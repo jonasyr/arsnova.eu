@@ -8,8 +8,8 @@
  * SMOKE_ARTIFACT_DIR=/tmp/host-home-entry npm run smoke:host-home-entry -w @arsnova/frontend
  */
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { randomUUID } from 'node:crypto';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createTRPCProxyClient, httpBatchLink } from '@trpc/client';
 import { chromium } from 'playwright';
@@ -19,8 +19,7 @@ const BASE_URL = (process.env.BASE_URL || 'http://localhost:4200/de')
   .replace(/\/+$/, '')
   .replace(/\/(de|en|fr|es|it)$/, '');
 const TRPC_URL = process.env.TRPC_URL || 'http://localhost:3000/trpc';
-const ARTIFACT_DIR =
-  process.env.SMOKE_ARTIFACT_DIR || (await mkdtemp(join(tmpdir(), 'arsnova-host-home-entry-')));
+const ARTIFACT_DIR = process.env.SMOKE_ARTIFACT_DIR || join('tmp', 'host-home-entry', randomUUID());
 const PREFERENCE = 'arsnova-host-scenario:v1';
 const SESSION_PREFIX = 'arsnova-host-scenario-session:v1:';
 const CHIPS = ['TEMPO', 'MOOD', 'YESNO', 'STARS'];
