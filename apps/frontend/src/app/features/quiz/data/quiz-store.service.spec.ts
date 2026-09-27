@@ -2,6 +2,7 @@ import { LOCALE_ID } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { isDemoQuizHistoryScopeId } from '@arsnova/shared-types';
 import { getDemoQuizExpectedTitle, getDemoQuizSeedFingerprint } from './demo-quiz-payload';
 import {
   DEMO_QUIZ_ID,
@@ -690,6 +691,24 @@ describe('QuizStoreService', () => {
 
     expect(service.getQuizById(created.id)).toBeNull();
     expect(service.quizzes().some((entry) => entry.id === created.id)).toBe(false);
+  });
+
+  it('legt ein gelöschtes Demo-Quiz mit einer neuen unabhängigen Historie erneut an', () => {
+    const service = TestBed.inject(QuizStoreService);
+    service.createQuiz({ name: 'Eigenes Quiz' });
+    expect(service.getQuizById(DEMO_QUIZ_ID)).toBeTruthy();
+
+    service.deleteQuiz(DEMO_QUIZ_ID);
+
+    expect(service.getQuizById(DEMO_QUIZ_ID)).toBeNull();
+    expect(service.ensureDemoQuiz()).toBe(true);
+    expect(service.getQuizById(DEMO_QUIZ_ID)).toBeTruthy();
+
+    const firstUpload = service.getUploadPayload(DEMO_QUIZ_ID);
+    const secondUpload = service.getUploadPayload(DEMO_QUIZ_ID);
+    expect(isDemoQuizHistoryScopeId(firstUpload.historyScopeId)).toBe(true);
+    expect(firstUpload.historyScopeId).not.toBe(DEMO_QUIZ_ID);
+    expect(secondUpload.historyScopeId).toBe(firstUpload.historyScopeId);
   });
 
   it('exportiert und importiert ein Quiz schema-konform mit neuer ID', () => {

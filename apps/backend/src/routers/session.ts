@@ -128,7 +128,7 @@ import {
   SendEmojiReactionInputSchema,
   EMOJI_REACTIONS,
   DEFAULT_TEAM_COUNT,
-  DEMO_QUIZ_HISTORY_SCOPE_ID,
+  isDemoQuizHistoryScopeId,
   NicknameThemeEnum,
   SHORT_TEXT_DEFAULT_EVALUATION_MODE,
   SHORT_TEXT_DEFAULT_TOLERANCE_LEVEL,
@@ -3202,7 +3202,7 @@ function canBootstrapDemoQuizTeamsOntoTeamlessSession(
   quiz: { historyScopeId?: string | null },
 ): boolean {
   return (
-    quiz.historyScopeId === DEMO_QUIZ_HISTORY_SCOPE_ID &&
+    isDemoQuizHistoryScopeId(quiz.historyScopeId) &&
     !sessionProfile.teamMode &&
     quizProfile.teamMode &&
     quizProfile.teamAssignment === 'AUTO'

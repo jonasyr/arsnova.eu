@@ -857,9 +857,85 @@ describe('QuizListComponent', () => {
     const fixture = TestBed.createComponent(QuizListComponent);
 
     await fixture.componentInstance.openLiveStartDialog(localQuizId, 'Datenbanken', 2);
+    fixture.detectChanges();
 
     expect(fixture.componentInstance.actionInfo()).toContain('bereits live');
+    expect(fixture.componentInstance.actionInfo()).toContain('unabhängige Kopie');
+    const startCopy = fixture.nativeElement.querySelector(
+      '[data-testid="quiz-live-start-copy"]',
+    ) as HTMLButtonElement | null;
+    expect(startCopy?.textContent).toContain('Als Kopie neu starten');
+    const recovery = fixture.nativeElement.querySelector(
+      '[data-testid="quiz-live-recovery"]',
+    ) as HTMLAnchorElement | null;
+    expect(recovery?.textContent).toContain('Host-Zugang wiederherstellen');
+    expect(fixture.componentInstance.hostRecoveryCommands).toContain('host-recovery');
     expect(mockStore.getUploadPayload).not.toHaveBeenCalled();
+  });
+
+  it('startet ohne Host-Wiederherstellung eine unabhängige Quiz-Kopie', async () => {
+    const localQuizId = 'e31fef3f-f7b1-4705-a739-28c8ec4486bf';
+    const copyQuizId = '91f3dd2b-27cf-424f-ae33-0bb13df0ab81';
+    mockStore.duplicateQuiz.mockReturnValue({ id: copyQuizId });
+    const fixture = TestBed.createComponent(QuizListComponent);
+    const router = TestBed.inject(Router);
+    const navigateByUrl = vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
+
+    await fixture.componentInstance.startAsNewQuizCopy(localQuizId);
+
+    expect(mockStore.duplicateQuiz).toHaveBeenCalledWith(localQuizId);
+    expect(mockStore.getUploadPayload).toHaveBeenCalledWith(copyQuizId);
+    expect(uploadQuizMutationMock).toHaveBeenCalled();
+    expect(createSessionMutationMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        quizId: '11111111-1111-4111-8111-111111111111',
+        type: 'QUIZ',
+      }),
+    );
+    expect(navigateByUrl).toHaveBeenCalledWith(
+      expect.stringContaining('/session/NEW123/host?tab=quiz'),
+    );
+  });
+
+  it('löscht eine lokale Quizkarte auch dann, wenn ihre Session weiterläuft', async () => {
+    const { of } = await import('rxjs');
+    const localQuizId = 'e31fef3f-f7b1-4705-a739-28c8ec4486bf';
+    const serverQuizId = '11111111-1111-4111-8111-111111111111';
+    quizzesSignal.set([
+      {
+        id: localQuizId,
+        name: 'Datenbanken',
+        description: null,
+        createdAt: '2026-03-08T10:00:00.000Z',
+        updatedAt: '2026-03-08T11:30:00.000Z',
+        questionCount: 2,
+        teamMode: false,
+        hasBonus: false,
+        lastServerQuizId: serverQuizId,
+        lastServerQuizAccessProof: localQuizId,
+      },
+    ]);
+    const fixture = TestBed.createComponent(QuizListComponent);
+    fixture.componentInstance.activeLiveQuizParticipants.set(new Map([[serverQuizId, 2]]));
+    const dialogOpenSpy = vi.spyOn(fixture.componentInstance['dialog'], 'open').mockReturnValue({
+      afterClosed: () => of(true),
+    } as never);
+
+    fixture.componentInstance.deleteQuiz(localQuizId, 'Datenbanken');
+    await Promise.resolve();
+
+    expect(dialogOpenSpy).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        data: expect.objectContaining({
+          message: expect.stringContaining('laufende Session bleibt geöffnet'),
+          consequences: expect.arrayContaining([
+            expect.stringContaining('nicht moderieren oder beenden'),
+          ]),
+        }),
+      }),
+    );
+    expect(mockStore.deleteQuiz).toHaveBeenCalledWith(localQuizId);
   });
 
   it('setzt die ältere Sitzung fort, für die dieser Browser eine Fähigkeit hat', async () => {

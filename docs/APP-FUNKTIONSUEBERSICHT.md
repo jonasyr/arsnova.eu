@@ -153,7 +153,7 @@ Die Sammlung unterstützt:
 - Quiz duplizieren
 - Quiz löschen
 - Sortierung nach Aktualität
-- Erkennung, ob ein Quiz gerade live verwendet wird; auch nach Löschen und erneutem Anlegen der lokalen Quizkarte führt **Starten** mit vorhandenem Hostzugang zurück in die laufende Session derselben Quiz-Historie
+- Erkennung, ob ein Quiz gerade live verwendet wird; auch nach Löschen und erneutem Anlegen einer normalen lokalen Quizkarte führt **Starten** mit vorhandenem Hostzugang zurück in die laufende Session derselben Quiz-Historie. Fehlt der Browserzugang, stehen **Als Kopie neu starten** und **Host-Zugang wiederherstellen** zur Wahl. Die lokale Quizkarte kann unabhängig davon gelöscht werden; eine laufende Session wird dadurch nicht beendet. Ein gelöschtes Demo-Quiz wird beim nächsten Laden als frische Demo-Instanz mit eigener Historie angelegt.
 - Zugriff auf vergangene Bonuscodes und letztes Session-Feedback pro Quiz-Historie
 
 ### 3.3 Quiz-Metadaten

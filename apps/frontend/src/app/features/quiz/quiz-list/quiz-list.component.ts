@@ -84,6 +84,7 @@ import { tryAutoRequestDocumentFullscreen } from '../../../core/document-fullscr
 import { buildQuizExportJsonFilename } from '../../../core/export-filename.util';
 import { SessionResultsExportService } from '../../../core/session-results-export.service';
 import { HostScenarioService, type HostScenario } from '../../../core/host-scenario.service';
+import { localizeCommands } from '../../../core/locale-router';
 
 const QUIZ_HISTORY_SCOPE_ID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -169,6 +170,8 @@ export class QuizListComponent implements OnInit {
   readonly currentBrowserLabel = this.quizStore.currentBrowserLabel;
   readonly syncPeerInfos = this.quizStore.syncPeerInfos;
   readonly actionInfo = signal<string | null>(null);
+  readonly liveBlockedQuizId = signal<string | null>(null);
+  readonly hostRecoveryCommands = localizeCommands(['host-recovery']);
   readonly actionInfoWarnings = signal<QuizImportWarning[]>([]);
   readonly importSkippedWarnings = computed(() =>
     this.actionInfoWarnings().filter((warning) => warning.kind === 'skipped_question'),
@@ -193,6 +196,11 @@ export class QuizListComponent implements OnInit {
     >
   >(new Map());
   readonly showAiImport = signal(false);
+
+  private setActionInfo(message: string | null, liveBlockedQuizId: string | null = null): void {
+    this.actionInfo.set(message);
+    this.liveBlockedQuizId.set(liveBlockedQuizId);
+  }
   /** Volltext der KI-Systemvorlage im Panel (Schritt 1). */
   readonly showKiPromptPreview = signal(false);
   /** Volltext der KI-Validierungsvorlage im Panel (Schritt 2). */
@@ -284,11 +292,6 @@ export class QuizListComponent implements OnInit {
   /** Für i18n-matTooltip: Mindestens eine Frage erforderlich. */
   tooltipMinQuestions(): string {
     return $localize`:@@quizList.tooltipMinQuestions:Für ein Quiz brauchst du mindestens eine Frage.`;
-  }
-
-  /** Für i18n-matTooltip: Kann nicht gelöscht werden, solange das Quiz live ist. */
-  tooltipDeleteLive(): string {
-    return $localize`:@@quizList.tooltipDeleteLive:Kann nicht gelöscht werden, solange das Quiz live ist.`;
   }
 
   getQuizActionsAriaLabel(quizName: string): string {
@@ -487,7 +490,7 @@ export class QuizListComponent implements OnInit {
     this.showKiPromptPreview.set(false);
     this.showKiValidationPromptPreview.set(false);
     this.actionError.set(null);
-    this.actionInfo.set(null);
+    this.setActionInfo(null);
     this.actionInfoWarnings.set([]);
     if (shouldOpen) {
       this.scrollAiImportPanelIntoViewAfterRender();
@@ -571,7 +574,7 @@ export class QuizListComponent implements OnInit {
   resetAiImport(): void {
     this.aiJsonInput.set('');
     this.actionError.set(null);
-    this.actionInfo.set(null);
+    this.setActionInfo(null);
     this.actionInfoWarnings.set([]);
   }
 
@@ -613,7 +616,7 @@ export class QuizListComponent implements OnInit {
     try {
       const duplicate = this.quizStore.duplicateQuiz(quizId);
       this.actionInfoWarnings.set([]);
-      this.actionInfo.set($localize`»${duplicate.name}« wurde dupliziert.`);
+      this.setActionInfo($localize`»${duplicate.name}« wurde dupliziert.`);
     } catch (error) {
       this.actionError.set(
         error instanceof Error ? error.message : $localize`Duplizieren fehlgeschlagen.`,
@@ -621,19 +624,43 @@ export class QuizListComponent implements OnInit {
     }
   }
 
+  async startAsNewQuizCopy(quizId: string): Promise<void> {
+    if (this.liveStartPending()) return;
+
+    this.actionError.set(null);
+    try {
+      const duplicate = this.quizStore.duplicateQuiz(quizId);
+      this.actionInfoWarnings.set([]);
+      this.setActionInfo(null);
+      await this.startLiveSession({
+        quizId: duplicate.id,
+        scenario: this.hostScenario.scenarioForAction(),
+      });
+    } catch (error) {
+      this.actionError.set(
+        error instanceof Error
+          ? error.message
+          : $localize`Neue Quiz-Kopie konnte nicht gestartet werden.`,
+      );
+    }
+  }
+
   deleteQuiz(quizId: string, quizName: string): void {
     this.actionError.set(null);
-    if (this.isQuizLive(quizId)) {
-      this.actionInfoWarnings.set([]);
-      this.actionInfo.set($localize`»${quizName}« ist gerade live und kann nicht gelöscht werden.`);
-      return;
-    }
+    const isLive = this.isQuizLive(quizId);
     const dialogRef = this.dialog.open(ConfirmLeaveDialogComponent, {
       data: {
         title: $localize`:@@quizList.deleteQuizDialogTitle:Quiz löschen?`,
-        message: $localize`:@@quizList.deleteQuizDialogMessage:Das Quiz »${quizName}« wird aus deiner Sammlung entfernt.`,
+        message: isLive
+          ? $localize`:@@quizList.deleteLiveQuizDialogMessage:Die Quizkarte »${quizName}« wird aus deiner Sammlung entfernt. Die laufende Session bleibt geöffnet.`
+          : $localize`:@@quizList.deleteQuizDialogMessage:Das Quiz »${quizName}« wird aus deiner Sammlung entfernt.`,
         consequences: [
           $localize`:@@quiz.deleteIrreversible:Das lässt sich nicht rückgängig machen.`,
+          ...(isLive
+            ? [
+                $localize`:@@quizList.deleteLiveQuizConsequence:Ohne Host-Zugang kannst du die laufende Session danach weiterhin nicht moderieren oder beenden.`,
+              ]
+            : []),
           $localize`:@@quizList.deleteQuizBonusCodesHint:Wenn Bonus-Codes vorhanden sind, exportiere sie vorher über »Bonus-Codes« > »CSV exportieren«.`,
         ],
         confirmLabel: $localize`:@@quizList.deleteQuizConfirm:Löschen`,
@@ -649,7 +676,7 @@ export class QuizListComponent implements OnInit {
       try {
         this.quizStore.deleteQuiz(quizId);
         this.actionInfoWarnings.set([]);
-        this.actionInfo.set($localize`»${quizName}« wurde gelöscht.`);
+        this.setActionInfo($localize`»${quizName}« wurde gelöscht.`);
       } catch (error) {
         this.actionError.set(
           error instanceof Error ? error.message : $localize`Löschen fehlgeschlagen.`,
@@ -672,7 +699,7 @@ export class QuizListComponent implements OnInit {
       anchor.click();
       URL.revokeObjectURL(url);
       this.actionInfoWarnings.set([]);
-      this.actionInfo.set($localize`»${quiz.quiz.name}« wurde exportiert.`);
+      this.setActionInfo($localize`»${quiz.quiz.name}« wurde exportiert.`);
     } catch (error) {
       this.actionError.set(
         error instanceof Error ? error.message : $localize`Export fehlgeschlagen.`,
@@ -700,7 +727,7 @@ export class QuizListComponent implements OnInit {
       }
       const parsed = JSON.parse(raw) as unknown;
       const imported = this.quizStore.importQuiz(parsed);
-      this.actionInfo.set(this.buildImportInfoMessage(imported));
+      this.setActionInfo(this.buildImportInfoMessage(imported));
       target.value = '';
     } catch (error) {
       const message = error instanceof Error ? error.message : $localize`Import fehlgeschlagen.`;
@@ -740,7 +767,7 @@ export class QuizListComponent implements OnInit {
   private showClipboardSuccess(message: string): void {
     this.actionError.set(null);
     this.actionInfoWarnings.set([]);
-    this.actionInfo.set(message);
+    this.setActionInfo(message);
     this.snackBar.open(message, '', {
       duration: 4000,
       verticalPosition: 'top',
@@ -859,7 +886,7 @@ export class QuizListComponent implements OnInit {
 
   importAiJson(): void {
     this.actionError.set(null);
-    this.actionInfo.set(null);
+    this.setActionInfo(null);
     this.actionInfoWarnings.set([]);
 
     const raw = this.aiJsonInput().trim();
@@ -880,7 +907,7 @@ export class QuizListComponent implements OnInit {
         return;
       }
       const imported = this.quizStore.importQuiz(parsed);
-      this.actionInfo.set(this.buildImportInfoMessage(imported));
+      this.setActionInfo(this.buildImportInfoMessage(imported));
       this.aiJsonInput.set('');
       this.showAiImport.set(false);
     } catch (error) {
@@ -1223,8 +1250,9 @@ export class QuizListComponent implements OnInit {
       (sessionCode) => hasHostToken(sessionCode) || Boolean(getHostBrowserCapability(sessionCode)),
     );
     if (!resumableCode) {
-      this.actionInfo.set(
-        $localize`:@@quizList.liveResumeUnavailable:Dieses Quiz läuft bereits live. Die Moderation ist in diesem Browser nicht verfügbar.`,
+      this.setActionInfo(
+        $localize`:@@quizList.liveResumeUnavailable:Dieses Quiz läuft bereits live. Du kannst den Host-Zugang wiederherstellen oder das Quiz als unabhängige Kopie neu starten. Die bestehende Session läuft dabei weiter.`,
+        localQuizId,
       );
       return true;
     }
@@ -1258,7 +1286,7 @@ export class QuizListComponent implements OnInit {
     scenario: HostScenario;
   }): Promise<void> {
     this.actionError.set(null);
-    this.actionInfo.set(null);
+    this.setActionInfo(null);
     this.actionInfoWarnings.set([]);
     this.liveStartPending.set(true);
     tryAutoRequestDocumentFullscreen(this.document);
@@ -1339,7 +1367,7 @@ export class QuizListComponent implements OnInit {
       setPendingHostSessionCode(result.code);
       try {
         await navigateToHostSession(this.router, result.code, 'quiz');
-        this.actionInfo.set($localize`Session ${result.code} gestartet.`);
+        this.setActionInfo($localize`Session ${result.code} gestartet.`);
       } finally {
         clearPendingHostSessionCode();
       }

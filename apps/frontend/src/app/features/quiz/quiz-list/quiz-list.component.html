@@ -50,6 +50,24 @@
   @if (actionInfo()) {
     <div class="quiz-list__info" role="status">
       <p class="quiz-list__info-text">{{ actionInfo() }}</p>
+      @if (liveBlockedQuizId(); as blockedQuizId) {
+        <div class="quiz-list__info-actions">
+          <button
+            mat-flat-button
+            type="button"
+            data-testid="quiz-live-start-copy"
+            [disabled]="liveStartPending()"
+            (click)="startAsNewQuizCopy(blockedQuizId)"
+          >
+            <mat-icon aria-hidden="true">content_copy</mat-icon>
+            <span i18n="@@quizList.liveStartCopyAction">Als Kopie neu starten</span>
+          </button>
+          <a mat-button data-testid="quiz-live-recovery" [routerLink]="hostRecoveryCommands">
+            <mat-icon aria-hidden="true">key</mat-icon>
+            <span i18n="@@quizList.liveRecoveryAction">Host-Zugang wiederherstellen</span>
+          </a>
+        </div>
+      }
       @if (importSkippedWarnings().length > 0) {
         <p class="quiz-list__info-list-title" i18n="@@quizList.importSkippedWarningsTitle">
           Nicht übernommen:
@@ -683,17 +701,10 @@
             <mat-icon>content_copy</mat-icon>
             <span i18n>Duplizieren</span>
           </button>
-          @if (isQuizLive(quiz.id)) {
-            <button mat-menu-item type="button" disabled [matTooltip]="tooltipDeleteLive()">
-              <mat-icon>delete</mat-icon>
-              <span i18n>Löschen (live)</span>
-            </button>
-          } @else {
-            <button mat-menu-item type="button" (click)="deleteQuiz(quiz.id, quiz.name)">
-              <mat-icon>delete</mat-icon>
-              <span i18n>Löschen</span>
-            </button>
-          }
+          <button mat-menu-item type="button" (click)="deleteQuiz(quiz.id, quiz.name)">
+            <mat-icon>delete</mat-icon>
+            <span i18n>Löschen</span>
+          </button>
         </mat-menu>
         @if (isSessionPdfExportPending(quiz.id)) {
           <div

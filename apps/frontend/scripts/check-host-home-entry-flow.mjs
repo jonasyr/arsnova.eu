@@ -76,6 +76,20 @@ async function expectCardBelowToolbar(page, selector) {
   }, selector);
 }
 
+async function expectQuizActionRowsDoNotOverlap(page) {
+  const cards = page.locator('mat-card.quiz-list-item');
+  for (let index = 0; index < (await cards.count()); index += 1) {
+    const card = cards.nth(index);
+    const secondary = await card.locator('.quiz-list-item__actions-secondary').boundingBox();
+    const primary = await card.locator('.quiz-list-item__actions-primary').boundingBox();
+    assert.ok(secondary && primary, `quiz card ${index + 1}: action rows are measurable`);
+    assert.ok(
+      secondary.y + secondary.height <= primary.y + 0.5,
+      `quiz card ${index + 1}: primary actions do not overlap secondary links`,
+    );
+  }
+}
+
 async function dismissJoin(page) {
   const close = page.locator('.session-host__join-viewport-overlay__close');
   if (
@@ -642,6 +656,7 @@ async function classroom(browser) {
       });
       const card = page.locator('mat-card.quiz-list-item', { hasText: payload.quiz.name });
       await card.waitFor();
+      await expectQuizActionRowsDoNotOverlap(page);
       await card.locator('.quiz-list-item__actions-primary button').first().click();
       const first = await currentSession(page, sessions);
       await page.getByTestId('lobby-start-session').waitFor();
