@@ -761,6 +761,24 @@
   gap: 1rem;
 }
 
+.home-host-stack > .home-card {
+  scroll-margin-top: 6rem;
+}
+
+.home-host-stack > .home-card--scenario-selected {
+  outline: 3px solid var(--mat-sys-primary);
+  outline-offset: 3px;
+  box-shadow:
+    var(--mat-sys-level3),
+    0 0 0 0.5rem color-mix(in srgb, var(--mat-sys-primary) 14%, transparent);
+}
+
+.home-card--scenario-selected .home-card__icon-wrap {
+  border-color: var(--mat-sys-primary);
+  background: var(--mat-sys-primary-container);
+  color: var(--mat-sys-on-primary-container);
+}
+
 .home-qa-session-ghost {
   display: flex;
   align-items: center;

@@ -198,7 +198,7 @@
           matButton="outlined"
           class="home-scenario__option"
           [attr.aria-pressed]="hostScenario.preference() === 'CLASSROOM'"
-          (click)="hostScenario.selectScenario('CLASSROOM')"
+          (click)="selectHostScenario('CLASSROOM')"
           i18n="@@homeScenario.classroom"
         >
           Meinen Kurs begleiten
@@ -208,7 +208,7 @@
           matButton="outlined"
           class="home-scenario__option"
           [attr.aria-pressed]="hostScenario.preference() === 'EVENT'"
-          (click)="hostScenario.selectScenario('EVENT')"
+          (click)="selectHostScenario('EVENT')"
           i18n="@@homeScenario.event"
         >
           Eine Veranstaltung moderieren
@@ -218,7 +218,7 @@
           matButton="outlined"
           class="home-scenario__option"
           [attr.aria-pressed]="hostScenario.preference() === 'QUICK'"
-          (click)="hostScenario.selectScenario('QUICK')"
+          (click)="selectHostScenario('QUICK')"
           i18n="@@homeScenario.quick"
         >
           Schnell ein Format einsetzen
@@ -229,7 +229,9 @@
     <div class="home-host-stack">
       <mat-card
         appearance="raised"
+        id="home-host-quiz"
         class="home-card home-card--create home-card--stage-side"
+        [class.home-card--scenario-selected]="hostScenario.preference() === 'CLASSROOM'"
         [class.home-card--sync-open]="syncLinkVisible()"
       >
         <mat-card-header class="home-card__header">
@@ -415,7 +417,9 @@
 
       <mat-card
         appearance="raised"
+        id="home-host-qa"
         class="home-card home-card--live home-card--stage-side"
+        [class.home-card--scenario-selected]="hostScenario.preference() === 'EVENT'"
         [attr.inert]="syncLinkVisible() ? '' : null"
       >
         <mat-card-header class="home-card__header">
@@ -649,6 +653,7 @@
         appearance="raised"
         id="host-quick-feedback"
         class="home-card home-card--feedback home-card--stage-side"
+        [class.home-card--scenario-selected]="hostScenario.preference() === 'QUICK'"
         [attr.inert]="syncLinkVisible() ? '' : null"
       >
         <mat-card-header class="home-card__header">

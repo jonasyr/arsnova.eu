@@ -267,13 +267,14 @@ describe('HomeComponent', () => {
   });
 
   describe('Host-Szenario', () => {
-    it('hält alle drei Karten vor und nach der Auswahl im DOM und den Fokus auf der Auswahl', () => {
+    it('hält alle Karten im DOM, den Fokus auf der Auswahl und scrollt zur passenden Karte', async () => {
       const fixture = createHomeFixture();
       fixture.detectChanges();
       const root = fixture.nativeElement as HTMLElement;
       const chooser = root.querySelector('section.home-scenario') as HTMLElement;
       const cards = Array.from(root.querySelectorAll('.home-host-stack > mat-card'));
       const choices = Array.from(chooser.querySelectorAll('button'));
+      const targetIds = ['home-host-quiz', 'home-host-qa', 'host-quick-feedback'];
 
       expect(root.querySelector('#home-host-title')?.textContent).toContain(
         'Was hast du heute vor?',
@@ -285,12 +286,25 @@ describe('HomeComponent', () => {
       expect(choices).toHaveLength(3);
       expect(choices.every((button) => button.getAttribute('aria-pressed') === 'false')).toBe(true);
 
-      for (const choice of choices) {
+      for (const [index, choice] of choices.entries()) {
+        const scrollIntoView = vi.fn();
+        const target = root.querySelector<HTMLElement>(`#${targetIds[index]}`);
+        expect(target).not.toBeNull();
+        target!.scrollIntoView = scrollIntoView;
         choice.focus();
         choice.click();
         fixture.detectChanges();
+        await fixture.whenStable();
         expect(document.activeElement).toBe(choice);
         expect(choice.getAttribute('aria-pressed')).toBe('true');
+        expect(
+          cards.filter((card) => card.classList.contains('home-card--scenario-selected')),
+        ).toEqual([target]);
+        expect(scrollIntoView).toHaveBeenCalledWith({
+          behavior: 'smooth',
+          block: 'start',
+          inline: 'nearest',
+        });
         expect(
           choices.filter((button) => button.getAttribute('aria-pressed') === 'true'),
         ).toHaveLength(1);
@@ -306,6 +320,25 @@ describe('HomeComponent', () => {
       }
       expect(TestBed.inject(HostScenarioService).preference()).toBe('QUICK');
       expect(matDialogMock.open).not.toHaveBeenCalled();
+    });
+
+    it('scrollt bei reduzierter Bewegung ohne Animation zur ausgewählten Karte', async () => {
+      vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({ matches: true }));
+      const fixture = createHomeFixture();
+      fixture.detectChanges();
+      const target = fixture.nativeElement.querySelector('#host-quick-feedback') as HTMLElement;
+      const scrollIntoView = vi.fn();
+      target.scrollIntoView = scrollIntoView;
+
+      fixture.componentInstance.selectHostScenario('QUICK');
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      expect(scrollIntoView).toHaveBeenCalledWith({
+        behavior: 'auto',
+        block: 'start',
+        inline: 'nearest',
+      });
     });
 
     it('bietet im Kurs eigene Quizaktionen und Kursfragen an, ohne Demo als letztes Quiz', () => {
@@ -2217,6 +2250,9 @@ describe('HomeComponent', () => {
     );
     expect(scss).toMatch(
       /\.home-feedback-chip--yes-no:focus-visible \.home-feedback-chip__body\s*\{[^}]*width:\s*fit-content[^}]*outline:\s*2px solid var\(--mat-sys-primary\)/,
+    );
+    expect(scss).toMatch(
+      /\.home-host-stack > \.home-card--scenario-selected\s*\{[^}]*outline:\s*3px solid var\(--mat-sys-primary\)/,
     );
   });
 

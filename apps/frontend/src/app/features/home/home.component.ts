@@ -122,6 +122,11 @@ type HostSessionCta = {
 const HOST_SESSION_CTA_LIMIT = 8;
 const HOST_SESSION_INFO_FETCH_LIMIT = 32;
 const HOST_SESSION_DIRECT_OPEN_LIMIT = 2;
+const HOST_SCENARIO_CARD_IDS: Record<HostScenario, string> = {
+  CLASSROOM: 'home-host-quiz',
+  EVENT: 'home-host-qa',
+  QUICK: 'host-quick-feedback',
+};
 
 function resolveSessionServerNow(
   session: Pick<SessionInfoDTO, 'serverTime' | 'serverNow'>,
@@ -346,6 +351,31 @@ export class HomeComponent implements OnInit, AfterViewInit, OnDestroy {
   isValidSessionCode = computed(() => /^[A-Z0-9]{6}$/.test(this.sessionCode()));
   readonly codeSlots = [0, 1, 2, 3, 4, 5];
   readonly quickFeedbackPresetChips = QUICK_FEEDBACK_HOME_CHIPS;
+
+  selectHostScenario(scenario: HostScenario): void {
+    this.hostScenario.selectScenario(scenario);
+    if (!isPlatformBrowser(this.platformId)) {
+      return;
+    }
+
+    afterNextRender(
+      () => {
+        if (this.destroyRef.destroyed) {
+          return;
+        }
+        const target = this.document.getElementById(HOST_SCENARIO_CARD_IDS[scenario]);
+        const reduceMotion =
+          this.document.defaultView?.matchMedia?.('(prefers-reduced-motion: reduce)').matches ===
+          true;
+        target?.scrollIntoView({
+          behavior: reduceMotion ? 'auto' : 'smooth',
+          block: 'start',
+          inline: 'nearest',
+        });
+      },
+      { injector: this.injector },
+    );
+  }
 
   /** Leertaste schon in keydown verarbeitet → keyup nicht erneut auslösen (vermeidet Doppel-Submit, nutzt keyup für virtuelle Tastatur). */
   private spaceHandledInKeydown = false;
