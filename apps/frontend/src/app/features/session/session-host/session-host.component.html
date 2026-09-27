@@ -856,7 +856,7 @@
                     >verified</mat-icon
                   >
                   <h1
-                    class="session-host__finished-text"
+                    class="session-host__finished-text app-content-focus-target"
                     id="session-finished-heading"
                     tabindex="-1"
                     #sessionFinishedHeading
@@ -3893,15 +3893,19 @@
         <div class="session-host__channel-panel session-host__channel-panel--qa">
           @if (postProcessingEnded()) {
             <section
-              #postProcessingEndedHeading
               class="session-host__post-processing-ended"
-              tabindex="-1"
               role="status"
               aria-labelledby="post-processing-ended-title"
               data-testid="post-processing-ended"
             >
               <mat-icon aria-hidden="true">event_busy</mat-icon>
-              <h2 id="post-processing-ended-title" i18n="@@sessionRetention.hostEndedTitle">
+              <h2
+                #postProcessingEndedHeading
+                id="post-processing-ended-title"
+                class="app-content-focus-target"
+                tabindex="-1"
+                i18n="@@sessionRetention.hostEndedTitle"
+              >
                 Nachbereitung beendet
               </h2>
               <p i18n="@@sessionRetention.hostEndedBody">
@@ -3929,7 +3933,7 @@
                       <div class="session-host__qa-title-view">
                         <h2
                           #qaChannelHeading
-                          class="session-channel-card__title session-host__qa-title-heading"
+                          class="session-channel-card__title session-host__qa-title-heading app-content-focus-target"
                           tabindex="-1"
                           data-testid="qa-channel-heading"
                         >

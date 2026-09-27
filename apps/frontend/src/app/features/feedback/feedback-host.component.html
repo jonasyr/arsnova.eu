@@ -1,5 +1,9 @@
 @if (embeddedInSession()) {
-  <h2 #embeddedHeading class="feedback-host__title feedback-host__workspace-title" tabindex="-1">
+  <h2
+    #embeddedHeading
+    class="feedback-host__title feedback-host__workspace-title app-content-focus-target"
+    tabindex="-1"
+  >
     @if (result(); as data) {
       {{ feedbackTitle(data.type) }}
     } @else {

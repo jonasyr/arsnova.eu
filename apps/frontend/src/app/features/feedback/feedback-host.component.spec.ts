@@ -160,6 +160,7 @@ describe('FeedbackHostComponent', () => {
     expect(document.activeElement).toBe(
       fixture.nativeElement.querySelector('.feedback-host__workspace-title'),
     );
+    expect(document.activeElement?.classList.contains('app-content-focus-target')).toBe(true);
     expect(fixture.nativeElement.querySelector('[data-testid="feedback-empty-tempo"]')).toBeNull();
     expect(fixture.nativeElement.querySelector('.feedback-host__tempo-trend')).not.toBeNull();
     fixture.destroy();

@@ -1884,6 +1884,20 @@ html.dark .app-qr-image {
   box-sizing: border-box;
 }
 
+/* Programmatically focused headings keep a visible ring around their text
+   instead of inheriting the width of a surrounding grid or flex row. */
+.app-content-focus-target {
+  width: fit-content;
+  max-width: 100%;
+  outline: none;
+}
+
+.app-content-focus-target:focus-visible {
+  outline: 2px solid var(--mat-sys-primary);
+  outline-offset: 0.25rem;
+  border-radius: var(--mat-sys-corner-small);
+}
+
 @media (max-width: 599px) {
   .app-live-channel-shell {
     width: min(var(--app-live-channel-max-width), calc(100vw - (2 * var(--host-mobile-inline))));

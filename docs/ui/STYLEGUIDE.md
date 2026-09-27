@@ -139,6 +139,10 @@ Regeln:
 
 - Kontrast und Lesbarkeit müssen in Light und Dark erfüllt sein.
 - Fokuszustand muss klar sichtbar sein (bei Bedarf `mat.strong-focus-indicators()`).
+- Programmatisch fokussierte Überschriften (`tabindex="-1"`) verwenden
+  `.app-content-focus-target`: Der Fokusrahmen umfasst den sichtbaren Titel statt
+  der vollen Grid-/Flex-Zeile. Größere Status- oder Dialogflächen bleiben nur
+  dann selbst Fokusziel, wenn die gesamte Fläche die angekündigte Einheit ist.
 - Textlinks verwenden bei `:focus-visible` einen 2-Pixel-Rahmen mit
   `0.25rem` `outline-offset`; kein zusätzliches Padding, damit Textfluss und
   Klickfläche unverändert bleiben.

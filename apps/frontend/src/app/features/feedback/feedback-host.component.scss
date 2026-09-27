@@ -2396,12 +2396,7 @@ $round2-color: var(--mat-sys-primary);
 .feedback-host__workspace-title {
   scroll-margin-block: 6rem;
   padding: 0.25rem;
-}
-
-.feedback-host__workspace-title:focus {
-  outline: 2px solid var(--mat-sys-primary);
-  outline-offset: 0.25rem;
-  border-radius: var(--mat-sys-corner-small);
+  margin-inline: auto;
 }
 
 .feedback-host__action-status,

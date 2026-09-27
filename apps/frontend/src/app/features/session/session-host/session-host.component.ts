@@ -9503,7 +9503,6 @@ export class SessionHostComponent implements OnInit, OnDestroy {
           if (this.destroyRef.destroyed) return;
           const host = this.hostElement.nativeElement as HTMLElement;
           const target =
-            (host.querySelector('#host-session-finished-card') as HTMLElement | null) ??
             (host.querySelector('#session-finished-heading') as HTMLElement | null) ??
             (this.sessionFinishedHeadingRef?.nativeElement as HTMLElement | undefined) ??
             null;

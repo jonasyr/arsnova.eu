@@ -152,6 +152,10 @@ describe('HelpComponent', () => {
     expect(
       root.querySelector('#help-participant-title .help-section__title-icon')?.textContent?.trim(),
     ).toBe('groups');
+    expect(root.querySelector('#help-host-title')?.classList).toContain('app-content-focus-target');
+    expect(root.querySelector('#help-participant-title')?.classList).toContain(
+      'app-content-focus-target',
+    );
     expect(
       root.querySelector('#help-common-title .help-section__title-icon')?.textContent?.trim(),
     ).toBe('info');

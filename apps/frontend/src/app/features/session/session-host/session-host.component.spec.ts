@@ -2944,6 +2944,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
       expect(heading).not.toBeNull();
       expect(heading?.textContent?.trim()).toBe(title);
       expect(heading?.tabIndex).toBe(-1);
+      expect(heading?.classList.contains('app-content-focus-target')).toBe(true);
       heading!.focus();
       expect(document.activeElement).toBe(heading);
 
@@ -3403,7 +3404,12 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
 
     const host = fixture.nativeElement as HTMLElement;
     expect(fixture.componentInstance.qaQuestions()).toEqual([]);
-    expect(host.querySelector('[data-testid="post-processing-ended"]')).not.toBeNull();
+    const ended = host.querySelector<HTMLElement>('[data-testid="post-processing-ended"]');
+    const endedHeading = host.querySelector<HTMLElement>('#post-processing-ended-title');
+    expect(ended).not.toBeNull();
+    expect(ended?.hasAttribute('tabindex')).toBe(false);
+    expect(endedHeading?.tabIndex).toBe(-1);
+    expect(endedHeading?.classList.contains('app-content-focus-target')).toBe(true);
     expect(host.textContent).toContain('Legal Holds');
     expect(host.textContent).not.toContain('Nicht mehr zugängliche Frage');
     fixture.destroy();
