@@ -1593,6 +1593,59 @@ describe('HomeComponent', () => {
       restoreDefaultSessionGetInfo(vi.mocked(trpc.session.getInfo.query));
     });
 
+    it('schließt das Host-Session-Menü und stellt dessen Fokus vor dem Löschdialog wieder her', async () => {
+      const { trpc } = await import('../../core/trpc.client');
+      for (const code of ['AAA111', 'BBB222', 'CCC333']) {
+        storeHostBrowserCapability(code, `${code}-browser-capability-abcdefghijklmnopqrstuvwxyz`);
+      }
+      vi.mocked(trpc.session.getInfo.query).mockImplementation(async (input: { code: string }) =>
+        hostSessionGetInfo(input.code, true),
+      );
+      const fixture = createHomeFixture();
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+      await vi.waitUntil(
+        () =>
+          fixture.nativeElement.querySelector('[data-testid="home-host-session-menu-trigger"]') !==
+          null,
+        { timeout: 1000, interval: 10 },
+      );
+
+      const trigger = fixture.nativeElement.querySelector<HTMLButtonElement>(
+        '[data-testid="home-host-session-menu-trigger"]',
+      )!;
+      trigger.click();
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      const closed = new Subject<boolean | 'alternate' | undefined>();
+      let focusAtDialogOpen: Element | null = null;
+      matDialogMock.open.mockImplementationOnce(() => {
+        focusAtDialogOpen = document.activeElement;
+        return { afterClosed: () => closed };
+      });
+      document
+        .querySelector<HTMLButtonElement>(
+          '[data-testid="home-host-session-menu-remove"][data-session-code="AAA111"]',
+        )!
+        .click();
+      await vi.waitUntil(() => matDialogMock.open.mock.calls.length === 1, {
+        timeout: 1000,
+        interval: 10,
+      });
+
+      expect(focusAtDialogOpen).toBe(trigger);
+      expect(trigger.getAttribute('aria-expanded')).toBe('false');
+      closed.next(undefined);
+      closed.complete();
+      await fixture.whenStable();
+      fixture.detectChanges();
+      expect(document.activeElement).toBe(trigger);
+
+      restoreDefaultSessionGetInfo(vi.mocked(trpc.session.getInfo.query));
+    });
+
     it('zeigt alle gespeicherten Host-Sessions auch ohne last-hosted-Zeiger', async () => {
       const { trpc } = await import('../../core/trpc.client');
       storeHostBrowserCapability('AAA111', 'older-browser-capability-abcdefghijklmnopqrstuvwxyz');

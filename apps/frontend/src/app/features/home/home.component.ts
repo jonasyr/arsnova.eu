@@ -232,6 +232,8 @@ export class HomeComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('syncLinkInput') private readonly syncLinkInput?: ElementRef<HTMLInputElement>;
   @ViewChild('syncToggleBtn', { read: ElementRef })
   private readonly syncToggleBtn?: ElementRef<HTMLButtonElement>;
+  @ViewChild('hostSessionMenuTrigger')
+  private readonly hostSessionMenuTrigger?: MatMenuTrigger;
 
   sessionCode = signal('');
   codeInputFocused = signal(false);
@@ -689,6 +691,9 @@ export class HomeComponent implements OnInit, AfterViewInit, OnDestroy {
     }
     this.hostSessionCtaBusy.set(true);
     try {
+      if (returnToMenuTrigger) {
+        await this.closeHostSessionMenuBeforeDialog();
+      }
       const consequences = [
         this.hostSessionCtaOpenDescription(item),
         this.hostSessionCtaQuestionDescription(item),
@@ -733,6 +738,18 @@ export class HomeComponent implements OnInit, AfterViewInit, OnDestroy {
     } finally {
       this.hostSessionCtaBusy.set(false);
     }
+  }
+
+  private async closeHostSessionMenuBeforeDialog(): Promise<void> {
+    const trigger = this.hostSessionMenuTrigger;
+    if (!trigger?.menuOpen) {
+      return;
+    }
+    const closed = firstValueFrom(trigger.menuClosed);
+    trigger.closeMenu();
+    // MatMenu restores focus before menuClosed emits. Open the dialog only
+    // after the trigger is the stable return target for every dialog outcome.
+    await closed;
   }
 
   private focusHostSessionCtaControl(preferredCode?: string, preferMenuTrigger = false): void {

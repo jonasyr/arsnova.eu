@@ -8,7 +8,7 @@
  * SMOKE_ARTIFACT_DIR=/tmp/host-home-entry npm run smoke:host-home-entry -w @arsnova/frontend
  */
 import assert from 'node:assert/strict';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createTRPCProxyClient, httpBatchLink } from '@trpc/client';
@@ -19,7 +19,8 @@ const BASE_URL = (process.env.BASE_URL || 'http://localhost:4200/de')
   .replace(/\/+$/, '')
   .replace(/\/(de|en|fr|es|it)$/, '');
 const TRPC_URL = process.env.TRPC_URL || 'http://localhost:3000/trpc';
-const ARTIFACT_DIR = process.env.SMOKE_ARTIFACT_DIR || join(tmpdir(), 'arsnova-host-home-entry');
+const ARTIFACT_DIR =
+  process.env.SMOKE_ARTIFACT_DIR || (await mkdtemp(join(tmpdir(), 'arsnova-host-home-entry-')));
 const PREFERENCE = 'arsnova-host-scenario:v1';
 const SESSION_PREFIX = 'arsnova-host-scenario-session:v1:';
 const CHIPS = ['TEMPO', 'MOOD', 'YESNO', 'STARS'];
@@ -295,6 +296,134 @@ async function acceptQa(page) {
   await page.getByTestId('host-recovery-card-done').click();
   await page.getByTestId('qa-tools-toggle').waitFor();
   await dismissJoin(page);
+}
+
+async function dismissHomeMotd(page) {
+  const close = page.locator('.home-motd-sheet__head button[aria-label]');
+  if (
+    await close.waitFor({ state: 'visible', timeout: 3000 }).then(
+      () => true,
+      () => false,
+    )
+  ) {
+    await close.click();
+    await page.locator('.home-motd-sheet').waitFor({ state: 'hidden' });
+  }
+}
+
+async function createOpenQaSession(browser, sample, sessions) {
+  const context = await createContext(browser, sample);
+  const page = await context.newPage();
+  page.setDefaultTimeout(20_000);
+  try {
+    await page.goto(`${BASE_URL}/${sample.locale}/`, { waitUntil: 'domcontentloaded' });
+    await dismissHomeMotd(page);
+    await page.getByTestId('home-live-qa-create').click();
+    await acceptProfile(page);
+    const created = await currentSession(page, sessions);
+    await acceptQa(page);
+    const browserCapability = await page.evaluate(
+      (code) => localStorage.getItem(`arsnova-host-browser-capability-${code}`),
+      created.code,
+    );
+    assert(browserCapability, `Missing browser capability for ${created.code}`);
+    return { code: created.code, browserCapability };
+  } finally {
+    await context.close();
+  }
+}
+
+async function openHostSessionRemoval(page, code) {
+  const trigger = page.getByTestId('home-host-session-menu-trigger');
+  await trigger.click();
+  await page
+    .locator(`[data-testid="home-host-session-menu-remove"][data-session-code="${code}"]`)
+    .click();
+  const dialog = page.locator('app-confirm-leave-dialog');
+  await dialog.waitFor();
+  await page.locator('.cdk-overlay-container [role="menu"]').waitFor({ state: 'hidden' });
+  return dialog;
+}
+
+async function qaSessionMenu(browser) {
+  const sample = CASES[1];
+  const sessions = new Map();
+  const credentials = [];
+  let context;
+  try {
+    for (let index = 0; index < 4; index += 1) {
+      credentials.push(await createOpenQaSession(browser, sample, sessions));
+    }
+
+    context = await createContext(browser, sample);
+    await context.addInitScript(
+      ({ sample, credentials }) => {
+        localStorage.setItem('home-theme', sample.theme);
+        localStorage.setItem('home-preset', sample.preset);
+        for (const credential of credentials) {
+          localStorage.setItem(
+            `arsnova-host-browser-capability-${credential.code}`,
+            credential.browserCapability,
+          );
+        }
+        localStorage.setItem('arsnova-last-hosted-session', credentials.at(-1).code);
+      },
+      { sample, credentials },
+    );
+    const page = await context.newPage();
+    page.setDefaultTimeout(20_000);
+    await page.goto(`${BASE_URL}/de/`, { waitUntil: 'domcontentloaded' });
+    await dismissHomeMotd(page);
+
+    const trigger = page.getByTestId('home-host-session-menu-trigger');
+    await trigger.waitFor();
+    assert.match(await trigger.innerText(), /\(4\)/);
+
+    // Cancel keeps all entries and returns to the now-closed menu trigger.
+    let dialog = await openHostSessionRemoval(page, credentials[0].code);
+    await dialog.getByRole('button', { name: 'Abbrechen' }).click();
+    await dialog.waitFor({ state: 'hidden' });
+    await expectFocus(page, '[data-testid="home-host-session-menu-trigger"]');
+    assert.match(await trigger.innerText(), /\(4\)/);
+
+    // A failed global end also restores the four-item menu and its trigger.
+    await page.route(/\/trpc\/[^?]*session\.end/, (route) => route.abort('failed'), {
+      times: 1,
+    });
+    dialog = await openHostSessionRemoval(page, credentials[1].code);
+    await dialog.getByRole('button', { name: 'Session löschen' }).click();
+    await dialog.waitFor({ state: 'hidden' });
+    await expectFocus(page, '[data-testid="home-host-session-menu-trigger"]');
+    assert.match(await trigger.innerText(), /\(4\)/);
+
+    // A successful end keeps the pull-down while three open sessions remain.
+    dialog = await openHostSessionRemoval(page, credentials[2].code);
+    await dialog.getByRole('button', { name: 'Session löschen' }).click();
+    await eventually(
+      () => trigger.innerText(),
+      (label) => /\(3\)/.test(label),
+      'four host-session CTAs collapse to three',
+    );
+    await expectFocus(page, '[data-testid="home-host-session-menu-trigger"]');
+
+    // At 3 → 2 the menu disappears; focus follows the first visible remove action.
+    dialog = await openHostSessionRemoval(page, credentials[3].code);
+    await dialog.getByRole('button', { name: 'Nur Schnellzugang entfernen' }).click();
+    await trigger.waitFor({ state: 'detached' });
+    assert.equal(await page.getByTestId('home-host-recovery').count(), 2);
+    await expectFocus(page, '[data-testid="home-host-session-remove"]');
+    outcomes.push({
+      label: 'qa-session-menu-lifecycle',
+      ...sample,
+      sessionCreates: credentials.length,
+    });
+    console.log('OK qa-session-menu-lifecycle');
+  } finally {
+    await context?.close();
+    for (const [code, hostApi] of sessions) {
+      await hostApi.session.end.mutate({ code }).catch(() => {});
+    }
+  }
 }
 
 async function eventStarts(browser) {
@@ -586,10 +715,14 @@ await mkdir(ARTIFACT_DIR, { recursive: true });
 const browser = await chromium.launch({ headless: true });
 try {
   const group = process.env.HOME_SMOKE_GROUP;
-  assert(!group || ['quick', 'event', 'classroom'].includes(group), 'Unknown HOME_SMOKE_GROUP');
+  assert(
+    !group || ['quick', 'event', 'classroom', 'menu'].includes(group),
+    'Unknown HOME_SMOKE_GROUP',
+  );
   if (!group || group === 'quick') await quickStarts(browser);
   if (!group || group === 'event') await eventStarts(browser);
   if (!group || group === 'classroom') await classroom(browser);
+  if (!group || group === 'menu') await qaSessionMenu(browser);
   await writeFile(join(ARTIFACT_DIR, 'summary.json'), JSON.stringify(outcomes, null, 2));
   console.log(`PASS: ${outcomes.length} genuine Home journeys; no API-created start sessions.`);
 } finally {

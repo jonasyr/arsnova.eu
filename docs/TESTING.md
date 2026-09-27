@@ -448,32 +448,32 @@ Auf dem Server übernimmt `scripts/deploy.sh` die Reihenfolge **Digest-Image pul
 
 ## Browser- und A11y-Checks
 
-| Befehl (Frontend-Workspace)        | Zweck                                                                                      |
-| ---------------------------------- | ------------------------------------------------------------------------------------------ |
-| `a11y:axe:static`                  | axe für statische Kernrouten/-zustände                                                     |
-| `a11y:layout`                      | Reflow, Fokus, 24px-Ziele, Skip-Link, Join-Fokus und mobiles Disclosure                    |
-| `check:viewport`                   | Alias/älterer 320px-Reflow-Smoke                                                           |
-| `smoke:host-present-auth`          | Host/Present-Auth-Smoke                                                                    |
-| `smoke:host-pairing-security`      | Story 2.10: Host / Smartphone / Presenter, Missbrauch + Lifecycle + Widerruf               |
-| `smoke:presenter-viewports`        | Gefüllte Presenter-Lobby in vier Tablet-/Beamer-Viewports                                  |
-| `smoke:host-music`                 | Host-Musik-/Sound-Smoke                                                                    |
-| `smoke:host-qa-feedback-tools`     | Q&A-/Blitzlicht-Werkzeuge, Filter, Fokus, Fristen, Runden und fünf Locales                 |
-| `smoke:host-home-entry`            | Echte Home-Chips, EVENT-Beides/Abbruch/Retry und CLASSROOM bis Gesamtende                  |
-| `smoke:host-phase-controls`        | Quiz-Phasen, PI, fünf Locales, mobile Labels und Menü-/Dialogfokus                         |
-| `smoke:short-text`                 | Kurzantwort-Flow inklusive axe                                                             |
-| `smoke:numeric-estimate`           | Numerische-Schätzfrage-Flow-Smoke                                                          |
-| `smoke:session-question-progress`  | Zwei-Client-Smoke für späteren Start, Vote, Skip und Nachbesprechung                       |
-| `e2e:confidence-summary-demo`      | Demo-Quiz: 30 TN + Confidence-Abschluss                                                    |
-| `e2e:motd-focus`                   | Desktop-MOTD: Tastatur-/Pointer-Rücksprung und fortgesetzte Tab-Reihe                      |
-| `smoke:webkit-participant-vote`    | WebKit/Safari-Engine: Smartphone-Teilnahme Join, Kanäle, Countdown, Vote                   |
-| `smoke:quiz-sync`                  | Quiz-Sync-Flow-Skript                                                                      |
-| `smoke:unified-session`            | Unified-Session-Flow inklusive axe                                                         |
-| `smoke:product-feedback`           | ProductFeedback 12.1: Host-Sheet + Vote-Sessionende                                        |
-| `smoke:product-feedback-in-app`    | ProductFeedback 12.2: Footer/Hilfe/Host/Vote/Join/Blitzlicht + Presenter-Negativ           |
-| `smoke:epic-405-host-qa-lifecycle` | Epic #405: Host-Zugangskarte, Q&A-Footer, Self-Service-Wiederherstellung                   |
-| `smoke:epic-405-participant-qa`    | Epic #405: Q&A-Join, Frage senden, Sortierung, Favoriten, Wortwolke, Schreibpfad nach Ende |
-| `lighthouse:a11y`                  | Score und A11y-Einzelaudits (lokal)                                                        |
-| `benchmark:word-cloud`             | Wortwolken-Benchmark / Regressionen                                                        |
+| Befehl (Frontend-Workspace)        | Zweck                                                                                         |
+| ---------------------------------- | --------------------------------------------------------------------------------------------- |
+| `a11y:axe:static`                  | axe für statische Kernrouten/-zustände                                                        |
+| `a11y:layout`                      | Reflow, Fokus, 24px-Ziele, Skip-Link, Join-Fokus und mobiles Disclosure                       |
+| `check:viewport`                   | Alias/älterer 320px-Reflow-Smoke                                                              |
+| `smoke:host-present-auth`          | Host/Present-Auth-Smoke                                                                       |
+| `smoke:host-pairing-security`      | Story 2.10: Host / Smartphone / Presenter, Missbrauch + Lifecycle + Widerruf                  |
+| `smoke:presenter-viewports`        | Gefüllte Presenter-Lobby in vier Tablet-/Beamer-Viewports                                     |
+| `smoke:host-music`                 | Host-Musik-/Sound-Smoke                                                                       |
+| `smoke:host-qa-feedback-tools`     | Q&A-/Blitzlicht-Werkzeuge, Filter, Fokus, Fristen, Runden und fünf Locales                    |
+| `smoke:host-home-entry`            | Echte Home-Chips, Q&A-Menü-Lifecycle, EVENT-Beides/Abbruch/Retry und CLASSROOM bis Gesamtende |
+| `smoke:host-phase-controls`        | Quiz-Phasen, PI, fünf Locales, mobile Labels und Menü-/Dialogfokus                            |
+| `smoke:short-text`                 | Kurzantwort-Flow inklusive axe                                                                |
+| `smoke:numeric-estimate`           | Numerische-Schätzfrage-Flow-Smoke                                                             |
+| `smoke:session-question-progress`  | Zwei-Client-Smoke für späteren Start, Vote, Skip und Nachbesprechung                          |
+| `e2e:confidence-summary-demo`      | Demo-Quiz: 30 TN + Confidence-Abschluss                                                       |
+| `e2e:motd-focus`                   | Desktop-MOTD: Tastatur-/Pointer-Rücksprung und fortgesetzte Tab-Reihe                         |
+| `smoke:webkit-participant-vote`    | WebKit/Safari-Engine: Smartphone-Teilnahme Join, Kanäle, Countdown, Vote                      |
+| `smoke:quiz-sync`                  | Quiz-Sync-Flow-Skript                                                                         |
+| `smoke:unified-session`            | Unified-Session-Flow inklusive axe                                                            |
+| `smoke:product-feedback`           | ProductFeedback 12.1: Host-Sheet + Vote-Sessionende                                           |
+| `smoke:product-feedback-in-app`    | ProductFeedback 12.2: Footer/Hilfe/Host/Vote/Join/Blitzlicht + Presenter-Negativ              |
+| `smoke:epic-405-host-qa-lifecycle` | Epic #405: Host-Zugangskarte, Q&A-Footer, Self-Service-Wiederherstellung                      |
+| `smoke:epic-405-participant-qa`    | Epic #405: Q&A-Join, Frage senden, Sortierung, Favoriten, Wortwolke, Schreibpfad nach Ende    |
+| `lighthouse:a11y`                  | Score und A11y-Einzelaudits (lokal)                                                           |
+| `benchmark:word-cloud`             | Wortwolken-Benchmark / Regressionen                                                           |
 
 Das PDF/UA-Gate liegt im Root-Workspace:
 
@@ -620,7 +620,7 @@ Required-Check.
 BASE_URL=http://localhost:4173/de TRPC_URL=http://localhost:3000/trpc SMOKE_ARTIFACT_DIR=/private/tmp/host-qa-feedback-tools npm run smoke:host-qa-feedback-tools -w @arsnova/frontend
 ```
 
-`smoke:host-home-entry` ergänzt die API-basierten Startzustände um echte Startseitenabläufe für #470. Alle vier sichtbaren Blitzlicht-Chips werden in sechs isolierten Sprach-/Preset-/Viewportkontexten angeklickt. Der Test zählt `session.create`-Requests, prüft den aktiven Kanal und Rundentyp serverseitig und verlangt bei `quickFeedback.create` die Bindung an genau die UI-erzeugte Session. Hinzu kommen EVENT-Beides über Teilnahmeprofil und Zugangskarte (serverseitige INITIAL-Defaults, kein zusätzlicher Q&A-Konfigurationsdialog), Aktivierungsfehler mit Q&A-Teilerfolg und Retry, Abbruch in beiden Schritten, Reload/neuer Tab sowie CLASSROOM über Quizimport, Auswahl, eigenes letztes Quiz und zwei Fragen bis zum Gesamtende. Sessionstarts erfolgen ausschließlich durch die UI; API-Teilnahmen dienen als Identitätsregression beim Formatwechsel und ermöglichen die Quiz-Gesamtauswertung. Screenshots enthalten keine Zugangskarten. Der lokale Zusatzlauf benötigt denselben lokalisierten Build und dieselben Dienste wie die anderen Host-Smokes; kein neuer Required-Check.
+`smoke:host-home-entry` ergänzt die API-basierten Startzustände um echte Startseitenabläufe für #470. Alle vier sichtbaren Blitzlicht-Chips werden in sechs isolierten Sprach-/Preset-/Viewportkontexten angeklickt. Der Test zählt `session.create`-Requests, prüft den aktiven Kanal und Rundentyp serverseitig und verlangt bei `quickFeedback.create` die Bindung an genau die UI-erzeugte Session. Hinzu kommen das Pulldown für mehr als zwei offene Q&A-Sessions mit Abbruch, Löschfehler, erfolgreichem Löschen und dem Übergang von drei auf zwei Direktzugänge, EVENT-Beides über Teilnahmeprofil und Zugangskarte (serverseitige INITIAL-Defaults, kein zusätzlicher Q&A-Konfigurationsdialog), Aktivierungsfehler mit Q&A-Teilerfolg und Retry, Abbruch in beiden Schritten, Reload/neuer Tab sowie CLASSROOM über Quizimport, Auswahl, eigenes letztes Quiz und zwei Fragen bis zum Gesamtende. Sessionstarts erfolgen ausschließlich durch die UI; API-Teilnahmen dienen als Identitätsregression beim Formatwechsel und ermöglichen die Quiz-Gesamtauswertung. Screenshots enthalten keine Zugangskarten. Der lokale Zusatzlauf benötigt denselben lokalisierten Build und dieselben Dienste wie die anderen Host-Smokes; kein neuer Required-Check.
 
 ```bash
 BASE_URL=http://localhost:4200/de TRPC_URL=http://localhost:3000/trpc SMOKE_ARTIFACT_DIR=/private/tmp/host-home-entry npm run smoke:host-home-entry -w @arsnova/frontend
