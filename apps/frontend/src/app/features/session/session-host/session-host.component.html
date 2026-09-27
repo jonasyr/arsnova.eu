@@ -5145,20 +5145,25 @@
           <span i18n="@@sessionHost.replaceQuizBeforeStart">Quiz wechseln</span>
         </button>
       }
+      @if (keepQaOpenOnHostLeave()) {
+        <button
+          mat-menu-item
+          type="button"
+          (click)="pendingHostMoreAction.set('leave')"
+          [disabled]="sessionEndPending()"
+        >
+          <mat-icon aria-hidden="true">home</mat-icon>
+          <span i18n="@@sessionHost.leaveQaHostAnchor">Zur Startseite</span>
+        </button>
+      }
       <button
         mat-menu-item
         type="button"
         (click)="pendingHostMoreAction.set('end')"
         [disabled]="sessionEndPending()"
       >
-        <mat-icon aria-hidden="true">{{
-          effectiveStatus() === 'FINISHED' || keepQaOpenOnHostLeave() ? 'home' : 'logout'
-        }}</mat-icon>
-        @if (effectiveStatus() === 'FINISHED' || keepQaOpenOnHostLeave()) {
-          <span i18n="@@sessionHost.leaveQaHostAnchor">Zur Startseite</span>
-        } @else {
-          <span i18n="@@sessionHost.endGlobalSessionAnchor">Session beenden</span>
-        }
+        <mat-icon aria-hidden="true">logout</mat-icon>
+        <span i18n="@@sessionHost.endGlobalSessionAnchor">Session beenden</span>
       </button>
     </mat-menu>
 
@@ -5179,6 +5184,18 @@
         (touchcancel)="onExitAnchorTouchEnd()"
       >
         @if (activeChannel() !== 'quiz') {
+          @if (keepQaOpenOnHostLeave()) {
+            <button
+              mat-button
+              type="button"
+              class="session-host__exit-anchor-button"
+              [disabled]="sessionEndPending()"
+              (click)="onLeaveHostKeepingQaOpen()"
+            >
+              <mat-icon aria-hidden="true">home</mat-icon>
+              <span i18n="@@sessionHost.leaveQaHostAnchor">Zur Startseite</span>
+            </button>
+          }
           <button
             mat-button
             type="button"
@@ -5187,14 +5204,8 @@
             [attr.aria-busy]="sessionEndPending()"
             (click)="onSessionEndAnchorClick($event)"
           >
-            <mat-icon aria-hidden="true">{{
-              keepQaOpenOnHostLeave() ? 'home' : 'logout'
-            }}</mat-icon>
-            @if (keepQaOpenOnHostLeave()) {
-              <span i18n="@@sessionHost.leaveQaHostAnchor">Zur Startseite</span>
-            } @else {
-              <span i18n="@@sessionHost.endGlobalSessionAnchor">Session beenden</span>
-            }
+            <mat-icon aria-hidden="true">logout</mat-icon>
+            <span i18n="@@sessionHost.endGlobalSessionAnchor">Session beenden</span>
           </button>
         }
         @if (

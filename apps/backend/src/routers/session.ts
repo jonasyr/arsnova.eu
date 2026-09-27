@@ -128,6 +128,7 @@ import {
   SendEmojiReactionInputSchema,
   EMOJI_REACTIONS,
   DEFAULT_TEAM_COUNT,
+  DEMO_QUIZ_HISTORY_SCOPE_ID,
   isDemoQuizHistoryScopeId,
   NicknameThemeEnum,
   SHORT_TEXT_DEFAULT_EVALUATION_MODE,
@@ -2956,7 +2957,10 @@ async function collectAuthorizedQuizHistoryLookups(
     ...new Set(
       authorized
         .map((entry) => entry.historyScopeId)
-        .filter((scopeId): scopeId is string => typeof scopeId === 'string'),
+        .filter(
+          (scopeId): scopeId is string =>
+            typeof scopeId === 'string' && scopeId !== DEMO_QUIZ_HISTORY_SCOPE_ID,
+        ),
     ),
   ];
   const scopedQuizzes =
@@ -2976,9 +2980,10 @@ async function collectAuthorizedQuizHistoryLookups(
 
   return authorized.map((entry) => ({
     requestedQuizId: entry.requestedQuizId,
-    scopedQuizIds: entry.historyScopeId
-      ? (quizIdsByHistoryScope.get(entry.historyScopeId) ?? [entry.requestedQuizId])
-      : [entry.requestedQuizId],
+    scopedQuizIds:
+      entry.historyScopeId && entry.historyScopeId !== DEMO_QUIZ_HISTORY_SCOPE_ID
+        ? (quizIdsByHistoryScope.get(entry.historyScopeId) ?? [entry.requestedQuizId])
+        : [entry.requestedQuizId],
   }));
 }
 

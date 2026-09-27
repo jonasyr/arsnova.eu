@@ -5420,7 +5420,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     fixture.destroy();
   });
 
-  it('schließt die Host-Ansicht einer reinen Q&A-Session über den Exit-Anker ohne Ende', async () => {
+  it('bietet für eine offene Q&A-Session getrennt Verlassen und globales Beenden an', async () => {
     getInfoQueryMock.mockResolvedValue({
       ...defaultSession,
       status: 'ACTIVE',
@@ -5449,7 +5449,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     expect(fixture.componentInstance.isQaSession()).toBe(true);
 
     dialogOpenMock.mockClear();
-    await fixture.componentInstance.onSessionEndAnchorClick();
+    await fixture.componentInstance.onLeaveHostKeepingQaOpen();
 
     expect(dialogOpenMock).not.toHaveBeenCalled();
     expect(endMutateMock).not.toHaveBeenCalled();
@@ -5504,7 +5504,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     expect(closeQuickFeedbackChannelMutateMock).toHaveBeenCalledWith({ code: 'ABC123' });
 
     closeQuickFeedbackChannelMutateMock.mockClear();
-    await fixture.componentInstance.onSessionEndAnchorClick();
+    await fixture.componentInstance.onLeaveHostKeepingQaOpen();
     expect(dialogOpenMock).not.toHaveBeenCalled();
     expect(endMutateMock).not.toHaveBeenCalled();
     expect(navigateByUrlSpy).toHaveBeenCalledWith('/', { replaceUrl: true });
@@ -5841,7 +5841,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
   );
 
   it.each(['ACTIVE', 'FINISHED'] as const)(
-    'beschriftet das Quiz-Menü bei offenem Q&A in %s als Zur Startseite und erhält den Raum',
+    'bietet im Quiz-Menü bei offenem Q&A in %s Verlassen und globales Beenden getrennt an',
     async (status) => {
       getInfoQueryMock.mockResolvedValue({
         ...defaultSession,
@@ -5879,7 +5879,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
         qa: fixture.componentInstance.session()?.channels?.qa,
       }).toMatchObject({ active: 'quiz', live: true, qa: { enabled: true, open: true } });
       const { menu } = await openHostMoreActions(fixture);
-      expect(menu.textContent).not.toContain('Session beenden');
+      expect(menu.textContent).toContain('Session beenden');
       const leave = Array.from(menu.querySelectorAll('button')).find((button) =>
         button.textContent?.includes('Zur Startseite'),
       );
@@ -5902,6 +5902,55 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
       }
       expect(dialogOpenMock).not.toHaveBeenCalled();
       expect(endMutateMock).not.toHaveBeenCalled();
+      fixture.destroy();
+    },
+  );
+
+  it.each(['ACTIVE', 'FINISHED'] as const)(
+    'beendet bei offenem Q&A in %s die gesamte Session erst nach Bestätigung',
+    async (status) => {
+      getInfoQueryMock.mockResolvedValue({
+        ...defaultSession,
+        status,
+        hostEnded: false,
+        qaClosesAt: '2027-03-25T12:00:00.000Z',
+        channels: {
+          quiz: { enabled: true },
+          qa: {
+            enabled: true,
+            open: true,
+            state: 'OPEN',
+            title: 'Fragen',
+            moderationMode: true,
+            closesAt: '2027-03-25T12:00:00.000Z',
+          },
+          quickFeedback: { enabled: false, open: false },
+        },
+      });
+      onStatusChangedSubscribeMock.mockImplementation(
+        (_input: unknown, opts: { onData: (data: unknown) => void }) => {
+          opts.onData({ status, currentQuestion: status === 'ACTIVE' ? 0 : null });
+          return { unsubscribe: unsubscribeMock };
+        },
+      );
+      const fixture = setup();
+      fixture.detectChanges();
+      await fixture.whenStable();
+      dialogOpenMock.mockClear();
+      endMutateMock.mockClear();
+
+      await fixture.componentInstance.onSessionEndAnchorClick();
+
+      expect(dialogOpenMock).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          data: expect.objectContaining({
+            title: 'Gesamte Session beenden?',
+            confirmLabel: 'Gesamte Session beenden',
+          }),
+        }),
+      );
+      expect(endMutateMock).toHaveBeenCalledWith({ code: 'ABC123' });
       fixture.destroy();
     },
   );
@@ -14861,8 +14910,9 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
       const skip = vi.spyOn(component, 'skipQuestion').mockResolvedValue(undefined);
       const previous = vi.spyOn(component, 'prevQuestion').mockResolvedValue(undefined);
       const replace = vi.spyOn(component, 'replaceQuizBeforeStart').mockResolvedValue(undefined);
+      const leave = vi.spyOn(component, 'onLeaveHostKeepingQaOpen').mockResolvedValue(undefined);
       const end = vi.spyOn(component, 'onSessionEndAnchorClick').mockResolvedValue(undefined);
-      for (const action of ['skip', 'previous', 'replace', 'end'] as const) {
+      for (const action of ['skip', 'previous', 'replace', 'leave', 'end'] as const) {
         component.pendingHostMoreAction.set(action);
         component.runHostMoreAction();
         expect(component.pendingHostMoreAction()).toBeNull();
@@ -14870,6 +14920,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
       expect(skip).not.toHaveBeenCalled();
       expect(previous).not.toHaveBeenCalled();
       expect(replace).not.toHaveBeenCalled();
+      expect(leave).not.toHaveBeenCalled();
       expect(end).not.toHaveBeenCalled();
       fixture.destroy();
     },

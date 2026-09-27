@@ -1761,7 +1761,9 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     return this.effectiveStatus() !== 'FINISHED' || this.liveChannelsRemainAfterQuiz();
   });
   readonly showHostViewControls = computed(() => this.isLiveHostSurface());
-  readonly pendingHostMoreAction = signal<'skip' | 'previous' | 'replace' | 'end' | null>(null);
+  readonly pendingHostMoreAction = signal<'skip' | 'previous' | 'replace' | 'leave' | 'end' | null>(
+    null,
+  );
 
   /** Material restores the persistent menu trigger before emitting menuClosed. */
   runHostMoreAction(): void {
@@ -1778,12 +1780,11 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       case 'replace':
         void this.replaceQuizBeforeStart();
         break;
+      case 'leave':
+        void this.onLeaveHostKeepingQaOpen();
+        break;
       case 'end':
-        if (this.effectiveStatus() === 'FINISHED') {
-          void this.navigateHomeFromFinishedSession();
-        } else {
-          void this.onSessionEndAnchorClick();
-        }
+        void this.onSessionEndAnchorClick();
         break;
     }
   }
@@ -5832,6 +5833,17 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     });
   }
 
+  async onLeaveHostKeepingQaOpen(): Promise<void> {
+    if (!this.keepQaOpenOnHostLeave()) {
+      return;
+    }
+    if (this.effectiveStatus() === 'FINISHED') {
+      await this.navigateHomeFromFinishedSession();
+      return;
+    }
+    await this.leaveHostViewKeepingQaOpen();
+  }
+
   private async closeQuickFeedbackBeforeKeepingQa(): Promise<void> {
     if (!this.code || !this.channels().quickFeedback || !this.isChannelOpen('quickFeedback')) {
       return;
@@ -6185,11 +6197,10 @@ export class SessionHostComponent implements OnInit, OnDestroy {
    * wenn die Session noch läuft.
    */
   async onSessionEndAnchorClick(event?: Event): Promise<void> {
-    if (!this.isSessionActive() || this.sessionEndPending()) {
-      return;
-    }
-    if (this.keepQaOpenOnHostLeave()) {
-      await this.leaveHostViewKeepingQaOpen();
+    const canEndGlobalSession =
+      this.isSessionActive() ||
+      (this.effectiveStatus() === 'FINISHED' && this.keepQaOpenOnHostLeave());
+    if (!canEndGlobalSession || this.sessionEndPending()) {
       return;
     }
     const focusReturn =

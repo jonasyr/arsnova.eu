@@ -1687,9 +1687,10 @@ export class QuizStoreService implements OnDestroy {
     let historyScopeId = document.id;
     if (document.id === DEMO_QUIZ_ID) {
       const existingScope = document.lastServerQuizAccessProof;
-      historyScopeId = isDemoQuizHistoryScopeId(existingScope)
-        ? existingScope
-        : `${DEMO_QUIZ_HISTORY_SCOPE_ID.slice(0, 4)}${generateUuid().slice(4)}`;
+      historyScopeId =
+        isDemoQuizHistoryScopeId(existingScope) && existingScope !== DEMO_QUIZ_HISTORY_SCOPE_ID
+          ? existingScope
+          : `${DEMO_QUIZ_HISTORY_SCOPE_ID.slice(0, 4)}${generateUuid().slice(4)}`;
       if (historyScopeId !== existingScope) {
         this.setLastServerQuizAccessProof(document.id, historyScopeId);
       }

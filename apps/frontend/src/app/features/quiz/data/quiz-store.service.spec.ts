@@ -711,6 +711,18 @@ describe('QuizStoreService', () => {
     expect(secondUpload.historyScopeId).toBe(firstUpload.historyScopeId);
   });
 
+  it('migriert den öffentlichen Demo-Legacy-Scope vor dem nächsten Upload', () => {
+    const service = TestBed.inject(QuizStoreService);
+    service.setLastServerQuizAccessProof(DEMO_QUIZ_ID, DEMO_QUIZ_ID);
+
+    const firstUpload = service.getUploadPayload(DEMO_QUIZ_ID);
+    const secondUpload = service.getUploadPayload(DEMO_QUIZ_ID);
+
+    expect(isDemoQuizHistoryScopeId(firstUpload.historyScopeId)).toBe(true);
+    expect(firstUpload.historyScopeId).not.toBe(DEMO_QUIZ_ID);
+    expect(secondUpload.historyScopeId).toBe(firstUpload.historyScopeId);
+  });
+
   it('exportiert und importiert ein Quiz schema-konform mit neuer ID', () => {
     const service = TestBed.inject(QuizStoreService);
     const created = service.createQuiz({

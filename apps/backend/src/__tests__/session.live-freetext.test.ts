@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { trpcDodIt } from './test-utils/trpc-dod-evidence';
-import { createQuizHistoryAccessProof } from '@arsnova/shared-types';
+import { createQuizHistoryAccessProof, DEMO_QUIZ_HISTORY_SCOPE_ID } from '@arsnova/shared-types';
 
 const { prismaMock, hostAuthMocks } = vi.hoisted(() => ({
   prismaMock: {
@@ -344,6 +344,78 @@ describe('session.getActiveQuizIds', () => {
         where: {
           status: { not: 'FINISHED' },
           quizId: { in: [ACTIVE_QUIZ_ID, INACTIVE_QUIZ_ID] },
+        },
+      }),
+    );
+  });
+
+  it('grenzt zwei unabhängige Demo-Karten mit dem öffentlichen Legacy-Scope voneinander ab', async () => {
+    const legacyDemoInput = { ...QUIZ_INPUT, historyScopeId: DEMO_QUIZ_HISTORY_SCOPE_ID };
+    const accessProof = await createQuizHistoryAccessProof(legacyDemoInput);
+    const authorizedQuiz = (id: string) => ({
+      id,
+      ...legacyDemoInput,
+      description: null,
+      teamCount: null,
+      backgroundMusic: null,
+      questions: QUIZ_INPUT.questions.map((question) => ({
+        ...question,
+        ratingMin: null,
+        ratingMax: null,
+        ratingLabelMin: null,
+        ratingLabelMax: null,
+      })),
+    });
+    prismaMock.quiz.findMany
+      .mockResolvedValueOnce([authorizedQuiz(ACTIVE_QUIZ_ID)])
+      .mockResolvedValueOnce([authorizedQuiz(INACTIVE_QUIZ_ID)]);
+    prismaMock.session.findMany.mockImplementation(
+      (args: { where?: { quizId?: { in?: string[] } } }) =>
+        Promise.resolve(
+          args.where?.quizId?.in?.includes(INACTIVE_QUIZ_ID)
+            ? [
+                {
+                  quizId: INACTIVE_QUIZ_ID,
+                  code: 'OTHER1',
+                  createdAt: new Date('2026-09-27T12:00:00.000Z'),
+                  status: 'ACTIVE',
+                  endedAt: null,
+                  expiresAt: new Date('2026-09-28T12:00:00.000Z'),
+                  _count: { participants: 6 },
+                },
+              ]
+            : [],
+        ),
+    );
+
+    await expect(
+      caller.getActiveQuizIds([{ quizId: ACTIVE_QUIZ_ID, accessProof }]),
+    ).resolves.toEqual([]);
+    await expect(
+      caller.getActiveQuizIds([{ quizId: INACTIVE_QUIZ_ID, accessProof }]),
+    ).resolves.toEqual([
+      {
+        quizId: INACTIVE_QUIZ_ID,
+        participantCountIncludingHost: 7,
+        sessionCodes: ['OTHER1'],
+      },
+    ]);
+    expect(prismaMock.quiz.findMany).toHaveBeenCalledTimes(2);
+    expect(prismaMock.session.findMany).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        where: {
+          status: { not: 'FINISHED' },
+          quizId: { in: [ACTIVE_QUIZ_ID] },
+        },
+      }),
+    );
+    expect(prismaMock.session.findMany).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        where: {
+          status: { not: 'FINISHED' },
+          quizId: { in: [INACTIVE_QUIZ_ID] },
         },
       }),
     );
