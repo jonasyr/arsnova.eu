@@ -228,7 +228,7 @@
   }
 }
 
-.session-host--with-channel-tabs {
+.session-host--with-channel-navigation {
   --session-host-tabs-height: 3.5rem;
 }
 
@@ -254,8 +254,8 @@
   }
 }
 
-.session-host--with-channel-tabs .session-host__live-shell-row,
-.session-host--with-channel-tabs .session-host__live-banner {
+.session-host--with-channel-navigation .session-host__live-shell-row,
+.session-host--with-channel-navigation .session-host__live-banner {
   position: static;
   top: auto;
   left: auto;
@@ -263,11 +263,11 @@
   z-index: auto;
 }
 
-.session-host--with-channel-tabs .session-host__live-shell-row {
+.session-host--with-channel-navigation .session-host__live-shell-row {
   margin-top: calc(-0.45 * var(--session-host-zone-gap));
 }
 
-.session-host--with-channel-tabs .session-host__run {
+.session-host--with-channel-navigation .session-host__run {
   padding-top: 0;
 }
 
@@ -432,7 +432,7 @@
     padding-bottom: var(--host-mobile-safe-bottom);
   }
 
-  .session-host--with-channel-tabs .session-host__channel-panel {
+  .session-host--with-channel-navigation .session-host__channel-panel {
     padding-bottom: var(--host-mobile-safe-bottom);
   }
 
@@ -639,7 +639,7 @@
   transform: none;
   z-index: auto;
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: center;
   gap: 0.45rem;
@@ -652,11 +652,27 @@
 
 .session-host__channel-nav {
   display: inline-flex;
+  flex-wrap: wrap;
   flex: 0 1 auto;
   align-items: center;
   gap: 0.45rem;
   min-width: 0;
   max-width: 100%;
+}
+
+.session-host__add-channel {
+  flex: 0 1 auto;
+  min-height: 2.75rem;
+  white-space: normal;
+}
+
+.session-host__channel-status {
+  width: var(--session-host-shell-width);
+  max-width: 100%;
+  margin: 0 auto;
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-body-medium);
+  line-height: 1.5;
 }
 
 .session-host__view-controls {
@@ -689,10 +705,6 @@
 }
 
 .session-host__view-controls--inline {
-  flex: 0 0 auto;
-}
-
-.session-host__view-controls--meta {
   flex: 0 0 auto;
 }
 
@@ -850,7 +862,7 @@
 
 /*
  * Compact (<600) + Medium (600–839): eine Nowrap-Zeile überfüllt Phone/iPad Mini.
- * Shell darf umbrechen; lange Labels und „Aus“-Badges entfallen; Tab-Scroll ohne sichtbaren Balken.
+ * Shell darf umbrechen; aktivierte Tabs behalten ihre Status-Badges.
  */
 @media (max-width: 839.98px) {
   .session-channel-tabs-shell {
@@ -992,7 +1004,7 @@
   }
 
   .session-channel-tabs-shell {
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     overflow-x: visible;
     column-gap: 0.75rem;
   }
@@ -1050,14 +1062,6 @@
   font-size: 1.08rem;
 }
 
-.session-channel-tabs__toggle--inactive {
-  opacity: 0.72;
-}
-
-.session-channel-tabs__toggle--inactive .session-channel-tabs__label {
-  color: var(--mat-sys-on-surface-variant);
-}
-
 .session-channel-tabs__badge {
   display: inline-flex;
   align-items: center;
@@ -1079,24 +1083,6 @@
 .session-channel-tabs__badge--status {
   background: color-mix(in srgb, var(--mat-sys-primary) 14%, transparent);
   color: var(--mat-sys-primary);
-}
-
-.session-channel-tabs__badge--inactive {
-  background: color-mix(in srgb, var(--mat-sys-outline-variant) 22%, transparent);
-  color: var(--mat-sys-on-surface-variant);
-}
-
-/* Nach der Basis-Badge-Regel: sonst gewinnt display:inline-flex gegen die Compact/Medium-Ausblendung. */
-@media (max-width: 839.98px) {
-  .session-channel-tabs__badge.session-channel-tabs__badge--inactive {
-    display: none;
-  }
-}
-
-@media (max-width: 599px) {
-  .session-channel-tabs__badge {
-    display: none;
-  }
 }
 
 .session-channel-card {
@@ -1864,8 +1850,8 @@
 }
 
 @media (max-width: 599px) {
-  .session-host--with-channel-tabs .session-host__live-shell-row,
-  .session-host--with-channel-tabs .session-host__live-banner {
+  .session-host--with-channel-navigation .session-host__live-shell-row,
+  .session-host--with-channel-navigation .session-host__live-banner {
     position: static;
     top: auto;
     left: auto;

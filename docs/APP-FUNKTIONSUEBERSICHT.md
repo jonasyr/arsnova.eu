@@ -89,7 +89,7 @@ Die optionale Aufgabenwahl **Was hast du heute vor?** steht unmittelbar über de
 
 **Beides** führt durch die vorhandene Q&A-Ersteinrichtung und die Bestätigung der Host-Zugangskarte. Erst nach erfolgreichem Öffnen von Q&A wird Blitzlicht unter demselben Sessioncode hinzugefügt; die Fragenwand bleibt der priorisierte Einstieg. Schlägt nur das Hinzufügen von Blitzlicht fehl, bleibt Q&A offen und **Blitzlicht hinzufügen** wiederholt den fehlenden Schritt in derselben Session.
 
-Die App merkt sich nur eine ausdrücklich gewählte Aufgabe als lokale Präferenz. Für neu gestartete Sessions wird die Aufgabe pro Code im aktuellen Tab gespeichert; ohne vorherige Wahl gilt der direkte Kartenstart als Schnellstart. Ein direkter Host-Link oder eine Wiederherstellung ohne diesen Eintrag übernimmt keine globale Präferenz und erhält keine zusätzlichen Rechte. Die weitere Reduktion der Live-Ansichten gehört zu den Folgeslices von [#470](https://github.com/kqc-real/arsnova.eu/issues/470); Slice 1 verändert deren Kanalnavigation nicht.
+Die App merkt sich nur eine ausdrücklich gewählte Aufgabe als lokale Präferenz. Für neu gestartete Sessions wird die Aufgabe pro Code im aktuellen Tab gespeichert; ohne vorherige Wahl gilt der direkte Kartenstart als Schnellstart. Ein direkter Host-Link oder eine Wiederherstellung ohne diesen Eintrag übernimmt keine globale Präferenz und erhält keine zusätzlichen Rechte. Die Host-Kanalnavigation folgt seit Slice 2 von [#470](https://github.com/kqc-real/arsnova.eu/issues/470) dem bestätigten Sessionzustand; die weitere Ordnung der Quizphasen und Werkzeuge bleibt den Folgeslices vorbehalten.
 
 Wichtig ist: Q&A und Blitzlicht können nicht nur als Zusatzkanäle einer bestehenden Session laufen, sondern auch sehr schnell aus dem Home-Bereich heraus initialisiert werden. Ein noch offenes Q&A-Forum überlebt ein beendetes Quiz (Epic #405).
 
@@ -380,7 +380,9 @@ Für diese Kanäle kann der Host:
 - sie aktivieren
 - sie schließen und wieder öffnen
 - einen bevorzugten Live-Kanal setzen
-- kanalabhängige UI-Tabs steuern
+- zwischen aktivierten Formaten über Tabs wechseln; bei nur einem Format entfällt die Tab-Leiste
+
+**Format hinzufügen** bietet ausschließlich noch nicht aktivierte Formate an. Quiz verwendet die bestehende Quiz-Auswahl, Q&A die vorhandene Ersteinrichtung und Blitzlicht den direkten Aktivierungspfad. Erst nach Serverbestätigung erscheinen der neue Tab und dessen Arbeitsfläche. Abbruch oder fehlgeschlagene Aktivierung erhält den bisherigen Kanal; der Fokus kehrt zum Hinzufügen-Button zurück. Geschlossene aktivierte Formate bleiben als **Zu** sichtbar und können über ihre vorhandenen Kanalaktionen wieder geöffnet werden. Reload und Wiederverbindung stellen die Navigation aus bestätigten Sessiondaten her. Nach Quizabschluss bleiben weitere offene Kanäle und **Nächstes Quiz in diesem Raum** gemäß dem bestehenden Session-Lifecycle erreichbar; das ausdrückliche Session-Ende bleibt davon getrennt.
 
 #### Laufende Anpassungen
 

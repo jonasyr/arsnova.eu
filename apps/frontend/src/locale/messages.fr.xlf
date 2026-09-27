@@ -19983,6 +19983,22 @@
           <context context-type="linenumber">107,109</context>
         </context-group>
       </trans-unit>
+      <trans-unit id="sessionHost.addChannel" datatype="html">
+        <source>Format hinzufügen</source>
+        <target>Ajouter un format</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.html</context>
+          <context context-type="linenumber">198</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.addChannelPending" datatype="html">
+        <source>Format wird vorbereitet …</source>
+        <target>Préparation du format…</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.html</context>
+          <context context-type="linenumber">298</context>
+        </context-group>
+      </trans-unit>
       <trans-unit id="sessionTabs.hostAria" datatype="html">
         <source>Live-Bereich wählen</source>
         <target>Choisir l’espace live</target>
@@ -24669,14 +24685,6 @@
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.ts</context>
           <context context-type="linenumber">8756</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="sessionTabs.channelInactive" datatype="html">
-        <source>Aus</source>
-        <target>Désactivé</target>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.ts</context>
-          <context context-type="linenumber">8856</context>
         </context-group>
       </trans-unit>
       <trans-unit id="sessionTabs.channelClosed" datatype="html">

@@ -1185,6 +1185,11 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   /** true ab ≤7s Rest (nach Musik-Ausblendung) → kein Countdown-Track mehr, nur SFX. */
   readonly countdownSfxPhase = signal(false);
   readonly channelActivationPending = signal<SessionChannelTab | null>(null);
+  readonly channelNavigationActionPending = signal<SessionChannelTab | null>(null);
+  readonly channelNavigationBusy = computed(
+    () =>
+      this.channelNavigationActionPending() !== null || this.channelActivationPending() !== null,
+  );
   readonly channelVisibilityPending = signal<SessionChannelTab | null>(null);
   readonly Math = Math;
   /** ARIA für sichtbaren Session-Code (Lokalisation wie Blitzlicht-Teilnehmeransicht). */
@@ -1608,10 +1613,16 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     if (channels.quickFeedback) result.push('quickFeedback');
     return result;
   });
-  readonly availableChannels = computed<SessionChannelTab[]>(() => {
+  readonly addableChannels = computed<SessionChannelTab[]>(() => {
     const session = this.session();
-    if (!session) return [];
-    return ['quiz', 'qa', 'quickFeedback'];
+    if (!session || session.hostEnded === true || this.sessionUnavailable()) return [];
+    return (['quiz', 'qa', 'quickFeedback'] as const).filter(
+      (channel) =>
+        !this.isChannelEnabled(channel) &&
+        (this.effectiveStatus() !== 'FINISHED' ||
+          this.qaHostWritesAllowed() ||
+          (this.qaChannelNeedsConfiguration() && channel !== 'quiz')),
+    );
   });
   readonly liveChannelsRemainAfterQuiz = computed(() => {
     if (this.effectiveStatus() !== 'FINISHED') {
@@ -1628,9 +1639,10 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     );
   });
   readonly showChannelTabs = computed(
-    () =>
-      this.availableChannels().length > 1 &&
-      (this.effectiveStatus() !== 'FINISHED' || this.liveChannelsRemainAfterQuiz()),
+    () => this.visibleChannels().length > 1 && this.session()?.hostEnded !== true,
+  );
+  readonly showChannelNavigation = computed(
+    () => this.showChannelTabs() || this.isLiveHostSurface(),
   );
   readonly showPrimaryLiveView = computed(() => {
     const active = this.activeChannel();
@@ -4655,7 +4667,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       return;
     }
     if (!this.channels().quiz) {
-      await this.selectChannel('quiz');
+      await this.addChannel('quiz');
       return;
     }
     if (this.canStartAnotherQuiz()) {
@@ -5870,7 +5882,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   }
 
   dismissHostSteeringCallout(): void {
-    if (this.qaQuickFeedbackPending()) return;
+    if (this.qaQuickFeedbackPending() || this.channelNavigationBusy()) return;
     if (this.hostSteeringCallout()?.retryLabel) {
       this.focusQaWallAfterCreateSetup();
     }
@@ -5939,6 +5951,8 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       errorRequestId: 'host.steering:failed',
       suggestedArea: 'LIVE_CONTROL',
     });
+    // The channel action restores focus after rendering its final navigation state.
+    if (this.channelNavigationActionPending()) return;
     this.scrollHostSteeringCalloutIntoView();
     setTimeout(() => {
       const target = this.hostElement.nativeElement.querySelector<HTMLButtonElement>(
@@ -8993,7 +9007,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       return '...';
     }
     if (!this.channels()[channel]) {
-      return $localize`:@@sessionTabs.channelInactive:Aus`;
+      return null;
     }
     if (!this.isChannelOpen(channel)) {
       return $localize`:@@sessionTabs.channelClosed:Zu`;
@@ -9751,29 +9765,64 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     await this.requestQaWordCloudLemmaSmoothing();
   }
 
+  async addChannel(channel: string): Promise<void> {
+    if (
+      (channel !== 'quiz' && channel !== 'qa' && channel !== 'quickFeedback') ||
+      !this.addableChannels().includes(channel)
+    ) {
+      return;
+    }
+    await this.runChannelNavigationAction(channel, () =>
+      channel === 'quiz' ? this.activateQuizChannel() : this.enableChannel(channel),
+    );
+  }
+
+  private async runChannelNavigationAction(
+    channel: SessionChannelTab,
+    action: () => Promise<void>,
+  ): Promise<void> {
+    if (this.channelNavigationBusy() || this.channelVisibilityPending()) return;
+    this.initialPreferredChannelApplied = true;
+    this.initialUrlTabApplied = true;
+    const previousCallout = this.hostSteeringCallout();
+    this.channelNavigationActionPending.set(channel);
+    try {
+      await action();
+    } finally {
+      this.channelNavigationActionPending.set(null);
+      if (!this.destroyRef.destroyed) {
+        afterNextRender(
+          () => {
+            if (this.destroyRef.destroyed || this.dialog.openDialogs?.length > 0) return;
+            const selected = this.hostElement.nativeElement.querySelector<HTMLElement>(
+              '.session-channel-tabs button[aria-checked="true"]',
+            );
+            const trigger = this.hostElement.nativeElement.querySelector<HTMLElement>(
+              '[data-testid="add-channel-trigger"]',
+            );
+            const activated = this.isChannelEnabled(channel) && this.activeChannel() === channel;
+            const target = activated ? (selected ?? trigger) : (trigger ?? selected);
+            if (target && this.isElementVisibleForFocus(target)) {
+              scrollAndFocusInAppMain(target, { block: 'nearest' });
+              if (activated && previousCallout && this.hostSteeringCallout() === previousCallout) {
+                this.hostSteeringCallout.set(null);
+              }
+            }
+          },
+          { injector: this.injector },
+        );
+      }
+    }
+  }
+
   async selectChannel(channel: string): Promise<void> {
     if (channel === 'quiz' || channel === 'qa' || channel === 'quickFeedback') {
+      if (!this.isChannelEnabled(channel) || this.channelNavigationBusy()) return;
       // Eine bewusste Auswahl darf nicht von einem noch ausstehenden Initial-Snapshot überschrieben werden.
       this.initialPreferredChannelApplied = true;
       this.initialUrlTabApplied = true;
-      if (
-        this.effectiveStatus() === 'FINISHED' &&
-        !this.isChannelEnabled(channel) &&
-        !this.qaHostWritesAllowed() &&
-        !(this.qaChannelNeedsConfiguration() && (channel === 'qa' || channel === 'quickFeedback'))
-      ) {
-        return;
-      }
       if (channel === 'qa' && this.qaChannelNeedsConfiguration()) {
-        await this.enableChannel('qa');
-        return;
-      }
-      if (!this.isChannelEnabled(channel)) {
-        if (channel === 'quiz') {
-          await this.activateQuizChannel();
-        } else {
-          await this.enableChannel(channel);
-        }
+        await this.runChannelNavigationAction('qa', () => this.enableChannel('qa'));
         return;
       }
       if (
@@ -9924,7 +9973,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
         await this.attachUploadedQuizToSession(uploadedQuizId, choice.adoptQuizTeams);
       } catch (error) {
         this.openHostSteeringCalloutForSteeringFailure(
-          () => void this.startQuizSelectionFlow(),
+          () => void this.runChannelNavigationAction('quiz', () => this.startQuizSelectionFlow()),
           error,
         );
       } finally {
@@ -9952,12 +10001,15 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       this.activeChannel.set('quiz');
       this.ensureActiveChannel();
       await this.finalizeQuizChannelActivation();
-      this.dismissHostSteeringCallout();
+      if (!this.channelNavigationActionPending()) this.dismissHostSteeringCallout();
     } catch (error) {
       const retry = attached
-        ? () => void this.finalizeQuizChannelActivation()
-        : () => void this.attachUploadedQuizToSession(uploadedQuizId, adoptQuizTeams);
-      this.openHostSteeringCalloutForSteeringFailure(retry, error);
+        ? () => this.finalizeQuizChannelActivation()
+        : () => this.attachUploadedQuizToSession(uploadedQuizId, adoptQuizTeams);
+      this.openHostSteeringCalloutForSteeringFailure(
+        () => void this.runChannelNavigationAction('quiz', retry),
+        error,
+      );
     }
   }
 
@@ -10118,7 +10170,9 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       try {
         await this.openQaConfigurationDialog({ numberSetupSequence: true });
       } catch {
-        this.openHostSteeringCalloutForSteeringFailure(() => void this.enableChannel(channel));
+        this.openHostSteeringCalloutForSteeringFailure(
+          () => void this.runChannelNavigationAction(channel, () => this.enableChannel(channel)),
+        );
       } finally {
         this.channelActivationPending.set(null);
       }
@@ -10145,7 +10199,9 @@ export class SessionHostComponent implements OnInit, OnDestroy {
         this.showStagedRecoveryCard();
       }
     } catch {
-      this.openHostSteeringCalloutForSteeringFailure(() => void this.enableChannel(channel));
+      this.openHostSteeringCalloutForSteeringFailure(
+        () => void this.runChannelNavigationAction(channel, () => this.enableChannel(channel)),
+      );
     } finally {
       this.channelActivationPending.set(null);
     }
@@ -10996,20 +11052,14 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   }
 
   private ensureActiveChannel(): void {
-    const available = this.availableChannels();
-    if (available.length === 0) {
+    const visible = this.visibleChannels();
+    if (visible.length === 0) {
       return;
     }
 
     let active = this.activeChannel();
-    const visible = this.visibleChannels();
-    if (!this.isChannelEnabled(active) && visible.length > 0) {
+    if (!visible.includes(active)) {
       active = visible[0]!;
-      this.activeChannel.set(active);
-    }
-
-    if (!available.includes(active)) {
-      active = available[0]!;
       this.activeChannel.set(active);
     }
 

@@ -791,6 +791,25 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     return TestBed.createComponent(SessionHostComponent);
   };
 
+  const clickAddChannel = async (
+    fixture: ReturnType<typeof setup>,
+    channel: 'quiz' | 'qa' | 'quickFeedback',
+  ) => {
+    const trigger = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+      '[data-testid="add-channel-trigger"]',
+    );
+    expect(trigger).not.toBeNull();
+    trigger!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const item = document.querySelector<HTMLButtonElement>(
+      `[data-testid="add-channel-${channel}"]`,
+    );
+    expect(item).not.toBeNull();
+    item!.click();
+    fixture.detectChanges();
+  };
+
   it('plant beim Laden die 30-Minuten-Warnung mit absoluter Frist und Q&A-Isolation', async () => {
     getLifecycleForHostQueryMock.mockResolvedValueOnce({
       ...defaultLifecycle,
@@ -935,7 +954,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
       afterClosed: () =>
         of(component === QaChannelConfigurationDialogComponent ? configuredQaChannelResult : true),
     }));
-    await fixture.componentInstance.selectChannel('qa');
+    await fixture.componentInstance.addChannel('qa');
 
     expect(enableQaChannelMutateMock).not.toHaveBeenCalled();
     expect(dialogOpenMock).toHaveBeenCalledWith(
@@ -1006,7 +1025,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     fixture.componentInstance.session.set(finishedQuizOnly);
     fixture.detectChanges();
 
-    await fixture.componentInstance.selectChannel('qa');
+    await fixture.componentInstance.addChannel('qa');
     fixture.detectChanges();
 
     expect(dialogOpenMock).toHaveBeenCalledWith(
@@ -2290,9 +2309,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     expect(styles).toMatch(
       /@media \(max-width: 839\.98px\)[\s\S]*?session-channel-tabs \{[^}]*width:\s*fit-content/,
     );
-    expect(styles).toMatch(
-      /\.session-channel-tabs__badge\.session-channel-tabs__badge--inactive \{\s*display:\s*none/,
-    );
+    expect(styles).not.toContain('session-channel-tabs__badge--inactive');
     fixture.destroy();
   });
 
@@ -2630,7 +2647,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
       toggle.style.display = 'none';
     }
     const visibleFallback = fixture.nativeElement.querySelector(
-      '.session-host__channel-visibility-action, .session-channel-tabs button',
+      '.session-host__channel-visibility-action, [data-testid="add-channel-trigger"], .session-channel-tabs button',
     ) as HTMLElement | null;
 
     expect(presenterButton).not.toBeNull();
@@ -2647,7 +2664,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     vi.unstubAllGlobals();
   });
 
-  it('zeigt im Host auch noch inaktive Kanaele als Tabs an', async () => {
+  it('zeigt bei einem aktivierten Kanal keine Tabs und inaktive Formate nur im Hinzufügen-Menü', async () => {
     getInfoQueryMock.mockResolvedValue({
       ...defaultSession,
       channels: {
@@ -2662,15 +2679,162 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    const text = fixture.nativeElement.textContent ?? '';
-    expect(text).toContain('Quiz');
-    expect(text).toContain('Q&A');
-    expect(text).toContain('Blitzlicht');
-    expect(text).toContain('Aus');
+    const host = fixture.nativeElement as HTMLElement;
+    expect(fixture.componentInstance.visibleChannels()).toEqual(['quiz']);
+    expect(fixture.componentInstance.addableChannels()).toEqual(['qa', 'quickFeedback']);
+    expect(fixture.componentInstance.showChannelTabs()).toBe(false);
+    expect(host.querySelector('.session-channel-tabs')).toBeNull();
+    const trigger = host.querySelector<HTMLButtonElement>('[data-testid="add-channel-trigger"]');
+    expect(trigger?.textContent).toContain('Format hinzufügen');
+    trigger!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(document.querySelector('[data-testid="add-channel-quiz"]')).toBeNull();
+    expect(document.querySelector('[data-testid="add-channel-qa"]')?.textContent).toContain('Q&A');
+    expect(
+      document.querySelector('[data-testid="add-channel-quickFeedback"]')?.textContent,
+    ).toContain('Blitzlicht');
     fixture.destroy();
   });
 
-  it('zeigt den Kanalwahlschalter nach Quiz-FINISHED, solange Q&A noch eingerichtet werden kann', () => {
+  it('zeigt geschlossene aktivierte Kanäle als Tabs und bietet sie nicht erneut zum Hinzufügen an', async () => {
+    getInfoQueryMock.mockResolvedValue({
+      ...defaultSession,
+      preferredChannel: 'quiz',
+      channels: {
+        quiz: { enabled: true },
+        qa: {
+          enabled: true,
+          open: false,
+          title: 'Geschlossene Fragenrunde',
+          moderationMode: true,
+          state: 'CLOSED',
+        },
+        quickFeedback: { enabled: false, open: false },
+      },
+    });
+    const fixture = setup();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const component = fixture.componentInstance;
+    expect(component.visibleChannels()).toEqual(['quiz', 'qa']);
+    expect(component.addableChannels()).toEqual(['quickFeedback']);
+    expect(component.showChannelTabs()).toBe(true);
+    const tabs = (fixture.nativeElement as HTMLElement).querySelector('.session-channel-tabs');
+    expect(tabs?.querySelectorAll('mat-button-toggle')).toHaveLength(2);
+    expect(tabs?.textContent).toContain('Q&A');
+    expect(tabs?.textContent).toContain('Zu');
+    expect(tabs?.textContent).not.toContain('Blitzlicht');
+
+    await component.selectChannel('qa');
+
+    expect(component.activeChannel()).toBe('qa');
+    expect(reopenQaChannelMutateMock).not.toHaveBeenCalled();
+    expect(enableQaChannelMutateMock).not.toHaveBeenCalled();
+    expect(dialogOpenMock).not.toHaveBeenCalled();
+    fixture.destroy();
+  });
+
+  it('zeigt bei drei aktivierten Kanälen drei Tabs und kein Hinzufügen-Menü', async () => {
+    getInfoQueryMock.mockResolvedValue({
+      ...defaultSession,
+      channels: {
+        quiz: { enabled: true },
+        qa: { enabled: true, open: true, title: 'Fragen', moderationMode: true },
+        quickFeedback: { enabled: true, open: true },
+      },
+    });
+    const fixture = setup();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.addableChannels()).toEqual([]);
+    expect(
+      fixture.nativeElement.querySelectorAll('.session-channel-tabs mat-button-toggle'),
+    ).toHaveLength(3);
+    expect(fixture.nativeElement.querySelector('[data-testid="add-channel-trigger"]')).toBeNull();
+    fixture.destroy();
+  });
+
+  it('rekonstruiert beim Reload die serverbestätigten Kanäle und preferredChannel ohne globale Aufgabenableitung', async () => {
+    localStorage.setItem(
+      'arsnova-host-scenario:v1',
+      JSON.stringify({ version: 1, scenario: 'EVENT' }),
+    );
+    getInfoQueryMock.mockResolvedValue({
+      ...defaultSession,
+      preferredChannel: 'quickFeedback',
+      channels: {
+        quiz: { enabled: true },
+        qa: { enabled: false, open: false, title: null, moderationMode: false },
+        quickFeedback: { enabled: true, open: false },
+      },
+    });
+    const fixture = setup();
+    const scenario = TestBed.inject(HostScenarioService);
+    scenario.selectScenario('EVENT');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(scenario.getForSession('ABC123')).toBeNull();
+    expect(fixture.componentInstance.visibleChannels()).toEqual(['quiz', 'quickFeedback']);
+    expect(fixture.componentInstance.addableChannels()).toEqual(['qa']);
+    expect(fixture.componentInstance.activeChannel()).toBe('quickFeedback');
+    expect(fixture.componentInstance.session()?.preferredChannel).toBe('quickFeedback');
+    expect(enableQaChannelMutateMock).not.toHaveBeenCalled();
+    expect(enableQuickFeedbackChannelMutateMock).not.toHaveBeenCalled();
+    expect(dialogOpenMock).not.toHaveBeenCalled();
+    fixture.destroy();
+  });
+
+  it('übernimmt beim Reconnect nur bestätigte neue Tabs und überschreibt preferredChannel nicht durch den lokalen Tab', async () => {
+    const initialSession = {
+      ...defaultSession,
+      preferredChannel: 'quiz' as const,
+      channels: {
+        quiz: { enabled: true },
+        qa: { enabled: false, open: false, title: null, moderationMode: false },
+        quickFeedback: { enabled: false, open: false },
+      },
+    };
+    getInfoQueryMock.mockResolvedValue(initialSession);
+    const fixture = setup();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(fixture.componentInstance.showChannelTabs()).toBe(false);
+    setPreferredLiveChannelMutateMock.mockClear();
+    getInfoQueryMock.mockResolvedValue({
+      ...initialSession,
+      preferredChannel: 'qa',
+      channels: {
+        ...initialSession.channels,
+        qa: { enabled: true, open: false, title: 'Fragen', moderationMode: true, state: 'CLOSED' },
+      },
+    });
+
+    await (
+      fixture.componentInstance as unknown as { reloadSessionInfo(): Promise<unknown> }
+    ).reloadSessionInfo();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.visibleChannels()).toEqual(['quiz', 'qa']);
+    expect(fixture.componentInstance.addableChannels()).toEqual(['quickFeedback']);
+    expect(fixture.componentInstance.showChannelTabs()).toBe(true);
+    expect(fixture.componentInstance.session()?.preferredChannel).toBe('qa');
+    expect(setPreferredLiveChannelMutateMock).not.toHaveBeenCalled();
+    expect(enableQaChannelMutateMock).not.toHaveBeenCalled();
+    fixture.destroy();
+  });
+
+  it('bietet nach Quiz-FINISHED weitere Formate an, ohne bei nur einem aktivierten Kanal Tabs zu zeigen', () => {
     const fixture = setup();
     fixture.componentInstance.session.set({
       ...defaultSession,
@@ -2689,8 +2853,13 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     });
     fixture.detectChanges();
 
-    expect(fixture.componentInstance.showChannelTabs()).toBe(true);
-    expect(fixture.nativeElement.querySelector('.session-channel-tabs')).not.toBeNull();
+    expect(fixture.componentInstance.showChannelTabs()).toBe(false);
+    expect(fixture.componentInstance.showChannelNavigation()).toBe(true);
+    expect(fixture.componentInstance.addableChannels()).toEqual(['qa', 'quickFeedback']);
+    expect(fixture.nativeElement.querySelector('.session-channel-tabs')).toBeNull();
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="add-channel-trigger"]'),
+    ).not.toBeNull();
     fixture.destroy();
   });
 
@@ -2873,8 +3042,8 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     fixture.detectChanges();
 
     expect(fixture.componentInstance.activeChannel()).toBe('qa');
-    expect(fixture.componentInstance.showChannelTabs()).toBe(false);
-    expect(fixture.nativeElement.querySelector('.session-channel-tabs')).toBeNull();
+    expect(fixture.componentInstance.showChannelTabs()).toBe(true);
+    expect(fixture.nativeElement.querySelector('.session-channel-tabs')).not.toBeNull();
     expect(
       fixture.nativeElement.querySelector('[data-testid="qa-channel-heading"]'),
     ).not.toBeNull();
@@ -3183,7 +3352,181 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     }
   });
 
-  it('aktiviert den Q&A-Tab beim Klick auf einen inaktiven Kanal', async () => {
+  it('aktiviert durch die Tab-Auswahl kein inaktives Format', async () => {
+    getInfoQueryMock.mockResolvedValue({
+      ...defaultSession,
+      preferredChannel: 'quiz',
+      channels: {
+        quiz: { enabled: true },
+        qa: { enabled: false, open: false, title: null, moderationMode: false },
+        quickFeedback: { enabled: false, open: false },
+      },
+    });
+    const fixture = setup();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const component = fixture.componentInstance;
+    setPreferredLiveChannelMutateMock.mockClear();
+
+    await component.selectChannel('qa');
+    await component.selectChannel('quickFeedback');
+
+    expect(component.activeChannel()).toBe('quiz');
+    expect(component.visibleChannels()).toEqual(['quiz']);
+    expect(component.session()?.preferredChannel).toBe('quiz');
+    expect(dialogOpenMock).not.toHaveBeenCalled();
+    expect(enableQaChannelMutateMock).not.toHaveBeenCalled();
+    expect(enableQuickFeedbackChannelMutateMock).not.toHaveBeenCalled();
+    expect(setPreferredLiveChannelMutateMock).not.toHaveBeenCalled();
+    fixture.destroy();
+  });
+
+  it('behält während Q&A-Einrichtung und bei Abbruch Kanal, Tabs und preferredChannel bei', async () => {
+    getLifecycleForHostQueryMock.mockResolvedValue({ ...defaultLifecycle });
+    getInfoQueryMock.mockResolvedValue({
+      ...defaultSession,
+      preferredChannel: 'quiz',
+      channels: {
+        quiz: { enabled: true },
+        qa: { enabled: false, open: false, title: null, moderationMode: false, state: 'DISABLED' },
+        quickFeedback: { enabled: false, open: false },
+      },
+    });
+    const fixture = setup();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const component = fixture.componentInstance;
+    const closed = new Subject<null>();
+    dialogOpenMock.mockReturnValue({ afterClosed: () => closed });
+    const addition = component.addChannel('qa');
+    await vi.waitFor(() => expect(dialogOpenMock).toHaveBeenCalled());
+    fixture.detectChanges();
+
+    expect(component.channelNavigationBusy()).toBe(true);
+    expect(component.activeChannel()).toBe('quiz');
+    expect(component.visibleChannels()).toEqual(['quiz']);
+    expect(component.session()?.preferredChannel).toBe('quiz');
+    expect(fixture.nativeElement.querySelector('.session-channel-tabs')).toBeNull();
+    expect(
+      fixture.nativeElement
+        .querySelector('[data-testid="add-channel-trigger"]')
+        ?.getAttribute('aria-disabled'),
+    ).toBe('true');
+    await component.addChannel('quickFeedback');
+    expect(enableQuickFeedbackChannelMutateMock).not.toHaveBeenCalled();
+
+    closed.next(null);
+    closed.complete();
+    await addition;
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(component.channelNavigationBusy()).toBe(false);
+    expect(component.activeChannel()).toBe('quiz');
+    expect(component.visibleChannels()).toEqual(['quiz']);
+    expect(component.addableChannels()).toEqual(['qa', 'quickFeedback']);
+    expect(component.session()?.preferredChannel).toBe('quiz');
+    expect(component.hostSteeringCallout()).toBeNull();
+    expect(enableQaChannelMutateMock).not.toHaveBeenCalled();
+    fixture.destroy();
+  });
+
+  it('fügt Blitzlicht erst nach Serverbestätigung hinzu und wechselt anschließend auf den bestätigten Tab', async () => {
+    const initialSession = {
+      ...defaultSession,
+      preferredChannel: 'quiz' as const,
+      channels: {
+        quiz: { enabled: true },
+        qa: { enabled: false, open: false, title: null, moderationMode: false },
+        quickFeedback: { enabled: false, open: false },
+      },
+    };
+    getInfoQueryMock.mockResolvedValue(initialSession);
+    const fixture = setup();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const component = fixture.componentInstance;
+    const confirmedChannels = {
+      ...initialSession.channels,
+      quickFeedback: { enabled: true, open: true },
+    };
+    let confirm!: (channels: typeof confirmedChannels) => void;
+    enableQuickFeedbackChannelMutateMock.mockReturnValueOnce(
+      new Promise<typeof confirmedChannels>((resolve) => {
+        confirm = resolve;
+      }),
+    );
+    const addition = component.addChannel('quickFeedback');
+    await vi.waitFor(() => expect(enableQuickFeedbackChannelMutateMock).toHaveBeenCalledTimes(1));
+    fixture.detectChanges();
+
+    expect(component.activeChannel()).toBe('quiz');
+    expect(component.visibleChannels()).toEqual(['quiz']);
+    expect(component.session()?.preferredChannel).toBe('quiz');
+    expect(component.channelNavigationBusy()).toBe(true);
+    expect(fixture.nativeElement.querySelector('.session-channel-tabs')).toBeNull();
+
+    confirm(confirmedChannels);
+    await addition;
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(component.activeChannel()).toBe('quickFeedback');
+    expect(component.visibleChannels()).toEqual(['quiz', 'quickFeedback']);
+    expect(component.addableChannels()).toEqual(['qa']);
+    expect(component.session()?.preferredChannel).toBe('quickFeedback');
+    expect(component.channelNavigationBusy()).toBe(false);
+    expect(
+      fixture.nativeElement.querySelectorAll('.session-channel-tabs mat-button-toggle'),
+    ).toHaveLength(2);
+    fixture.destroy();
+  });
+
+  it('lässt nach fehlgeschlagener Blitzlicht-Aktivierung den bisherigen Kanal und einen erneuten Versuch zu', async () => {
+    getInfoQueryMock.mockResolvedValue({
+      ...defaultSession,
+      preferredChannel: 'quiz',
+      channels: {
+        quiz: { enabled: true },
+        qa: { enabled: false, open: false, title: null, moderationMode: false },
+        quickFeedback: { enabled: false, open: false },
+      },
+    });
+    const fixture = setup();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const component = fixture.componentInstance;
+    enableQuickFeedbackChannelMutateMock.mockRejectedValueOnce(new Error('offline'));
+    setPreferredLiveChannelMutateMock.mockClear();
+
+    await component.addChannel('quickFeedback');
+    fixture.detectChanges();
+
+    expect(component.activeChannel()).toBe('quiz');
+    expect(component.visibleChannels()).toEqual(['quiz']);
+    expect(component.session()?.preferredChannel).toBe('quiz');
+    expect(component.channelNavigationBusy()).toBe(false);
+    expect(component.hostSteeringCallout()).not.toBeNull();
+    expect(setPreferredLiveChannelMutateMock).not.toHaveBeenCalled();
+    expect(fixture.nativeElement.querySelector('.session-channel-tabs')).toBeNull();
+    await flushComponentAfterStable(fixture, 0);
+    expect(document.activeElement).toBe(
+      fixture.nativeElement.querySelector('[data-testid="add-channel-trigger"]'),
+    );
+
+    await component.addChannel('quickFeedback');
+
+    expect(enableQuickFeedbackChannelMutateMock).toHaveBeenCalledTimes(2);
+    expect(component.activeChannel()).toBe('quickFeedback');
+    expect(component.visibleChannels()).toEqual(['quiz', 'quickFeedback']);
+    fixture.destroy();
+  });
+
+  it('fügt den Q&A-Tab nach bestätigter Einrichtung über Format hinzufügen hinzu', async () => {
     getLifecycleForHostQueryMock.mockResolvedValue({ ...defaultLifecycle });
     getInfoQueryMock.mockResolvedValue({
       ...defaultSession,
@@ -3201,7 +3544,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     qaOnQuestionsUpdatedSubscribeMock.mockClear();
     dialogOpenMock.mockReturnValue({ afterClosed: () => of(configuredQaChannelResult) });
 
-    await fixture.componentInstance.selectChannel('qa');
+    await fixture.componentInstance.addChannel('qa');
     fixture.detectChanges();
 
     expect(enableQaChannelMutateMock).not.toHaveBeenCalled();
@@ -3256,7 +3599,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
 
     const fixture = setup();
     await fixture.componentInstance.ngOnInit();
-    await fixture.componentInstance.selectChannel('qa');
+    await fixture.componentInstance.addChannel('qa');
 
     expect(enableQaChannelMutateMock).not.toHaveBeenCalled();
     expect(dialogOpenMock).toHaveBeenCalledWith(
@@ -3298,7 +3641,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
 
     const fixture = setup();
     await fixture.componentInstance.ngOnInit();
-    await fixture.componentInstance.selectChannel('qa');
+    await fixture.componentInstance.addChannel('qa');
 
     expect(dialogOpenMock).toHaveBeenCalledWith(
       QaChannelConfigurationDialogComponent,
@@ -3332,7 +3675,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
 
     const fixture = setup();
     await fixture.componentInstance.ngOnInit();
-    await fixture.componentInstance.selectChannel('qa');
+    await fixture.componentInstance.addChannel('qa');
 
     expect(enableQaChannelMutateMock).not.toHaveBeenCalled();
     expect(endMutateMock).not.toHaveBeenCalled();
@@ -3895,6 +4238,46 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     fixture.destroy();
   });
 
+  it('ändert preferredChannel beim Tabwechsel erst nach Serverbestätigung und erhält ihn bei Ablehnung', async () => {
+    getInfoQueryMock.mockResolvedValue({
+      ...defaultSession,
+      preferredChannel: 'quiz',
+      channels: {
+        quiz: { enabled: true },
+        qa: { enabled: true, open: true, title: 'Fragen', moderationMode: false },
+        quickFeedback: { enabled: false, open: false },
+      },
+    });
+    const fixture = setup();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const component = fixture.componentInstance;
+    let reject!: (error: Error) => void;
+    setPreferredLiveChannelMutateMock.mockReset().mockRejectedValue(new Error('offline'));
+    setPreferredLiveChannelMutateMock.mockReturnValueOnce(
+      new Promise<never>((_resolve, rejectPromise) => {
+        reject = rejectPromise;
+      }),
+    );
+
+    const selection = component.selectChannel('qa');
+    await vi.waitFor(() =>
+      expect(setPreferredLiveChannelMutateMock).toHaveBeenCalledWith({
+        code: 'ABC123',
+        channel: 'qa',
+      }),
+    );
+    expect(component.activeChannel()).toBe('qa');
+    expect(component.session()?.preferredChannel).toBe('quiz');
+    reject(new Error('offline'));
+    await selection;
+
+    expect(component.session()?.preferredChannel).toBe('quiz');
+    expect(component.visibleChannels()).toEqual(['quiz', 'qa']);
+    expect(setPreferredLiveChannelMutateMock.mock.calls.length).toBeGreaterThanOrEqual(2);
+    fixture.destroy();
+  });
+
   it('setzt den Presenter-Kanal bei Q&A-Listenaktualisierung nicht auf den lokalen Tab zurück', async () => {
     getInfoQueryMock.mockResolvedValue({
       ...defaultSession,
@@ -4059,7 +4442,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     fixture.destroy();
   });
 
-  it('öffnet beim inaktiven Quiz-Tab die Sammlung, lädt das Quiz hoch und hängt es an die Session', async () => {
+  it('öffnet über Format hinzufügen die Sammlung, lädt das Quiz hoch und hängt es an die Session', async () => {
     getInfoQueryMock
       .mockResolvedValueOnce({
         ...defaultSession,
@@ -4088,7 +4471,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    await fixture.componentInstance.selectChannel('quiz');
+    await fixture.componentInstance.addChannel('quiz');
     fixture.detectChanges();
 
     expect(dialogOpenMock).toHaveBeenCalled();
@@ -4109,7 +4492,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     ['qa', 'Q&A'],
     ['quickFeedback', 'Blitzlicht'],
   ] as const)(
-    'setzt den Kanalschalter nach abgebrochener Quiz-Aktivierung auf %s zurück',
+    'behält bei abgebrochener Quiz-Aktivierung im Menü den aktivierten %s-Tab',
     async (sourceChannel, sourceLabel) => {
       getInfoQueryMock.mockResolvedValue({
         ...defaultSession,
@@ -4130,11 +4513,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
       fixture.detectChanges();
       dialogOpenMock.mockClear();
 
-      const toggles = Array.from(
-        fixture.nativeElement.querySelectorAll('mat-button-toggle'),
-      ) as HTMLElement[];
-      const quizToggle = toggles.find((toggle) => toggle.textContent?.includes('Quiz'));
-      (quizToggle?.querySelector('button') as HTMLButtonElement | null)?.click();
+      await clickAddChannel(fixture, 'quiz');
 
       await vi.waitUntil(() => dialogOpenMock.mock.calls.length === 1);
       await fixture.whenStable();
@@ -4467,11 +4846,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     fixture.componentInstance.activeChannel.set('qa');
     fixture.detectChanges();
 
-    const toggles = Array.from(
-      fixture.nativeElement.querySelectorAll('mat-button-toggle'),
-    ) as HTMLElement[];
-    const quizToggle = toggles.find((toggle) => toggle.textContent?.includes('Quiz'));
-    (quizToggle?.querySelector('button') as HTMLButtonElement | null)?.click();
+    await clickAddChannel(fixture, 'quiz');
 
     await vi.waitUntil(() => dialogOpenMock.mock.calls.length === 1);
 
@@ -4556,11 +4931,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     fixture.componentInstance.activeChannel.set('qa');
     fixture.detectChanges();
 
-    const toggles = Array.from(
-      fixture.nativeElement.querySelectorAll('mat-button-toggle'),
-    ) as HTMLElement[];
-    const quizToggle = toggles.find((toggle) => toggle.textContent?.includes('Quiz'));
-    (quizToggle?.querySelector('button') as HTMLButtonElement | null)?.click();
+    await clickAddChannel(fixture, 'quiz');
 
     await vi.waitUntil(() => dialogOpenMock.mock.calls.length === 1);
 
@@ -4597,7 +4968,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     fixture.componentInstance.activeChannel.set('qa');
     fixture.detectChanges();
 
-    await fixture.componentInstance.selectChannel('quiz');
+    await fixture.componentInstance.addChannel('quiz');
     await fixture.whenStable();
 
     expect(quizStoreMock.getUploadPayload).toHaveBeenCalledWith('local-quiz-incompatible');
@@ -4633,7 +5004,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     fixture.componentInstance.activeChannel.set('qa');
     fixture.detectChanges();
 
-    await fixture.componentInstance.selectChannel('quiz');
+    await fixture.componentInstance.addChannel('quiz');
     await fixture.whenStable();
     fixture.detectChanges();
 
@@ -4688,7 +5059,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
       },
     });
 
-    await fixture.componentInstance.selectChannel('quiz');
+    await fixture.componentInstance.addChannel('quiz');
     await fixture.whenStable();
     fixture.detectChanges();
 
@@ -8710,6 +9081,9 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     };
     let peerReleased = false;
     let resolveUnfilteredReload!: (snapshot: QaQuestionsListDTO) => void;
+    const unfilteredReload = new Promise<QaQuestionsListDTO>((resolve) => {
+      resolveUnfilteredReload = resolve;
+    });
     qaListQueryMock.mockImplementation(
       (input?: { statuses?: Array<'PENDING' | 'ACTIVE' | 'PINNED' | 'ARCHIVED'> }) => {
         const pendingOnly = input?.statuses?.length === 1 && input.statuses[0] === 'PENDING';
@@ -8721,9 +9095,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
             qaHostSnapshot([], { rankingRevision: 2, sessionLifecycleRevision: 2 }),
           );
         }
-        return new Promise<QaQuestionsListDTO>((resolve) => {
-          resolveUnfilteredReload = resolve;
-        });
+        return unfilteredReload;
       },
     );
     let invalidationHandler: ((data: QaQuestionsInvalidationDTO) => void) | undefined;
