@@ -1,10 +1,10 @@
-import { TestBed } from '@angular/core/testing';
+import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { DOCUMENT } from '@angular/common';
 import { LOCALE_ID, type Provider, signal } from '@angular/core';
 import { ActivatedRoute, convertToParamMap, provideRouter, Router } from '@angular/router';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { MatTooltip } from '@angular/material/tooltip';
+import { MatMenuTrigger } from '@angular/material/menu';
 import { By } from '@angular/platform-browser';
 import { NEVER, Subject, of } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -27,14 +27,33 @@ import { PresentationStartDialogComponent } from '../host-pairing/presentation-s
 import { WordCloudComponent } from '../session-present/word-cloud.component';
 import { SessionTokenStorageService } from '../session-present/session-token-storage.service';
 import { ThemePresetService } from '../../../core/theme-preset.service';
+import { HostScenarioService } from '../../../core/host-scenario.service';
+import { SessionResultsExportService } from '../../../core/session-results-export.service';
 import { QuizStoreService, DEMO_QUIZ_ID } from '../../quiz/data/quiz-store.service';
 import { getSkewAdjustedNow, resetServerClockSkew } from '../session-server-clock';
 
 function exitAnchorButtonLabel(button: Element): string {
   return (button.textContent ?? '')
-    .replace(/^(logout|groups|stop|replay|home)/, '')
+    .replace(/^(logout|groups|stop|replay|home|more_horiz|skip_next)/, '')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+async function openHostMoreActions(fixture: ComponentFixture<SessionHostComponent>): Promise<{
+  trigger: HTMLButtonElement;
+  menu: HTMLElement;
+}> {
+  const trigger = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+    '[data-testid="host-more-actions"]',
+  );
+  expect(trigger).not.toBeNull();
+  trigger!.focus();
+  trigger!.click();
+  fixture.detectChanges();
+  await fixture.whenStable();
+  const menu = document.querySelector<HTMLElement>('.cdk-overlay-container [role="menu"]');
+  expect(menu).not.toBeNull();
+  return { trigger: trigger!, menu: menu! };
 }
 
 function qaHostSnapshot(
@@ -474,6 +493,9 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     sessionStorage.removeItem('session-expiration-warning:ABC123:2:30');
     sessionStorage.removeItem('session-expiration-warning:ABC123:2:5');
     sessionStorage.removeItem('arsnova-host-recovery-card-ABC123');
+    sessionStorage.removeItem('arsnova-host-scenario-session:v1:ABC123');
+    sessionStorage.removeItem('arsnova-host-scenario-quick-feedback:v1:ABC123');
+    localStorage.removeItem('arsnova-host-scenario:v1');
     localStorage.removeItem('arsnova-host-phase-tracks');
     vi.clearAllMocks();
     resetServerClockSkew();
@@ -787,6 +809,25 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     return TestBed.createComponent(SessionHostComponent);
   };
 
+  const clickAddChannel = async (
+    fixture: ReturnType<typeof setup>,
+    channel: 'quiz' | 'qa' | 'quickFeedback',
+  ) => {
+    const trigger = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+      '[data-testid="add-channel-trigger"]',
+    );
+    expect(trigger).not.toBeNull();
+    trigger!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const item = document.querySelector<HTMLButtonElement>(
+      `[data-testid="add-channel-${channel}"]`,
+    );
+    expect(item).not.toBeNull();
+    item!.click();
+    fixture.detectChanges();
+  };
+
   it('plant beim Laden die 30-Minuten-Warnung mit absoluter Frist und Q&A-Isolation', async () => {
     getLifecycleForHostQueryMock.mockResolvedValueOnce({
       ...defaultLifecycle,
@@ -931,7 +972,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
       afterClosed: () =>
         of(component === QaChannelConfigurationDialogComponent ? configuredQaChannelResult : true),
     }));
-    await fixture.componentInstance.selectChannel('qa');
+    await fixture.componentInstance.addChannel('qa');
 
     expect(enableQaChannelMutateMock).not.toHaveBeenCalled();
     expect(dialogOpenMock).toHaveBeenCalledWith(
@@ -1002,7 +1043,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     fixture.componentInstance.session.set(finishedQuizOnly);
     fixture.detectChanges();
 
-    await fixture.componentInstance.selectChannel('qa');
+    await fixture.componentInstance.addChannel('qa');
     fixture.detectChanges();
 
     expect(dialogOpenMock).toHaveBeenCalledWith(
@@ -1478,8 +1519,13 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
         suppressJoinMenuAutopen: boolean;
       }
     ).suppressJoinMenuAutopen = true;
+    fixture.componentInstance.joinInfoPopoverOpen.set(false);
+    fixture.detectChanges();
+    fixture.nativeElement.setAttribute('tabindex', '-1');
+    fixture.nativeElement.focus();
     fixture.componentInstance.joinInfoPopoverOpen.set(true);
     fixture.detectChanges();
+    await fixture.whenStable();
 
     const overlay = fixture.nativeElement.querySelector(
       '.session-host__join-viewport-overlay',
@@ -1495,8 +1541,14 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     expect(text).not.toContain('Live-Ansicht:');
     expect(closeButton).toBeDefined();
     expect(fixture.nativeElement.querySelectorAll('.cdk-focus-trap-anchor')).toHaveLength(2);
+    const overlayCode = overlay?.querySelector('.session-host__join-menu-origin--code');
+    expect(overlayCode).not.toBeNull();
+    expect(overlayCode?.hasAttribute('aria-label')).toBe(false);
+    expect(overlayCode?.querySelector('.sr-only')?.textContent?.trim()).toBe('Session-Code ABC123');
+    expect(overlayCode?.querySelector('[aria-hidden="true"]')?.textContent?.trim()).toBe('ABC123');
 
     closeButton?.click();
+    await Promise.resolve();
     fixture.detectChanges();
     await Promise.resolve();
 
@@ -1519,6 +1571,11 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     expect(joinControl?.getAttribute('aria-label')).toBe('Beitrittsinformationen öffnen');
     expect(joinControl?.querySelector('mat-icon')?.textContent?.trim()).toBe('qr_code_2');
     expect(joinControl?.textContent?.replace(/\s+/g, ' ').trim()).toBe('qr_code_2');
+    const liveCode = fixture.nativeElement.querySelector('.session-host__live-code') as HTMLElement;
+    expect(liveCode).not.toBeNull();
+    expect(liveCode.hasAttribute('aria-label')).toBe(false);
+    expect(liveCode.querySelector('.sr-only')?.textContent?.trim()).toBe('Session-Code ABC123');
+    expect(liveCode.querySelector('[aria-hidden="true"]')?.textContent?.trim()).toBe('ABC123');
     fixture.destroy();
   });
 
@@ -1649,7 +1706,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     const icons = Array.from(
       fixture.nativeElement.querySelectorAll('.session-lobby__nick-emoji--host-lobby'),
     ) as HTMLElement[];
-    const srOnlyLabels = Array.from(fixture.nativeElement.querySelectorAll('.sr-only'), (el) =>
+    const srOnlyLabels = Array.from(list?.querySelectorAll('.sr-only') ?? [], (el) =>
       (el.textContent ?? '').trim(),
     );
 
@@ -1683,6 +1740,16 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     fixture.detectChanges();
 
     expect(fixture.componentInstance.isQuizAwaitingFirstQuestion()).toBe(true);
+    expect(
+      fixture.nativeElement.querySelectorAll(
+        '.session-lobby__actions--hero .mat-mdc-unelevated-button',
+      ),
+    ).toHaveLength(1);
+    expect(
+      fixture.nativeElement.querySelector(
+        '.session-lobby__actions--hero [data-testid="open-presenter-view"]',
+      ),
+    ).toBeNull();
     expect(fixture.componentInstance.showLobbyStage()).toBe(true);
     const icons = Array.from(
       fixture.nativeElement.querySelectorAll('.session-lobby__nick-emoji--host-lobby'),
@@ -2093,7 +2160,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     fixture.destroy();
   });
 
-  it('aktiviert im Quiz-Foyer bereits die immersive Host-Ansicht', async () => {
+  it('ordnet im Quiz-Foyer den gefüllten Start vor den beschrifteten Anzeigeoptionen ein', async () => {
     getInfoQueryMock.mockResolvedValue({
       ...defaultSession,
       status: 'LOBBY',
@@ -2108,70 +2175,40 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
-
+    const host = fixture.nativeElement as HTMLElement;
     expect(fixture.componentInstance.isImmersiveMode()).toBe(true);
+    expect(host.querySelector('.session-host__view-controls--inline')).toBeNull();
+    const controls = host.querySelector('.session-host__view-controls--labeled');
+    const presenter = controls?.querySelector<HTMLButtonElement>(
+      '[data-testid="open-presenter-view"]',
+    );
+    expect(host.querySelectorAll('[data-testid="open-presenter-view"]')).toHaveLength(1);
+    expect(presenter?.getAttribute('aria-label')).toBe('Präsentation starten');
+    expect(presenter?.textContent).toContain('Präsentation starten');
+    expect(presenter?.className).toMatch(/tonal/i);
+    expect(presenter?.querySelector('app-presenter-icon')).not.toBeNull();
+    expect(controls?.querySelector('.session-host__view-toggle--frame')?.textContent).toContain(
+      'App-Rahmen',
+    );
+    expect(host.querySelector('#host-display-heading')?.textContent).toContain(
+      'Auf Bildschirm zeigen',
+    );
+    expect(host.querySelector('#host-sound-heading')?.textContent?.trim()).toBe('Ton');
     expect(
-      fixture.nativeElement.querySelector('.session-host__view-controls--inline'),
+      host.querySelector('.session-host__sound-tools .session-host__live-sound-control'),
     ).not.toBeNull();
-    const presenterButton = fixture.nativeElement.querySelector(
-      '.session-host__view-controls [data-testid="open-presenter-view"]',
-    ) as HTMLButtonElement | null;
-    expect(presenterButton).not.toBeNull();
-    expect(presenterButton?.getAttribute('aria-label')).toBe('Präsentation starten');
-    expect(presenterButton?.className ?? '').toMatch(/mat-mdc-icon-button/);
-    expect(presenterButton?.classList.contains('session-host__view-toggle--labeled')).toBe(false);
-    expect(presenterButton?.querySelector('app-presenter-icon')).not.toBeNull();
-    expect(presenterButton?.querySelector('.session-host__view-toggle-label')).toBeNull();
-    expect(presenterButton?.querySelector('.session-host__view-toggle-content')).toBeNull();
-    expect(presenterButton?.classList.contains('session-host__view-toggle')).toBe(true);
-    const lobbyPresenterCta = fixture.nativeElement.querySelector(
-      '.session-lobby__actions--hero [data-testid="open-presenter-view"]',
-    ) as HTMLButtonElement | null;
-    expect(lobbyPresenterCta).not.toBeNull();
-    expect(lobbyPresenterCta?.textContent).toContain('Präsentation starten');
-    expect(lobbyPresenterCta?.className ?? '').toMatch(/unelevated|filled/i);
-    expect(lobbyPresenterCta?.querySelector('app-presenter-icon')).not.toBeNull();
-    const lobbyIcon = lobbyPresenterCta?.querySelector('app-presenter-icon');
-    const lobbyLabel = lobbyPresenterCta?.querySelector('.mdc-button__label');
-    expect(lobbyIcon).not.toBeNull();
-    expect(lobbyLabel).not.toBeNull();
-    expect(lobbyLabel?.contains(lobbyIcon!)).toBe(false);
-    expect(getComputedStyle(lobbyIcon!).alignSelf).toBe('center');
-    expect(getComputedStyle(lobbyIcon!).verticalAlign).toBe('middle');
-    expect(getComputedStyle(lobbyIcon!).width).toMatch(/1\.75rem|28px|app-presenter-icon-size/);
-    expect(getComputedStyle(lobbyIcon!).height).toMatch(/1\.75rem|28px|app-presenter-icon-size/);
-    const lobbyStartButton = Array.from(
-      fixture.nativeElement.querySelectorAll(
-        '.session-lobby__actions--hero button',
-      ) as NodeListOf<HTMLButtonElement>,
-    ).find((button) => button.textContent?.includes('Erste Frage starten'));
-    expect(lobbyStartButton).toBeTruthy();
-    expect(lobbyStartButton?.className ?? '').toMatch(/tonal/i);
-    const { readFileSync } = await import('node:fs');
-    const { fileURLToPath } = await import('node:url');
-    const { dirname, join } = await import('node:path');
-    const styles = readFileSync(
-      join(dirname(fileURLToPath(import.meta.url)), 'session-host.component.scss'),
-      'utf8',
+    const lobbyActions = host.querySelector('.session-lobby__actions--hero');
+    expect(lobbyActions?.querySelector('[data-testid="open-presenter-view"]')).toBeNull();
+    const startButton = Array.from(lobbyActions?.querySelectorAll('button') ?? []).find((button) =>
+      button.textContent?.includes('Erste Frage starten'),
     );
-    expect(styles).toMatch(
-      /\.session-host__view-toggle\.session-host__view-toggle--presenter\s*\{[^}]*mat-sys-primary-container/s,
-    );
-    expect(styles).toMatch(
-      /\.session-host__view-toggle\.session-host__view-toggle--presenter\s*\{[^}]*mat-sys-on-primary-container/s,
-    );
-    expect(styles).toMatch(
-      /\.session-host__view-toggle\.session-host__view-toggle--presenter\s*\{[^}]*--app-presenter-icon-size:\s*1\.5rem/s,
-    );
-    expect(styles).toMatch(
-      /\.session-host__view-toggle\.session-host__view-toggle--presenter\s*\{[^}]*--mat-icon-button-state-layer-size:\s*2\.75rem/s,
-    );
-    expect(styles).toMatch(
-      /\.session-host__presenter-cta \{[^}]*--app-presenter-icon-size:\s*1\.75rem/s,
-    );
-    expect(styles).not.toMatch(
-      /\.session-host__presenter-cta \{[^}]*--mat-button-tonal-container-color/s,
-    );
+    expect(startButton).toBeTruthy();
+    expect(startButton?.className).toMatch(/unelevated|filled/i);
+    expect(lobbyActions?.querySelectorAll('.mat-mdc-unelevated-button')).toHaveLength(1);
+    expect(TestBed.inject(HostScenarioService).getForSession('ABC123')).toBeNull();
+    expect(host.querySelector('#host-live-content')).not.toBeNull();
+    expect(host.querySelector('.session-channel-tabs')).toBeNull();
+    expect(host.querySelector('[data-testid="host-more-actions"]')).not.toBeNull();
     fixture.destroy();
   });
 
@@ -2234,15 +2271,27 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     fixture.destroy();
   });
 
-  it('gruppiert Kanal-Navigation mit Pause und View-Controls Presenter zuerst', async () => {
+  it('trennt Quiz-Navigation und Pause von den beschrifteten Anzeigeoptionen', async () => {
     getInfoQueryMock.mockResolvedValue({
       ...defaultSession,
       status: 'ACTIVE',
+      currentQuestion: 0,
       channels: {
         quiz: { enabled: true },
         qa: { enabled: true, open: true, title: null, moderationMode: false },
         quickFeedback: { enabled: true, open: true },
       },
+    });
+    getCurrentQuestionForHostQueryMock.mockResolvedValue({
+      questionId: '11111111-1111-4111-8111-111111111111',
+      order: 0,
+      totalQuestions: 3,
+      text: 'Welche Antwort stimmt?',
+      type: 'SINGLE_CHOICE',
+      difficulty: 'MEDIUM',
+      showQuestionTypeIndicators: true,
+      timer: 30,
+      answers: [],
     });
 
     const fixture = setup();
@@ -2257,7 +2306,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
       '[data-testid="channel-visibility-action"]',
     ) as HTMLButtonElement | null;
     const viewControls = fixture.nativeElement.querySelector(
-      '.session-host__view-controls--inline',
+      '.session-host__view-controls--labeled',
     ) as HTMLElement | null;
     const { readFileSync } = await import('node:fs');
     const { fileURLToPath } = await import('node:url');
@@ -2274,11 +2323,11 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     expect(channelNav?.contains(pauseAction)).toBe(true);
     expect(viewControls).not.toBeNull();
 
-    const toggles = Array.from(
-      viewControls?.querySelectorAll('.session-host__view-toggle') ?? [],
-    ) as HTMLElement[];
-    expect(toggles[0]?.classList.contains('session-host__view-toggle--presenter')).toBe(true);
-    expect(toggles.at(-1)?.classList.contains('session-host__view-toggle--frame')).toBe(true);
+    expect(channelNav?.contains(viewControls)).toBe(false);
+    expect(viewControls?.querySelector('[data-testid="open-presenter-view"]')).not.toBeNull();
+    expect(viewControls?.querySelector('.session-host__view-toggle--frame')?.textContent).toContain(
+      'App-Rahmen',
+    );
     expect(styles).toMatch(/\.session-channel-tabs \{[^}]*overflow:\s*hidden/);
     expect(styles).toMatch(
       /@media \(max-width: 839\.98px\)[\s\S]*?session-channel-tabs \{[^}]*overflow-x:\s*auto/,
@@ -2286,9 +2335,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     expect(styles).toMatch(
       /@media \(max-width: 839\.98px\)[\s\S]*?session-channel-tabs \{[^}]*width:\s*fit-content/,
     );
-    expect(styles).toMatch(
-      /\.session-channel-tabs__badge\.session-channel-tabs__badge--inactive \{\s*display:\s*none/,
-    );
+    expect(styles).not.toContain('session-channel-tabs__badge--inactive');
     fixture.destroy();
   });
 
@@ -2558,7 +2605,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
       '[data-testid="open-presenter-view"]',
     ) as HTMLButtonElement | null;
     const viewControls = fixture.nativeElement.querySelector(
-      '.session-host__view-controls--inline',
+      '.session-host__view-controls--labeled',
     ) as HTMLElement | null;
     const focusFallback = viewControls?.querySelector(
       '.session-host__view-toggle--fullscreen, .session-host__view-toggle--frame',
@@ -2615,7 +2662,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
       '[data-testid="open-presenter-view"]',
     ) as HTMLButtonElement | null;
     const viewControls = fixture.nativeElement.querySelector(
-      '.session-host__view-controls--inline',
+      '.session-host__view-controls--labeled',
     ) as HTMLElement | null;
     const hiddenToggles = Array.from(
       viewControls?.querySelectorAll<HTMLElement>(
@@ -2626,7 +2673,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
       toggle.style.display = 'none';
     }
     const visibleFallback = fixture.nativeElement.querySelector(
-      '.session-host__channel-visibility-action, .session-channel-tabs button',
+      '.session-host__channel-visibility-action, [data-testid="add-channel-trigger"], .session-channel-tabs button',
     ) as HTMLElement | null;
 
     expect(presenterButton).not.toBeNull();
@@ -2643,7 +2690,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     vi.unstubAllGlobals();
   });
 
-  it('zeigt im Host auch noch inaktive Kanaele als Tabs an', async () => {
+  it('zeigt bei einem aktivierten Kanal keine Tabs und inaktive Formate nur im Hinzufügen-Menü', async () => {
     getInfoQueryMock.mockResolvedValue({
       ...defaultSession,
       channels: {
@@ -2658,15 +2705,162 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    const text = fixture.nativeElement.textContent ?? '';
-    expect(text).toContain('Quiz');
-    expect(text).toContain('Q&A');
-    expect(text).toContain('Blitzlicht');
-    expect(text).toContain('Aus');
+    const host = fixture.nativeElement as HTMLElement;
+    expect(fixture.componentInstance.visibleChannels()).toEqual(['quiz']);
+    expect(fixture.componentInstance.addableChannels()).toEqual(['qa', 'quickFeedback']);
+    expect(fixture.componentInstance.showChannelTabs()).toBe(false);
+    expect(host.querySelector('.session-channel-tabs')).toBeNull();
+    const trigger = host.querySelector<HTMLButtonElement>('[data-testid="add-channel-trigger"]');
+    expect(trigger?.textContent).toContain('Format hinzufügen');
+    trigger!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(document.querySelector('[data-testid="add-channel-quiz"]')).toBeNull();
+    expect(document.querySelector('[data-testid="add-channel-qa"]')?.textContent).toContain('Q&A');
+    expect(
+      document.querySelector('[data-testid="add-channel-quickFeedback"]')?.textContent,
+    ).toContain('Blitzlicht');
     fixture.destroy();
   });
 
-  it('zeigt den Kanalwahlschalter nach Quiz-FINISHED, solange Q&A noch eingerichtet werden kann', () => {
+  it('zeigt geschlossene aktivierte Kanäle als Tabs und bietet sie nicht erneut zum Hinzufügen an', async () => {
+    getInfoQueryMock.mockResolvedValue({
+      ...defaultSession,
+      preferredChannel: 'quiz',
+      channels: {
+        quiz: { enabled: true },
+        qa: {
+          enabled: true,
+          open: false,
+          title: 'Geschlossene Fragenrunde',
+          moderationMode: true,
+          state: 'CLOSED',
+        },
+        quickFeedback: { enabled: false, open: false },
+      },
+    });
+    const fixture = setup();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const component = fixture.componentInstance;
+    expect(component.visibleChannels()).toEqual(['quiz', 'qa']);
+    expect(component.addableChannels()).toEqual(['quickFeedback']);
+    expect(component.showChannelTabs()).toBe(true);
+    const tabs = (fixture.nativeElement as HTMLElement).querySelector('.session-channel-tabs');
+    expect(tabs?.querySelectorAll('mat-button-toggle')).toHaveLength(2);
+    expect(tabs?.textContent).toContain('Q&A');
+    expect(tabs?.textContent).toContain('Zu');
+    expect(tabs?.textContent).not.toContain('Blitzlicht');
+
+    await component.selectChannel('qa');
+
+    expect(component.activeChannel()).toBe('qa');
+    expect(reopenQaChannelMutateMock).not.toHaveBeenCalled();
+    expect(enableQaChannelMutateMock).not.toHaveBeenCalled();
+    expect(dialogOpenMock).not.toHaveBeenCalled();
+    fixture.destroy();
+  });
+
+  it('zeigt bei drei aktivierten Kanälen drei Tabs und kein Hinzufügen-Menü', async () => {
+    getInfoQueryMock.mockResolvedValue({
+      ...defaultSession,
+      channels: {
+        quiz: { enabled: true },
+        qa: { enabled: true, open: true, title: 'Fragen', moderationMode: true },
+        quickFeedback: { enabled: true, open: true },
+      },
+    });
+    const fixture = setup();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.addableChannels()).toEqual([]);
+    expect(
+      fixture.nativeElement.querySelectorAll('.session-channel-tabs mat-button-toggle'),
+    ).toHaveLength(3);
+    expect(fixture.nativeElement.querySelector('[data-testid="add-channel-trigger"]')).toBeNull();
+    fixture.destroy();
+  });
+
+  it('rekonstruiert beim Reload die serverbestätigten Kanäle und preferredChannel ohne globale Aufgabenableitung', async () => {
+    localStorage.setItem(
+      'arsnova-host-scenario:v1',
+      JSON.stringify({ version: 1, scenario: 'EVENT' }),
+    );
+    getInfoQueryMock.mockResolvedValue({
+      ...defaultSession,
+      preferredChannel: 'quickFeedback',
+      channels: {
+        quiz: { enabled: true },
+        qa: { enabled: false, open: false, title: null, moderationMode: false },
+        quickFeedback: { enabled: true, open: false },
+      },
+    });
+    const fixture = setup();
+    const scenario = TestBed.inject(HostScenarioService);
+    scenario.selectScenario('EVENT');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(scenario.getForSession('ABC123')).toBeNull();
+    expect(fixture.componentInstance.visibleChannels()).toEqual(['quiz', 'quickFeedback']);
+    expect(fixture.componentInstance.addableChannels()).toEqual(['qa']);
+    expect(fixture.componentInstance.activeChannel()).toBe('quickFeedback');
+    expect(fixture.componentInstance.session()?.preferredChannel).toBe('quickFeedback');
+    expect(enableQaChannelMutateMock).not.toHaveBeenCalled();
+    expect(enableQuickFeedbackChannelMutateMock).not.toHaveBeenCalled();
+    expect(dialogOpenMock).not.toHaveBeenCalled();
+    fixture.destroy();
+  });
+
+  it('übernimmt beim Reconnect nur bestätigte neue Tabs und überschreibt preferredChannel nicht durch den lokalen Tab', async () => {
+    const initialSession = {
+      ...defaultSession,
+      preferredChannel: 'quiz' as const,
+      channels: {
+        quiz: { enabled: true },
+        qa: { enabled: false, open: false, title: null, moderationMode: false },
+        quickFeedback: { enabled: false, open: false },
+      },
+    };
+    getInfoQueryMock.mockResolvedValue(initialSession);
+    const fixture = setup();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(fixture.componentInstance.showChannelTabs()).toBe(false);
+    setPreferredLiveChannelMutateMock.mockClear();
+    getInfoQueryMock.mockResolvedValue({
+      ...initialSession,
+      preferredChannel: 'qa',
+      channels: {
+        ...initialSession.channels,
+        qa: { enabled: true, open: false, title: 'Fragen', moderationMode: true, state: 'CLOSED' },
+      },
+    });
+
+    await (
+      fixture.componentInstance as unknown as { reloadSessionInfo(): Promise<unknown> }
+    ).reloadSessionInfo();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.visibleChannels()).toEqual(['quiz', 'qa']);
+    expect(fixture.componentInstance.addableChannels()).toEqual(['quickFeedback']);
+    expect(fixture.componentInstance.showChannelTabs()).toBe(true);
+    expect(fixture.componentInstance.session()?.preferredChannel).toBe('qa');
+    expect(setPreferredLiveChannelMutateMock).not.toHaveBeenCalled();
+    expect(enableQaChannelMutateMock).not.toHaveBeenCalled();
+    fixture.destroy();
+  });
+
+  it('bietet nach Quiz-FINISHED weitere Formate an, ohne bei nur einem aktivierten Kanal Tabs zu zeigen', () => {
     const fixture = setup();
     fixture.componentInstance.session.set({
       ...defaultSession,
@@ -2685,10 +2879,85 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     });
     fixture.detectChanges();
 
-    expect(fixture.componentInstance.showChannelTabs()).toBe(true);
-    expect(fixture.nativeElement.querySelector('.session-channel-tabs')).not.toBeNull();
+    expect(fixture.componentInstance.showChannelTabs()).toBe(false);
+    expect(fixture.componentInstance.showChannelNavigation()).toBe(true);
+    expect(fixture.componentInstance.addableChannels()).toEqual(['qa', 'quickFeedback']);
+    expect(fixture.nativeElement.querySelector('.session-channel-tabs')).toBeNull();
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="add-channel-trigger"]'),
+    ).not.toBeNull();
     fixture.destroy();
   });
+
+  it.each([
+    { label: 'offenem Q&A', qaOpen: true, feedbackOpen: false, title: 'Quiz beendet' },
+    { label: 'offenem Blitzlicht', qaOpen: false, feedbackOpen: true, title: 'Quiz beendet' },
+    { label: 'beiden offenen Formaten', qaOpen: true, feedbackOpen: true, title: 'Quiz beendet' },
+    {
+      label: 'geschlossenen Formaten',
+      qaOpen: false,
+      feedbackOpen: false,
+      title: 'Session beendet',
+    },
+  ])(
+    'unterscheidet den Quizabschluss bei $label vom Host-Ende und erhält den Überschriftenfokus',
+    async ({ qaOpen, feedbackOpen, title }) => {
+      getInfoQueryMock.mockResolvedValue({
+        ...defaultSession,
+        status: 'FINISHED',
+        hostEnded: false,
+        qaClosesAt: '2027-09-22T06:00:00.000Z',
+        channels: {
+          quiz: { enabled: true },
+          qa: {
+            enabled: true,
+            open: qaOpen,
+            title: 'Fragen',
+            moderationMode: true,
+            state: qaOpen ? 'OPEN' : 'CLOSED',
+            closesAt: '2027-09-22T06:00:00.000Z',
+          },
+          quickFeedback: { enabled: true, open: feedbackOpen },
+        },
+      });
+      onStatusChangedSubscribeMock.mockImplementation(
+        (_input: unknown, opts: { onData: (data: unknown) => void }) => {
+          opts.onData({ status: 'FINISHED', currentQuestion: null });
+          return { unsubscribe: unsubscribeMock };
+        },
+      );
+      const initialize = vi.spyOn(SessionHostComponent.prototype, 'ngOnInit');
+      const fixture = setup();
+      const inst = fixture.componentInstance;
+      try {
+        fixture.detectChanges();
+        expect(initialize).toHaveBeenCalledOnce();
+        await initialize.mock.results[0]!.value;
+      } finally {
+        initialize.mockRestore();
+      }
+      await inst.selectChannel('quiz');
+      fixture.detectChanges();
+
+      const host = fixture.nativeElement as HTMLElement;
+      const heading = host.querySelector<HTMLHeadingElement>('h1#session-finished-heading');
+      expect(heading).not.toBeNull();
+      expect(heading?.textContent?.trim()).toBe(title);
+      expect(heading?.tabIndex).toBe(-1);
+      expect(heading?.classList.contains('app-content-focus-target')).toBe(true);
+      heading!.focus();
+      expect(document.activeElement).toBe(heading);
+
+      // The authoritative host end wins even if an older channel snapshot still reports open.
+      inst.session.update((session) => ({ ...session!, hostEnded: true }));
+      fixture.detectChanges();
+
+      expect(host.querySelector('h1#session-finished-heading')).toBe(heading);
+      expect(heading?.textContent?.trim()).toBe('Session beendet');
+      expect(document.activeElement).toBe(heading);
+      fixture.destroy();
+    },
+  );
 
   it('blendet den Kanalwahlschalter nach Session-Ende aus', () => {
     const fixture = setup();
@@ -2789,6 +3058,11 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     expect(
       fixture.nativeElement.querySelector('[data-testid="start-another-quiz"]')?.textContent,
     ).toContain('Nächstes Quiz in diesem Raum');
+    fixture.componentInstance.activeChannel.set('quiz');
+    fixture.detectChanges();
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="start-another-quiz"]')?.className,
+    ).toMatch(/tonal/i);
     fixture.destroy();
   });
 
@@ -2869,8 +3143,8 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     fixture.detectChanges();
 
     expect(fixture.componentInstance.activeChannel()).toBe('qa');
-    expect(fixture.componentInstance.showChannelTabs()).toBe(false);
-    expect(fixture.nativeElement.querySelector('.session-channel-tabs')).toBeNull();
+    expect(fixture.componentInstance.showChannelTabs()).toBe(true);
+    expect(fixture.nativeElement.querySelector('.session-channel-tabs')).not.toBeNull();
     expect(
       fixture.nativeElement.querySelector('[data-testid="qa-channel-heading"]'),
     ).not.toBeNull();
@@ -3078,7 +3352,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     expect(fixture.componentInstance.qaStatusTooltip('PINNED')).toContain('Wird beantwortet');
     expect(fixture.componentInstance.qaStatusTooltip('ARCHIVED')).toContain('beantwortet');
     const pendingChip = host.querySelector(
-      '.session-qa-summary__chip--pending',
+      '[data-testid="qa-review-pending"]',
     ) as HTMLElement | null;
     const pinnedChip = host.querySelector(
       '.session-qa-summary__chip--pinned',
@@ -3089,7 +3363,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     expect(pendingChip).not.toBeNull();
     expect(pinnedChip).not.toBeNull();
     expect(archivedChip).not.toBeNull();
-    expect(pendingChip?.getAttribute('aria-label')).toContain('Fragen in Moderation');
+    expect(pendingChip?.textContent).toContain('Fragen prüfen (1)');
     expect(pinnedChip?.getAttribute('aria-label')).toContain('angepinnte Fragen');
     expect(archivedChip?.getAttribute('aria-label')).toContain('archivierte Fragen');
     expect(pendingChip?.tabIndex).toBe(0);
@@ -3130,7 +3404,12 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
 
     const host = fixture.nativeElement as HTMLElement;
     expect(fixture.componentInstance.qaQuestions()).toEqual([]);
-    expect(host.querySelector('[data-testid="post-processing-ended"]')).not.toBeNull();
+    const ended = host.querySelector<HTMLElement>('[data-testid="post-processing-ended"]');
+    const endedHeading = host.querySelector<HTMLElement>('#post-processing-ended-title');
+    expect(ended).not.toBeNull();
+    expect(ended?.hasAttribute('tabindex')).toBe(false);
+    expect(endedHeading?.tabIndex).toBe(-1);
+    expect(endedHeading?.classList.contains('app-content-focus-target')).toBe(true);
     expect(host.textContent).toContain('Legal Holds');
     expect(host.textContent).not.toContain('Nicht mehr zugängliche Frage');
     fixture.destroy();
@@ -3179,7 +3458,181 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     }
   });
 
-  it('aktiviert den Q&A-Tab beim Klick auf einen inaktiven Kanal', async () => {
+  it('aktiviert durch die Tab-Auswahl kein inaktives Format', async () => {
+    getInfoQueryMock.mockResolvedValue({
+      ...defaultSession,
+      preferredChannel: 'quiz',
+      channels: {
+        quiz: { enabled: true },
+        qa: { enabled: false, open: false, title: null, moderationMode: false },
+        quickFeedback: { enabled: false, open: false },
+      },
+    });
+    const fixture = setup();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const component = fixture.componentInstance;
+    setPreferredLiveChannelMutateMock.mockClear();
+
+    await component.selectChannel('qa');
+    await component.selectChannel('quickFeedback');
+
+    expect(component.activeChannel()).toBe('quiz');
+    expect(component.visibleChannels()).toEqual(['quiz']);
+    expect(component.session()?.preferredChannel).toBe('quiz');
+    expect(dialogOpenMock).not.toHaveBeenCalled();
+    expect(enableQaChannelMutateMock).not.toHaveBeenCalled();
+    expect(enableQuickFeedbackChannelMutateMock).not.toHaveBeenCalled();
+    expect(setPreferredLiveChannelMutateMock).not.toHaveBeenCalled();
+    fixture.destroy();
+  });
+
+  it('behält während Q&A-Einrichtung und bei Abbruch Kanal, Tabs und preferredChannel bei', async () => {
+    getLifecycleForHostQueryMock.mockResolvedValue({ ...defaultLifecycle });
+    getInfoQueryMock.mockResolvedValue({
+      ...defaultSession,
+      preferredChannel: 'quiz',
+      channels: {
+        quiz: { enabled: true },
+        qa: { enabled: false, open: false, title: null, moderationMode: false, state: 'DISABLED' },
+        quickFeedback: { enabled: false, open: false },
+      },
+    });
+    const fixture = setup();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const component = fixture.componentInstance;
+    const closed = new Subject<null>();
+    dialogOpenMock.mockReturnValue({ afterClosed: () => closed });
+    const addition = component.addChannel('qa');
+    await vi.waitFor(() => expect(dialogOpenMock).toHaveBeenCalled());
+    fixture.detectChanges();
+
+    expect(component.channelNavigationBusy()).toBe(true);
+    expect(component.activeChannel()).toBe('quiz');
+    expect(component.visibleChannels()).toEqual(['quiz']);
+    expect(component.session()?.preferredChannel).toBe('quiz');
+    expect(fixture.nativeElement.querySelector('.session-channel-tabs')).toBeNull();
+    expect(
+      fixture.nativeElement
+        .querySelector('[data-testid="add-channel-trigger"]')
+        ?.getAttribute('aria-disabled'),
+    ).toBe('true');
+    await component.addChannel('quickFeedback');
+    expect(enableQuickFeedbackChannelMutateMock).not.toHaveBeenCalled();
+
+    closed.next(null);
+    closed.complete();
+    await addition;
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(component.channelNavigationBusy()).toBe(false);
+    expect(component.activeChannel()).toBe('quiz');
+    expect(component.visibleChannels()).toEqual(['quiz']);
+    expect(component.addableChannels()).toEqual(['qa', 'quickFeedback']);
+    expect(component.session()?.preferredChannel).toBe('quiz');
+    expect(component.hostSteeringCallout()).toBeNull();
+    expect(enableQaChannelMutateMock).not.toHaveBeenCalled();
+    fixture.destroy();
+  });
+
+  it('fügt Blitzlicht erst nach Serverbestätigung hinzu und wechselt anschließend auf den bestätigten Tab', async () => {
+    const initialSession = {
+      ...defaultSession,
+      preferredChannel: 'quiz' as const,
+      channels: {
+        quiz: { enabled: true },
+        qa: { enabled: false, open: false, title: null, moderationMode: false },
+        quickFeedback: { enabled: false, open: false },
+      },
+    };
+    getInfoQueryMock.mockResolvedValue(initialSession);
+    const fixture = setup();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const component = fixture.componentInstance;
+    const confirmedChannels = {
+      ...initialSession.channels,
+      quickFeedback: { enabled: true, open: true },
+    };
+    let confirm!: (channels: typeof confirmedChannels) => void;
+    enableQuickFeedbackChannelMutateMock.mockReturnValueOnce(
+      new Promise<typeof confirmedChannels>((resolve) => {
+        confirm = resolve;
+      }),
+    );
+    const addition = component.addChannel('quickFeedback');
+    await vi.waitFor(() => expect(enableQuickFeedbackChannelMutateMock).toHaveBeenCalledTimes(1));
+    fixture.detectChanges();
+
+    expect(component.activeChannel()).toBe('quiz');
+    expect(component.visibleChannels()).toEqual(['quiz']);
+    expect(component.session()?.preferredChannel).toBe('quiz');
+    expect(component.channelNavigationBusy()).toBe(true);
+    expect(fixture.nativeElement.querySelector('.session-channel-tabs')).toBeNull();
+
+    confirm(confirmedChannels);
+    await addition;
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(component.activeChannel()).toBe('quickFeedback');
+    expect(component.visibleChannels()).toEqual(['quiz', 'quickFeedback']);
+    expect(component.addableChannels()).toEqual(['qa']);
+    expect(component.session()?.preferredChannel).toBe('quickFeedback');
+    expect(component.channelNavigationBusy()).toBe(false);
+    expect(
+      fixture.nativeElement.querySelectorAll('.session-channel-tabs mat-button-toggle'),
+    ).toHaveLength(2);
+    fixture.destroy();
+  });
+
+  it('lässt nach fehlgeschlagener Blitzlicht-Aktivierung den bisherigen Kanal und einen erneuten Versuch zu', async () => {
+    getInfoQueryMock.mockResolvedValue({
+      ...defaultSession,
+      preferredChannel: 'quiz',
+      channels: {
+        quiz: { enabled: true },
+        qa: { enabled: false, open: false, title: null, moderationMode: false },
+        quickFeedback: { enabled: false, open: false },
+      },
+    });
+    const fixture = setup();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const component = fixture.componentInstance;
+    enableQuickFeedbackChannelMutateMock.mockRejectedValueOnce(new Error('offline'));
+    setPreferredLiveChannelMutateMock.mockClear();
+
+    await component.addChannel('quickFeedback');
+    fixture.detectChanges();
+
+    expect(component.activeChannel()).toBe('quiz');
+    expect(component.visibleChannels()).toEqual(['quiz']);
+    expect(component.session()?.preferredChannel).toBe('quiz');
+    expect(component.channelNavigationBusy()).toBe(false);
+    expect(component.hostSteeringCallout()).not.toBeNull();
+    expect(setPreferredLiveChannelMutateMock).not.toHaveBeenCalled();
+    expect(fixture.nativeElement.querySelector('.session-channel-tabs')).toBeNull();
+    await flushComponentAfterStable(fixture, 0);
+    expect(document.activeElement).toBe(
+      fixture.nativeElement.querySelector('[data-testid="add-channel-trigger"]'),
+    );
+
+    await component.addChannel('quickFeedback');
+
+    expect(enableQuickFeedbackChannelMutateMock).toHaveBeenCalledTimes(2);
+    expect(component.activeChannel()).toBe('quickFeedback');
+    expect(component.visibleChannels()).toEqual(['quiz', 'quickFeedback']);
+    fixture.destroy();
+  });
+
+  it('fügt den Q&A-Tab nach bestätigter Einrichtung über Format hinzufügen hinzu', async () => {
     getLifecycleForHostQueryMock.mockResolvedValue({ ...defaultLifecycle });
     getInfoQueryMock.mockResolvedValue({
       ...defaultSession,
@@ -3197,7 +3650,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     qaOnQuestionsUpdatedSubscribeMock.mockClear();
     dialogOpenMock.mockReturnValue({ afterClosed: () => of(configuredQaChannelResult) });
 
-    await fixture.componentInstance.selectChannel('qa');
+    await fixture.componentInstance.addChannel('qa');
     fixture.detectChanges();
 
     expect(enableQaChannelMutateMock).not.toHaveBeenCalled();
@@ -3252,7 +3705,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
 
     const fixture = setup();
     await fixture.componentInstance.ngOnInit();
-    await fixture.componentInstance.selectChannel('qa');
+    await fixture.componentInstance.addChannel('qa');
 
     expect(enableQaChannelMutateMock).not.toHaveBeenCalled();
     expect(dialogOpenMock).toHaveBeenCalledWith(
@@ -3294,7 +3747,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
 
     const fixture = setup();
     await fixture.componentInstance.ngOnInit();
-    await fixture.componentInstance.selectChannel('qa');
+    await fixture.componentInstance.addChannel('qa');
 
     expect(dialogOpenMock).toHaveBeenCalledWith(
       QaChannelConfigurationDialogComponent,
@@ -3328,7 +3781,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
 
     const fixture = setup();
     await fixture.componentInstance.ngOnInit();
-    await fixture.componentInstance.selectChannel('qa');
+    await fixture.componentInstance.addChannel('qa');
 
     expect(enableQaChannelMutateMock).not.toHaveBeenCalled();
     expect(endMutateMock).not.toHaveBeenCalled();
@@ -3384,6 +3837,8 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     const router = TestBed.inject(Router);
     const navigateByUrlSpy = vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
 
+    const scenario = TestBed.inject(HostScenarioService);
+    scenario.requestQuickFeedbackAfterQa('ABC123');
     await fixture.componentInstance.ngOnInit();
 
     expect(dialogOpenMock).toHaveBeenCalledWith(
@@ -3410,6 +3865,8 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
       expect.anything(),
     );
     expect(navigateByUrlSpy).toHaveBeenCalledWith('/', { replaceUrl: true });
+    expect(enableQuickFeedbackChannelMutateMock).not.toHaveBeenCalled();
+    expect(scenario.hasQuickFeedbackAfterQa('ABC123')).toBe(false);
     fixture.destroy();
   });
 
@@ -3624,6 +4081,219 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     fixture.destroy();
   });
 
+  describe('EVENT: Fragenwand und Blitzlicht unter einem Code', () => {
+    const qaSession = {
+      ...defaultSession,
+      ...configuredQaChannelResult,
+      channels: {
+        ...configuredQaChannelResult.channels,
+        quiz: { enabled: false },
+      },
+    };
+    const combinedChannels = {
+      ...qaSession.channels,
+      quickFeedback: { enabled: true, open: true },
+    };
+
+    function prepareEventStart(options: { recoveryCard?: boolean; active?: boolean } = {}) {
+      getInfoQueryMock.mockResolvedValue({
+        ...qaSession,
+        status: options.active ? 'ACTIVE' : 'LOBBY',
+      });
+      enableQuickFeedbackChannelMutateMock.mockResolvedValue(combinedChannels);
+      if (options.recoveryCard) {
+        persistInitialHostRecovery({
+          code: 'ABC123',
+          recoveryCard: {
+            supportId: 'ARS-ABCD-2345',
+            recoveryCode: 'recovery-capability-abcdefghijklmnopqrstuvwxyz',
+          },
+        });
+      }
+      const fixture = setup();
+      const scenario = TestBed.inject(HostScenarioService);
+      scenario.assignToSession('ABC123', 'EVENT');
+      scenario.requestQuickFeedbackAfterQa('ABC123');
+      return { fixture, scenario };
+    }
+
+    it('aktiviert Blitzlicht erst nach bestätigter Zugangskarte und erfolgreichem Q&A-Start', async () => {
+      const { fixture, scenario } = prepareEventStart({ recoveryCard: true });
+      const confirmation = new Subject<boolean>();
+      dialogOpenMock.mockReturnValue({ afterClosed: () => confirmation });
+      const started = fixture.componentInstance.ngOnInit();
+      await vi.waitFor(() =>
+        expect(dialogOpenMock).toHaveBeenCalledWith(
+          HostRecoveryCardDialogComponent,
+          expect.anything(),
+        ),
+      );
+      expect(startQaMutateMock).not.toHaveBeenCalled();
+      expect(enableQuickFeedbackChannelMutateMock).not.toHaveBeenCalled();
+      confirmation.next(true);
+      confirmation.complete();
+      await started;
+      expect(startQaMutateMock).toHaveBeenCalledOnce();
+      expect(enableQuickFeedbackChannelMutateMock).toHaveBeenCalledExactlyOnceWith({
+        code: 'ABC123',
+      });
+      expect(startQaMutateMock.mock.invocationCallOrder[0]).toBeLessThan(
+        enableQuickFeedbackChannelMutateMock.mock.invocationCallOrder[0],
+      );
+      expect(fixture.componentInstance.channels()).toEqual({
+        quiz: false,
+        qa: true,
+        quickFeedback: true,
+      });
+      expect(fixture.componentInstance.activeChannel()).toBe('qa');
+      expect(fixture.componentInstance.session()?.preferredChannel).toBe('qa');
+      expect(scenario.hasQuickFeedbackAfterQa('ABC123')).toBe(false);
+      fixture.destroy();
+    });
+
+    it('behält die Anschlussaktion bei abgebrochener Zugangskarte ohne Blitzlicht-Aktivierung', async () => {
+      const { fixture, scenario } = prepareEventStart({ recoveryCard: true });
+      dialogOpenMock.mockReturnValue({ afterClosed: () => of(false) });
+      await fixture.componentInstance.ngOnInit();
+      expect(startQaMutateMock).not.toHaveBeenCalled();
+      expect(enableQuickFeedbackChannelMutateMock).not.toHaveBeenCalled();
+      expect(scenario.hasQuickFeedbackAfterQa('ABC123')).toBe(true);
+      fixture.destroy();
+    });
+
+    it('führt nach fehlgeschlagenem Q&A-Start erst beim erfolgreichen Retry fort', async () => {
+      const { fixture, scenario } = prepareEventStart({ recoveryCard: true });
+      startQaMutateMock.mockRejectedValueOnce(new Error('offline'));
+      await fixture.componentInstance.ngOnInit();
+      expect(enableQuickFeedbackChannelMutateMock).not.toHaveBeenCalled();
+      expect(scenario.hasQuickFeedbackAfterQa('ABC123')).toBe(true);
+      fixture.componentInstance.hostSteeringCallout()?.retry();
+      await vi.waitFor(() => expect(scenario.hasQuickFeedbackAfterQa('ABC123')).toBe(false));
+      expect(startQaMutateMock).toHaveBeenCalledTimes(2);
+      expect(enableQuickFeedbackChannelMutateMock).toHaveBeenCalledOnce();
+      fixture.destroy();
+    });
+
+    it('führt Beides auch nach geschlossenem Fehlerhinweis über den normalen Lobby-Start fort', async () => {
+      const { fixture, scenario } = prepareEventStart({ recoveryCard: true });
+      startQaMutateMock.mockRejectedValueOnce(new Error('offline'));
+      fixture.detectChanges();
+      await vi.waitFor(() =>
+        expect(fixture.componentInstance.hostSteeringCallout()).not.toBeNull(),
+      );
+      fixture.detectChanges();
+      expect(fixture.componentInstance.activeChannel()).toBe('qa');
+      fixture.componentInstance.dismissHostSteeringCallout();
+      await fixture.componentInstance.startSessionFlow();
+      expect(startQaMutateMock).toHaveBeenCalledTimes(2);
+      expect(enableQuickFeedbackChannelMutateMock).toHaveBeenCalledExactlyOnceWith({
+        code: 'ABC123',
+      });
+      expect(scenario.hasQuickFeedbackAfterQa('ABC123')).toBe(false);
+      expect(fixture.componentInstance.activeChannel()).toBe('qa');
+      fixture.destroy();
+    });
+
+    it('benennt den Q&A-Teilerfolg und ergänzt Blitzlicht beim Retry ohne erneuten Start', async () => {
+      const { fixture, scenario } = prepareEventStart({ active: true });
+      enableQuickFeedbackChannelMutateMock.mockRejectedValueOnce(new Error('offline'));
+      fixture.detectChanges();
+      await vi.waitFor(() =>
+        expect(fixture.componentInstance.hostSteeringCallout()?.retryLabel).toBe(
+          'Blitzlicht hinzufügen',
+        ),
+      );
+      await fixture.whenStable();
+      fixture.detectChanges();
+      await flushMacroTask();
+      const host = fixture.componentInstance;
+      expect(host.activeChannel()).toBe('qa');
+      expect(host.channels().qa).toBe(true);
+      expect(host.channels().quickFeedback).toBe(false);
+      expect(host.hostSteeringCallout()?.title).toBe('Q&A ist geöffnet');
+      expect(scenario.hasQuickFeedbackAfterQa('ABC123')).toBe(true);
+      const retry = fixture.nativeElement.querySelector(
+        '[data-testid="host-steering-retry"]',
+      ) as HTMLButtonElement;
+      expect(retry.textContent).toContain('Blitzlicht hinzufügen');
+      expect(document.activeElement).toBe(retry);
+      let finishActivation!: (channels: typeof combinedChannels) => void;
+      enableQuickFeedbackChannelMutateMock.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishActivation = resolve;
+          }),
+      );
+      retry.click();
+      fixture.detectChanges();
+      expect(retry.getAttribute('aria-disabled')).toBe('true');
+      expect(
+        fixture.nativeElement.querySelector('#host-steering-callout').getAttribute('aria-busy'),
+      ).toBe('true');
+      retry.click();
+      expect(enableQuickFeedbackChannelMutateMock).toHaveBeenCalledTimes(2);
+      expect(document.activeElement).toBe(retry);
+      finishActivation(combinedChannels);
+      await vi.waitFor(() => expect(scenario.hasQuickFeedbackAfterQa('ABC123')).toBe(false));
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+      expect(host.hostSteeringCallout()).toBeNull();
+      expect(document.activeElement).toBe(
+        fixture.nativeElement.querySelector('[data-testid="qa-channel-heading"]'),
+      );
+      expect(startQaMutateMock).not.toHaveBeenCalled();
+      expect(dialogOpenMock).not.toHaveBeenCalledWith(
+        QaChannelConfigurationDialogComponent,
+        expect.anything(),
+      );
+      expect(endMutateMock).not.toHaveBeenCalled();
+      fixture.destroy();
+    });
+
+    it('setzt nach während der Aktivierung geschlossener Fragenwand keinen falschen Erfolg', async () => {
+      const { fixture, scenario } = prepareEventStart({ active: true });
+      enableQuickFeedbackChannelMutateMock.mockResolvedValue({
+        ...combinedChannels,
+        qa: { ...combinedChannels.qa, open: false, state: 'CLOSED' },
+      });
+      await fixture.componentInstance.ngOnInit();
+      expect(scenario.hasQuickFeedbackAfterQa('ABC123')).toBe(true);
+      expect(fixture.componentInstance.hostSteeringCallout()).toBeNull();
+      expect(reopenQaChannelMutateMock).not.toHaveBeenCalled();
+      fixture.destroy();
+    });
+
+    it('rekonstruiert nach Reload die Priorität aus bestätigten Kanälen ohne doppelte Aktivierung', async () => {
+      const { fixture, scenario } = prepareEventStart({ active: true });
+      getInfoQueryMock.mockResolvedValue({
+        ...qaSession,
+        status: 'ACTIVE',
+        channels: combinedChannels,
+        preferredChannel: 'quickFeedback',
+      });
+      await fixture.componentInstance.ngOnInit();
+      expect(enableQuickFeedbackChannelMutateMock).not.toHaveBeenCalled();
+      expect(startQaMutateMock).not.toHaveBeenCalled();
+      expect(setPreferredLiveChannelMutateMock).toHaveBeenCalledWith(
+        expect.objectContaining({ code: 'ABC123', channel: 'qa' }),
+      );
+      expect(fixture.componentInstance.activeChannel()).toBe('qa');
+      expect(scenario.hasQuickFeedbackAfterQa('ABC123')).toBe(false);
+      fixture.destroy();
+    });
+
+    it('aktiviert aus einer globalen Fallpräferenz allein keinen zusätzlichen Kanal', async () => {
+      const { fixture, scenario } = prepareEventStart({ active: true });
+      scenario.clearQuickFeedbackAfterQa('ABC123');
+      scenario.selectScenario('EVENT');
+      await fixture.componentInstance.ngOnInit();
+      expect(enableQuickFeedbackChannelMutateMock).not.toHaveBeenCalled();
+      expect(startQaMutateMock).not.toHaveBeenCalled();
+      fixture.destroy();
+    });
+  });
+
   it('projiziert einen geöffneten Q&A-Kanal auch ohne sichtbare Fragen', async () => {
     getInfoQueryMock.mockResolvedValue({
       ...defaultSession,
@@ -3671,6 +4341,46 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
 
     expect(setPreferredLiveChannelMutateMock).toHaveBeenCalledTimes(1);
     expect(fixture.componentInstance.session()?.preferredChannel).toBe('qa');
+    fixture.destroy();
+  });
+
+  it('ändert preferredChannel beim Tabwechsel erst nach Serverbestätigung und erhält ihn bei Ablehnung', async () => {
+    getInfoQueryMock.mockResolvedValue({
+      ...defaultSession,
+      preferredChannel: 'quiz',
+      channels: {
+        quiz: { enabled: true },
+        qa: { enabled: true, open: true, title: 'Fragen', moderationMode: false },
+        quickFeedback: { enabled: false, open: false },
+      },
+    });
+    const fixture = setup();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const component = fixture.componentInstance;
+    let reject!: (error: Error) => void;
+    setPreferredLiveChannelMutateMock.mockReset().mockRejectedValue(new Error('offline'));
+    setPreferredLiveChannelMutateMock.mockReturnValueOnce(
+      new Promise<never>((_resolve, rejectPromise) => {
+        reject = rejectPromise;
+      }),
+    );
+
+    const selection = component.selectChannel('qa');
+    await vi.waitFor(() =>
+      expect(setPreferredLiveChannelMutateMock).toHaveBeenCalledWith({
+        code: 'ABC123',
+        channel: 'qa',
+      }),
+    );
+    expect(component.activeChannel()).toBe('qa');
+    expect(component.session()?.preferredChannel).toBe('quiz');
+    reject(new Error('offline'));
+    await selection;
+
+    expect(component.session()?.preferredChannel).toBe('quiz');
+    expect(component.visibleChannels()).toEqual(['quiz', 'qa']);
+    expect(setPreferredLiveChannelMutateMock.mock.calls.length).toBeGreaterThanOrEqual(2);
     fixture.destroy();
   });
 
@@ -3838,7 +4548,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     fixture.destroy();
   });
 
-  it('öffnet beim inaktiven Quiz-Tab die Sammlung, lädt das Quiz hoch und hängt es an die Session', async () => {
+  it('öffnet über Format hinzufügen die Sammlung, lädt das Quiz hoch und hängt es an die Session', async () => {
     getInfoQueryMock
       .mockResolvedValueOnce({
         ...defaultSession,
@@ -3867,7 +4577,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    await fixture.componentInstance.selectChannel('quiz');
+    await fixture.componentInstance.addChannel('quiz');
     fixture.detectChanges();
 
     expect(dialogOpenMock).toHaveBeenCalled();
@@ -3888,7 +4598,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     ['qa', 'Q&A'],
     ['quickFeedback', 'Blitzlicht'],
   ] as const)(
-    'setzt den Kanalschalter nach abgebrochener Quiz-Aktivierung auf %s zurück',
+    'behält bei abgebrochener Quiz-Aktivierung im Menü den aktivierten %s-Tab',
     async (sourceChannel, sourceLabel) => {
       getInfoQueryMock.mockResolvedValue({
         ...defaultSession,
@@ -3909,11 +4619,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
       fixture.detectChanges();
       dialogOpenMock.mockClear();
 
-      const toggles = Array.from(
-        fixture.nativeElement.querySelectorAll('mat-button-toggle'),
-      ) as HTMLElement[];
-      const quizToggle = toggles.find((toggle) => toggle.textContent?.includes('Quiz'));
-      (quizToggle?.querySelector('button') as HTMLButtonElement | null)?.click();
+      await clickAddChannel(fixture, 'quiz');
 
       await vi.waitUntil(() => dialogOpenMock.mock.calls.length === 1);
       await fixture.whenStable();
@@ -4246,11 +4952,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     fixture.componentInstance.activeChannel.set('qa');
     fixture.detectChanges();
 
-    const toggles = Array.from(
-      fixture.nativeElement.querySelectorAll('mat-button-toggle'),
-    ) as HTMLElement[];
-    const quizToggle = toggles.find((toggle) => toggle.textContent?.includes('Quiz'));
-    (quizToggle?.querySelector('button') as HTMLButtonElement | null)?.click();
+    await clickAddChannel(fixture, 'quiz');
 
     await vi.waitUntil(() => dialogOpenMock.mock.calls.length === 1);
 
@@ -4335,11 +5037,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     fixture.componentInstance.activeChannel.set('qa');
     fixture.detectChanges();
 
-    const toggles = Array.from(
-      fixture.nativeElement.querySelectorAll('mat-button-toggle'),
-    ) as HTMLElement[];
-    const quizToggle = toggles.find((toggle) => toggle.textContent?.includes('Quiz'));
-    (quizToggle?.querySelector('button') as HTMLButtonElement | null)?.click();
+    await clickAddChannel(fixture, 'quiz');
 
     await vi.waitUntil(() => dialogOpenMock.mock.calls.length === 1);
 
@@ -4376,7 +5074,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     fixture.componentInstance.activeChannel.set('qa');
     fixture.detectChanges();
 
-    await fixture.componentInstance.selectChannel('quiz');
+    await fixture.componentInstance.addChannel('quiz');
     await fixture.whenStable();
 
     expect(quizStoreMock.getUploadPayload).toHaveBeenCalledWith('local-quiz-incompatible');
@@ -4412,7 +5110,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     fixture.componentInstance.activeChannel.set('qa');
     fixture.detectChanges();
 
-    await fixture.componentInstance.selectChannel('quiz');
+    await fixture.componentInstance.addChannel('quiz');
     await fixture.whenStable();
     fixture.detectChanges();
 
@@ -4467,7 +5165,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
       },
     });
 
-    await fixture.componentInstance.selectChannel('quiz');
+    await fixture.componentInstance.addChannel('quiz');
     await fixture.whenStable();
     fixture.detectChanges();
 
@@ -4495,6 +5193,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     getInfoQueryMock.mockResolvedValue({
       ...defaultSession,
       status: 'ACTIVE',
+      currentQuestion: 0,
       preferredChannel: 'quiz',
       channels: {
         quiz: { enabled: true },
@@ -4539,6 +5238,38 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     fixture.destroy();
   });
 
+  it('bietet vor der ersten Quizfrage keine Pause an und sendet keine Pause-Mutation', async () => {
+    getInfoQueryMock.mockResolvedValue({
+      ...defaultSession,
+      status: 'ACTIVE',
+      currentQuestion: null,
+      preferredChannel: 'quiz',
+      channels: {
+        quiz: { enabled: true },
+        qa: { enabled: true, open: false, title: 'Fragen', moderationMode: false },
+        quickFeedback: { enabled: true, open: false },
+      },
+    });
+    getCurrentQuestionForHostQueryMock.mockResolvedValue(null);
+
+    const fixture = setup();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.isQuizAwaitingFirstQuestion()).toBe(true);
+    expect(fixture.componentInstance.activeChannelVisibilityActionLabel()).toBeNull();
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="channel-visibility-action"]'),
+    ).toBeNull();
+
+    await fixture.componentInstance.toggleActiveChannelOpen();
+
+    expect(pauseQuizMutateMock).not.toHaveBeenCalled();
+    expect(fixture.componentInstance.hostSteeringCallout()).toBeNull();
+    fixture.destroy();
+  });
+
   it('schließt den aktiven Q&A-Kanal über die Sichtbarkeitsaktion', async () => {
     getInfoQueryMock.mockResolvedValue({
       ...defaultSession,
@@ -4564,6 +5295,9 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     expect(closeQaChannelMutateMock).toHaveBeenCalledWith({ code: 'ABC123' });
     expect(fixture.componentInstance.isChannelOpen('qa')).toBe(false);
     expect(fixture.componentInstance.channelTabMetaLabel('qa')).toBe('Zu');
+    expect(fixture.nativeElement.textContent).toContain(
+      'Q&A geschlossen: Teilnehmende können keine Fragen einreichen oder bewerten',
+    );
     fixture.destroy();
   });
 
@@ -4686,7 +5420,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     fixture.destroy();
   });
 
-  it('schließt die Host-Ansicht einer reinen Q&A-Session über den Exit-Anker ohne Ende', async () => {
+  it('bietet für eine offene Q&A-Session getrennt Verlassen und globales Beenden an', async () => {
     getInfoQueryMock.mockResolvedValue({
       ...defaultSession,
       status: 'ACTIVE',
@@ -4715,7 +5449,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     expect(fixture.componentInstance.isQaSession()).toBe(true);
 
     dialogOpenMock.mockClear();
-    await fixture.componentInstance.onSessionEndAnchorClick();
+    await fixture.componentInstance.onLeaveHostKeepingQaOpen();
 
     expect(dialogOpenMock).not.toHaveBeenCalled();
     expect(endMutateMock).not.toHaveBeenCalled();
@@ -4770,7 +5504,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     expect(closeQuickFeedbackChannelMutateMock).toHaveBeenCalledWith({ code: 'ABC123' });
 
     closeQuickFeedbackChannelMutateMock.mockClear();
-    await fixture.componentInstance.onSessionEndAnchorClick();
+    await fixture.componentInstance.onLeaveHostKeepingQaOpen();
     expect(dialogOpenMock).not.toHaveBeenCalled();
     expect(endMutateMock).not.toHaveBeenCalled();
     expect(navigateByUrlSpy).toHaveBeenCalledWith('/', { replaceUrl: true });
@@ -5041,7 +5775,15 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
   it.each(['quiz', 'qa', 'quickFeedback'] as const)(
     'öffnet aus %s denselben globalen Beenden-Dialog und stellt bei Abbruch den Fokus wieder her',
     async (channel) => {
-      getInfoQueryMock.mockResolvedValue({ ...defaultSession, status: 'ACTIVE' });
+      getInfoQueryMock.mockResolvedValue({
+        ...defaultSession,
+        status: 'ACTIVE',
+        channels: {
+          quiz: { enabled: true },
+          qa: { enabled: true, open: false, title: null, moderationMode: false },
+          quickFeedback: { enabled: true, open: false },
+        },
+      });
       dialogOpenMock.mockReturnValueOnce({ afterClosed: () => of(false) });
 
       const fixture = setup();
@@ -5051,13 +5793,28 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
       fixture.detectChanges();
 
       const button = fixture.nativeElement.querySelector(
-        '.session-host__exit-anchor-button--end',
+        channel === 'quiz'
+          ? '[data-testid="host-more-actions"]'
+          : '.session-host__exit-anchor-button--end',
       ) as HTMLButtonElement | null;
-      expect(button?.textContent).toContain('Session beenden');
+      expect(button?.textContent).toContain(
+        channel === 'quiz' ? 'Weitere Aktionen' : 'Session beenden',
+      );
 
       dialogOpenMock.mockClear();
-      button?.focus();
-      button?.click();
+      if (channel === 'quiz') {
+        const { menu } = await openHostMoreActions(fixture);
+        const endItem = Array.from(menu.querySelectorAll('button')).find((item) =>
+          item.textContent?.includes('Session beenden'),
+        );
+        expect(endItem).toBeTruthy();
+        endItem!.focus();
+        endItem!.click();
+      } else {
+        button?.focus();
+        button?.click();
+      }
+      fixture.detectChanges();
       await vi.waitUntil(
         () =>
           dialogOpenMock.mock.calls.length === 1 &&
@@ -5079,6 +5836,121 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
       );
       expect(document.activeElement).toBe(button);
       expect(endMutateMock).not.toHaveBeenCalled();
+      fixture.destroy();
+    },
+  );
+
+  it.each(['ACTIVE', 'FINISHED'] as const)(
+    'bietet im Quiz-Menü bei offenem Q&A in %s Verlassen und globales Beenden getrennt an',
+    async (status) => {
+      getInfoQueryMock.mockResolvedValue({
+        ...defaultSession,
+        status,
+        hostEnded: false,
+        qaClosesAt: '2027-03-25T12:00:00.000Z',
+        channels: {
+          quiz: { enabled: true },
+          qa: {
+            enabled: true,
+            open: true,
+            state: 'OPEN',
+            title: 'Fragen',
+            moderationMode: true,
+            closesAt: '2027-03-25T12:00:00.000Z',
+          },
+          quickFeedback: { enabled: false, open: false },
+        },
+      });
+      onStatusChangedSubscribeMock.mockImplementation(
+        (_input: unknown, opts: { onData: (data: unknown) => void }) => {
+          opts.onData({ status, currentQuestion: status === 'ACTIVE' ? 0 : null });
+          return { unsubscribe: unsubscribeMock };
+        },
+      );
+      const fixture = setup();
+      const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+      fixture.detectChanges();
+      await fixture.whenStable();
+      await fixture.componentInstance.selectChannel('quiz');
+      fixture.detectChanges();
+      expect({
+        active: fixture.componentInstance.activeChannel(),
+        live: fixture.componentInstance.isLiveHostSurface(),
+        qa: fixture.componentInstance.session()?.channels?.qa,
+      }).toMatchObject({ active: 'quiz', live: true, qa: { enabled: true, open: true } });
+      const { menu } = await openHostMoreActions(fixture);
+      expect(menu.textContent).toContain('Session beenden');
+      const leave = Array.from(menu.querySelectorAll('button')).find((button) =>
+        button.textContent?.includes('Zur Startseite'),
+      );
+      expect(leave).toBeTruthy();
+      dialogOpenMock.mockClear();
+      const finishedHome = vi.spyOn(fixture.componentInstance, 'navigateHomeFromFinishedSession');
+      if (status === 'ACTIVE') {
+        leave!.click();
+        await vi.waitUntil(() => navigate.mock.calls.length > 0, { timeout: 1000, interval: 10 });
+        expect(navigate).toHaveBeenCalledWith('/', { replaceUrl: true });
+        expect(finishedHome).not.toHaveBeenCalled();
+      } else {
+        expect(fixture.componentInstance.liveChannelsRemainAfterQuiz()).toBe(true);
+        expect(fixture.componentInstance.keepQaOpenOnHostLeave()).toBe(true);
+        expect(fixture.componentInstance.canStartAnotherQuiz()).toBe(true);
+        leave!.click();
+        await vi.waitUntil(() => navigate.mock.calls.length > 0, { timeout: 1000, interval: 10 });
+        expect(finishedHome).toHaveBeenCalledOnce();
+        expect(navigate).toHaveBeenCalledWith('/', { replaceUrl: true });
+      }
+      expect(dialogOpenMock).not.toHaveBeenCalled();
+      expect(endMutateMock).not.toHaveBeenCalled();
+      fixture.destroy();
+    },
+  );
+
+  it.each(['ACTIVE', 'FINISHED'] as const)(
+    'beendet bei offenem Q&A in %s die gesamte Session erst nach Bestätigung',
+    async (status) => {
+      getInfoQueryMock.mockResolvedValue({
+        ...defaultSession,
+        status,
+        hostEnded: false,
+        qaClosesAt: '2027-03-25T12:00:00.000Z',
+        channels: {
+          quiz: { enabled: true },
+          qa: {
+            enabled: true,
+            open: true,
+            state: 'OPEN',
+            title: 'Fragen',
+            moderationMode: true,
+            closesAt: '2027-03-25T12:00:00.000Z',
+          },
+          quickFeedback: { enabled: false, open: false },
+        },
+      });
+      onStatusChangedSubscribeMock.mockImplementation(
+        (_input: unknown, opts: { onData: (data: unknown) => void }) => {
+          opts.onData({ status, currentQuestion: status === 'ACTIVE' ? 0 : null });
+          return { unsubscribe: unsubscribeMock };
+        },
+      );
+      const fixture = setup();
+      fixture.detectChanges();
+      await fixture.whenStable();
+      dialogOpenMock.mockClear();
+      endMutateMock.mockClear();
+
+      await fixture.componentInstance.onSessionEndAnchorClick();
+
+      expect(dialogOpenMock).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          data: expect.objectContaining({
+            title: 'Gesamte Session beenden?',
+            confirmLabel: 'Gesamte Session beenden',
+          }),
+        }),
+      );
+      expect(endMutateMock).toHaveBeenCalledWith({ code: 'ABC123' });
       fixture.destroy();
     },
   );
@@ -5567,7 +6439,8 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     expect(wordCloudDetails?.className).toContain('session-host__extra--freetext');
     expect(wordCloudDetails?.className).toContain('session-host__extra--no-divider');
     expect(text).toContain('Wortwolke anzeigen');
-    expect(text).not.toContain('Weitere Aktionen');
+    expect(wordCloudDetails?.textContent).not.toContain('Weitere Aktionen');
+    expect(fixture.nativeElement.querySelector('[data-testid="host-more-actions"]')).not.toBeNull();
     expect(text).toContain('2 Antworten');
     expect(text).toContain('Live-Freitext wird aktualisiert.');
     expect(text).toContain('Live-Freitext');
@@ -8489,6 +9362,9 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     };
     let peerReleased = false;
     let resolveUnfilteredReload!: (snapshot: QaQuestionsListDTO) => void;
+    const unfilteredReload = new Promise<QaQuestionsListDTO>((resolve) => {
+      resolveUnfilteredReload = resolve;
+    });
     qaListQueryMock.mockImplementation(
       (input?: { statuses?: Array<'PENDING' | 'ACTIVE' | 'PINNED' | 'ARCHIVED'> }) => {
         const pendingOnly = input?.statuses?.length === 1 && input.statuses[0] === 'PENDING';
@@ -8500,9 +9376,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
             qaHostSnapshot([], { rankingRevision: 2, sessionLifecycleRevision: 2 }),
           );
         }
-        return new Promise<QaQuestionsListDTO>((resolve) => {
-          resolveUnfilteredReload = resolve;
-        });
+        return unfilteredReload;
       },
     );
     let invalidationHandler: ((data: QaQuestionsInvalidationDTO) => void) | undefined;
@@ -8518,13 +9392,14 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     await flushComponentAfterStable(fixture, 50);
     const component = fixture.componentInstance;
     component.activeChannel.set('qa');
+    component.qaToolsOpen.set(true);
     await component.setQaPendingFilter(true);
     fixture.detectChanges();
     const pendingFilter = fixture.nativeElement.querySelector(
       '[data-testid="qa-filter-pending"]',
     ) as HTMLButtonElement;
     const pinnedFilter = fixture.nativeElement.querySelector(
-      '[data-testid="qa-filter-pinned"]',
+      '[data-testid="qa-tools-toggle"]',
     ) as HTMLButtonElement;
     pendingFilter.focus();
     expect(document.activeElement).toBe(pendingFilter);
@@ -8798,6 +9673,240 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     fixture.destroy();
   });
 
+  async function setupQaWorkspace(moderationMode = true) {
+    getInfoQueryMock.mockResolvedValue({
+      ...defaultSession,
+      status: 'ACTIVE',
+      channels: {
+        quiz: { enabled: true },
+        qa: { enabled: true, open: true, title: 'Fragen', moderationMode },
+        quickFeedback: { enabled: false, open: false },
+      },
+    });
+    qaListQueryMock.mockResolvedValue([]);
+    const initialize = vi.spyOn(SessionHostComponent.prototype, 'ngOnInit');
+    const fixture = setup();
+    try {
+      fixture.detectChanges();
+      expect(initialize).toHaveBeenCalledOnce();
+      // Angular stability does not await an async lifecycle hook's returned promise.
+      // Finish initial reads before filter tests replace mocks or destroy the fixture.
+      await initialize.mock.results[0]!.value;
+    } finally {
+      initialize.mockRestore();
+    }
+    expect(fixture.componentInstance.session()).toMatchObject({
+      status: 'ACTIVE',
+      channels: { qa: { enabled: true, open: true, moderationMode } },
+    });
+    fixture.componentInstance.activeChannel.set('qa');
+    fixture.detectChanges();
+    return fixture;
+  }
+
+  it('zeigt leere Q&A mit offenem Status und geschlossenen, benannten Werkzeugen', async () => {
+    const fixture = await setupQaWorkspace(false);
+    const host = fixture.nativeElement as HTMLElement;
+    const tools = host.querySelector<HTMLElement>('#qa-tools-content')!;
+    expect(tools.hidden).toBe(true);
+    expect(host.querySelector('[data-testid="qa-tools-toggle"]')?.textContent).toContain(
+      'Auswertung & Werkzeuge',
+    );
+    expect(host.textContent).toContain(
+      'Q&A geöffnet: Teilnehmende können Fragen einreichen und bewerten',
+    );
+    expect(host.querySelector('[data-testid="qa-review-pending"]')).toBeNull();
+    expect(fixture.componentInstance.qaSortMode()).toBe('BEST');
+    expect(tools.contains(host.querySelector('[data-testid="host-moderation-compass"]'))).toBe(
+      false,
+    );
+    expect(tools.querySelector('.session-qa-search')).not.toBeNull();
+    expect(tools.querySelector('[data-testid="qa-filter-pinned"]')).not.toBeNull();
+    fixture.destroy();
+  });
+
+  it('erhält alle Sortierungen, Suche und Filter beim Auf- und Zuklappen', async () => {
+    const fixture = await setupQaWorkspace();
+    const component = fixture.componentInstance;
+    for (const sort of ['TOP', 'BEST', 'CONTROVERSIAL', 'TIME'] as const) {
+      component.toggleQaTools();
+      await component.setQaSortMode(sort);
+      component.qaSearchDraft.set('langes Suchwort');
+      component.qaSearch.set('langes Suchwort');
+      await component.setQaPinnedFilter(true);
+      fixture.detectChanges();
+      component.toggleQaTools();
+      fixture.detectChanges();
+      expect(component.qaSortMode()).toBe(sort);
+      expect(component.qaSearchDraft()).toBe('langes Suchwort');
+      expect(component.qaSearch()).toBe('langes Suchwort');
+      expect(component.qaShowPinnedOnly()).toBe(true);
+      expect(fixture.nativeElement.querySelector('#qa-tools-content').hidden).toBe(true);
+      expect(
+        fixture.nativeElement.querySelector('[data-testid="qa-clear-search"]').closest('[hidden]'),
+      ).toBeNull();
+    }
+    fixture.destroy();
+  });
+
+  it.each(['search', 'pinned', 'pending', 'author'] as const)(
+    'löst den extern gesetzten %s-Filter bei geschlossenen Werkzeugen und erhält sichtbaren Fokus',
+    async (filter) => {
+      const fixture = await setupQaWorkspace();
+      const component = fixture.componentInstance;
+      if (filter === 'search') {
+        component.qaSearchDraft.set('Test');
+        component.qaSearch.set('Test');
+      }
+      if (filter === 'pinned') component.qaShowPinnedOnly.set(true);
+      if (filter === 'pending') component.qaShowPendingOnly.set(true);
+      if (filter === 'author') component.qaSelectedAuthorNickname.set('Ada');
+      fixture.detectChanges();
+      const clear = fixture.nativeElement.querySelector(
+        `[data-testid="qa-clear-${filter}"]`,
+      ) as HTMLButtonElement;
+      clear.focus();
+      clear.click();
+      fixture.detectChanges();
+      expect(document.activeElement).toBe(
+        fixture.nativeElement.querySelector('[data-testid="qa-tools-toggle"]'),
+      );
+      await flushComponentAfterStable(fixture, 50);
+      expect(fixture.nativeElement.querySelector(`[data-testid="qa-clear-${filter}"]`)).toBeNull();
+      expect(component.qaToolsOpen()).toBe(false);
+      expect(document.activeElement).not.toBe(document.body);
+      fixture.destroy();
+    },
+  );
+
+  it('verschiebt Fokus vor dem Einklappen und hält ihn nach verspäteten Listenantworten', async () => {
+    const fixture = await setupQaWorkspace();
+    const component = fixture.componentInstance;
+    component.toggleQaTools();
+    fixture.detectChanges();
+    const input = fixture.nativeElement.querySelector(
+      '.session-qa-search input',
+    ) as HTMLInputElement;
+    input.focus();
+    let resolve!: (value: QaQuestionDTO[]) => void;
+    qaListQueryMock.mockImplementation(
+      () =>
+        new Promise<QaQuestionDTO[]>((done) => {
+          resolve = done;
+        }),
+    );
+    const pending = component.setQaPinnedFilter(true);
+    component.toggleQaTools();
+    // The target is focused before Angular sets hidden.
+    expect(document.activeElement).toBe(
+      fixture.nativeElement.querySelector('[data-testid="qa-tools-toggle"]'),
+    );
+    fixture.detectChanges();
+    const review = fixture.nativeElement.querySelector(
+      '[data-testid="qa-review-pending"]',
+    ) as HTMLButtonElement;
+    review.focus();
+    resolve([]);
+    await pending;
+    await flushComponentAfterStable(fixture, 0);
+    expect(document.activeElement).toBe(review);
+    fixture.destroy();
+  });
+
+  it('prüft den vollständigen PENDING-Bestand trotz zuvor aktiver Suche und Teilnahmefilter', async () => {
+    const fixture = await setupQaWorkspace();
+    const component = fixture.componentInstance;
+    component.qaSearchDraft.set('unsichtbar');
+    component.qaSearch.set('unsichtbar');
+    component.qaSelectedAuthorNickname.set('Ada');
+    component.qaShowPinnedOnly.set(true);
+    component.qaListSessionPendingCount.set(12);
+    fixture.detectChanges();
+    const review = fixture.nativeElement.querySelector(
+      '[data-testid="qa-review-pending"]',
+    ) as HTMLButtonElement;
+    expect(review.textContent).toContain('Fragen prüfen (12)');
+    qaListQueryMock.mockClear();
+    const pendingQuestions = Array.from({ length: 12 }, (_, index) => ({
+      id: `44444444-4444-4444-8444-${String(index).padStart(12, '0')}`,
+      text: `Offene Frage ${index + 1}`,
+      upvoteCount: 0,
+      status: 'PENDING' as const,
+      createdAt: '2026-03-24T12:00:00.000Z',
+      myVote: null,
+      isOwn: false,
+      hasUpvoted: false,
+    }));
+    qaListQueryMock.mockResolvedValue(pendingQuestions);
+    const reviewAction = vi.spyOn(component, 'reviewPendingQaQuestions');
+    review.focus();
+    review.click();
+    expect(reviewAction).toHaveBeenCalledOnce();
+    await reviewAction.mock.results[0]!.value;
+    fixture.detectChanges();
+    expect(qaListQueryMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ statuses: ['PENDING'] }),
+    );
+    expect(qaListQueryMock.mock.lastCall?.[0]).not.toHaveProperty('authorNickname');
+    expect(component.qaShowPinnedOnly()).toBe(false);
+    expect(component.qaShowPendingOnly()).toBe(true);
+    expect(component.qaSearch()).toBe('');
+    expect(component.qaSearchDraft()).toBe('');
+    expect(component.qaSelectedAuthorNickname()).toBeNull();
+    expect(component.qaQuestions()).toEqual(pendingQuestions);
+    expect(review.textContent).toContain('Fragen prüfen (12)');
+    expect(component.qaToolsOpen()).toBe(false);
+    expect(document.activeElement).toBe(review);
+    fixture.destroy();
+  });
+
+  it('erhält Fokus bevor eine entfernte Moderationsänderung den Prüfen-Button entfernt', async () => {
+    const fixture = await setupQaWorkspace();
+    const component = fixture.componentInstance;
+    fixture.nativeElement.querySelector('[data-testid="qa-review-pending"]').focus();
+    component.session.update(
+      (session) =>
+        session && {
+          ...session,
+          channels: {
+            ...session.channels!,
+            qa: { ...session.channels!.qa, moderationMode: false },
+          },
+        },
+    );
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-testid="qa-review-pending"]')).toBeNull();
+    expect(document.activeElement).toBe(
+      fixture.nativeElement.querySelector('[data-testid="qa-tools-toggle"]'),
+    );
+    fixture.destroy();
+  });
+
+  it('erhält Fokus beim Wechsel vom Pending-Zähler zur Vorabmoderation durch einen anderen Host', async () => {
+    const fixture = await setupQaWorkspace(false);
+    const component = fixture.componentInstance;
+    component.qaListPendingCount.set(3);
+    component.qaListTotalCount.set(3);
+    fixture.detectChanges();
+    fixture.nativeElement.querySelector('[data-testid="qa-summary-pending"]').focus();
+    component.session.update(
+      (session) =>
+        session && {
+          ...session,
+          channels: {
+            ...session.channels!,
+            qa: { ...session.channels!.qa, moderationMode: true },
+          },
+        },
+    );
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-testid="qa-summary-pending"]')).toBeNull();
+    expect(document.activeElement).toBe(
+      fixture.nativeElement.querySelector('[data-testid="qa-tools-toggle"]'),
+    );
+    fixture.destroy();
+  });
+
   it('bündelt Sortierung und Export auf kleinen Displays im Mehr-Menü', async () => {
     getInfoQueryMock.mockResolvedValue({
       ...defaultSession,
@@ -8827,6 +9936,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
 
     const component = fixture.componentInstance;
     component.activeChannel.set('qa');
+    component.qaToolsOpen.set(true);
     component.qaCompactToolbar.set(true);
     fixture.detectChanges();
     const host = fixture.nativeElement as HTMLElement;
@@ -8889,6 +9999,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
       await flushComponentAfterStable(fixture, 50);
       const component = fixture.componentInstance;
       component.activeChannel.set('qa');
+      component.qaToolsOpen.set(true);
       fixture.detectChanges();
       const host = fixture.nativeElement as HTMLElement;
       const desktopButton = host.querySelector(
@@ -8908,7 +10019,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
         '[data-testid="qa-mobile-more"]',
       ) as HTMLButtonElement | null;
       expect(component.qaCompactToolbar()).toBe(true);
-      expect(document.activeElement).toBe(moreButton);
+      expect(document.activeElement).toBe(host.querySelector('[data-testid="qa-tools-toggle"]'));
 
       moreButton?.click();
       fixture.detectChanges();
@@ -8932,7 +10043,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
       ) as HTMLButtonElement | null;
       expect(component.qaCompactToolbar()).toBe(false);
       expect(selectedDesktopButton).toBeTruthy();
-      expect(document.activeElement).toBe(selectedDesktopButton);
+      expect(document.activeElement).toBe(host.querySelector('[data-testid="qa-tools-toggle"]'));
       fixture.destroy();
     } finally {
       Object.defineProperty(window, 'innerWidth', {
@@ -9158,14 +10269,12 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
 
     expect(component.qaPendingCount()).toBe(1);
     const pendingSummary = fixture.nativeElement.querySelector(
-      '[data-testid="qa-summary-pending"]',
+      '[data-testid="qa-review-pending"]',
     ) as HTMLButtonElement | null;
     expect(pendingSummary).not.toBeNull();
     expect(pendingSummary?.tagName).toBe('BUTTON');
     expect(pendingSummary?.getAttribute('aria-pressed')).toBe('false');
-    expect(pendingSummary?.getAttribute('aria-label')).toBe(
-      '1 Frage in Moderation. Nur Fragen in Moderation anzeigen',
-    );
+    expect(pendingSummary?.textContent).toContain('Fragen prüfen (1)');
     expect(fixture.nativeElement.textContent).toMatch(/Gesamt:\s*1([.,])553/);
 
     qaListQueryMock.mockClear();
@@ -9181,9 +10290,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
       }),
     );
     expect(pendingSummary?.getAttribute('aria-pressed')).toBe('true');
-    expect(document.activeElement).toBe(
-      fixture.nativeElement.querySelector('[data-testid="qa-filter-pending"]'),
-    );
+    expect(document.activeElement).toBe(pendingSummary);
     fixture.destroy();
   });
 
@@ -9540,6 +10647,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     await flushComponentAfterStable(fixture, 50);
     const component = fixture.componentInstance;
     component.activeChannel.set('qa');
+    component.qaToolsOpen.set(true);
     fixture.detectChanges();
     await flushComponentAfterStable(fixture, 50);
 
@@ -12622,7 +13730,11 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
   });
 
   it('empfiehlt bei passendem Korridor eine zweite Runde statt aktiver Ergebnisanzeige', async () => {
-    getInfoQueryMock.mockResolvedValue({ ...defaultSession, status: 'ACTIVE' });
+    getInfoQueryMock.mockResolvedValue({
+      ...defaultSession,
+      status: 'ACTIVE',
+      enableTimerAccommodation: true,
+    });
     getParticipantsQueryMock.mockResolvedValue({ participantCount: 4, participants: [] });
     onStatusChangedSubscribeMock.mockImplementation(
       (_input: unknown, opts: { onData: (d: unknown) => void }) => {
@@ -12631,6 +13743,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
       },
     );
     getCurrentQuestionForHostQueryMock.mockResolvedValue({
+      questionId: 'bbbbbbbb-2222-4222-8222-222222222222',
       order: 0,
       text: 'Was ist 2+2?',
       type: 'SINGLE_CHOICE' as const,
@@ -12667,11 +13780,13 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
       exitAnchorButtonLabel(button),
     );
     expect(exitAnchor.className).toContain('session-host__exit-anchor--with-primary');
+    expect(exitAnchor.querySelectorAll('.session-host__exit-anchor-button--primary')).toHaveLength(
+      1,
+    );
     expect(buttonTexts).toEqual([
-      'Session beenden',
-      'skip_nextFrage auslassen',
       'Diskussionsphase',
       'Ergebnis trotzdem zeigen',
+      'Weitere Aktionen',
     ]);
     const actionPairButtons = Array.from(
       exitAnchor.querySelectorAll('.session-host__exit-anchor-action-pair button'),
@@ -12680,6 +13795,31 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     expect(actionPairButtons[1]?.className).toContain(
       'session-host__exit-anchor-button--paired-secondary',
     );
+    fixture.componentInstance.countdownEnded.set(false);
+    fixture.componentInstance.hostVoteProgress.set({
+      questionId: 'bbbbbbbb-2222-4222-8222-222222222222',
+      questionOrder: 0,
+      round: 1,
+      totalVotes: 4,
+      peerInstructionSuggestion: {
+        suggested: true,
+        reason: 'CORRECTNESS_WINDOW',
+      },
+      pendingTimerAccommodationCount: 1,
+      blockingTimerAccommodationCount: 1,
+    });
+    fixture.detectChanges();
+    for (const button of actionPairButtons) {
+      expect((button as HTMLButtonElement).disabled).toBe(true);
+      expect(button.getAttribute('aria-describedby')).toBe(
+        'session-host-timer-accommodation-status',
+      );
+    }
+    expect(exitAnchor.querySelector('[role="status"]')?.textContent).toContain('10× Zeit');
+    fixture.componentInstance.countdownEnded.set(true);
+    fixture.detectChanges();
+    expect(actionPairButtons.every((button) => !(button as HTMLButtonElement).disabled)).toBe(true);
+    expect(actionPairButtons[1]?.textContent).toContain('Trotzdem freigeben');
     fixture.destroy();
   });
 
@@ -13468,15 +14608,14 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
       exitAnchorButtonLabel(button),
     );
     expect(exitAnchor.className).toContain('session-host__exit-anchor--with-primary');
-    expect(buttonTexts).toEqual([
-      'Session beenden',
-      'skip_nextFrage auslassen',
-      'Antwortoptionen freigebenAntwortoptionen',
-    ]);
+    expect(exitAnchor.querySelectorAll('.session-host__exit-anchor-button--primary')).toHaveLength(
+      1,
+    );
+    expect(buttonTexts).toEqual(['Antwortoptionen freigeben', 'Weitere Aktionen']);
     expect(
       exitAnchor.querySelector('.session-host__exit-anchor-label--reveal-options-compact')
         ?.textContent,
-    ).toBe('Antwortoptionen');
+    ).toBeUndefined();
     expect(
       exitAnchor
         .querySelector('.session-host__exit-anchor-button--reveal-options')
@@ -13519,7 +14658,14 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
 
     const host = fixture.nativeElement as HTMLElement;
     expect(host.textContent).toContain('Antwortoptionen freigeben');
-    expect(host.textContent).toContain('Frage auslassen');
+    const { menu } = await openHostMoreActions(fixture);
+    expect(menu.textContent).toContain('Frage auslassen');
+    fixture.debugElement
+      .query(By.css('[data-testid="host-more-actions"]'))
+      .injector.get(MatMenuTrigger)
+      .closeMenu();
+    fixture.detectChanges();
+    await fixture.whenStable();
 
     await fixture.componentInstance.selectChannel('qa');
     fixture.detectChanges();
@@ -13551,7 +14697,8 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     fixture.detectChanges();
 
     expect(host.textContent).toContain('Antwortoptionen freigeben');
-    expect(host.textContent).toContain('Frage auslassen');
+    const reopened = await openHostMoreActions(fixture);
+    expect(reopened.menu.textContent).toContain('Frage auslassen');
     fixture.destroy();
   });
 
@@ -13651,15 +14798,27 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     await flushComponentAfterStable(fixture, 50);
     fixture.detectChanges();
 
-    const skipButton = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+    const { trigger, menu } = await openHostMoreActions(fixture);
+    const skipButton = menu.querySelector<HTMLButtonElement>(
       'button[aria-label="Aktuelle Frage auslassen"]',
     );
     expect(skipButton).not.toBeNull();
-
-    skipButton?.focus();
     dialogOpenMock.mockReturnValueOnce({ afterClosed: () => of(false) });
-    await fixture.componentInstance.skipQuestion();
-    expect(document.activeElement).toBe(skipButton);
+    skipButton!.focus();
+    skipButton!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    await vi.waitUntil(
+      () => document.querySelector('.cdk-overlay-container [role="menu"]') === null,
+      {
+        timeout: 1000,
+        interval: 10,
+      },
+    );
+    expect(document.activeElement).toBe(trigger);
+    expect(trigger.isConnected).toBe(true);
+    expect(getComputedStyle(trigger).display).not.toBe('none');
     expect(skipQuestionMutateMock).not.toHaveBeenCalled();
 
     await fixture.componentInstance.skipQuestion();
@@ -13685,7 +14844,14 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     expect(questionCard?.getAttribute('tabindex')).toBe('-1');
 
     skipQuestionMutateMock.mockRejectedValueOnce(new Error('offline'));
-    await fixture.componentInstance.skipQuestion();
+    const retryMenu = await openHostMoreActions(fixture);
+    retryMenu.menu
+      .querySelector<HTMLButtonElement>('button[aria-label="Aktuelle Frage auslassen"]')!
+      .click();
+    await vi.waitUntil(() => fixture.componentInstance.hostSteeringCallout() !== null, {
+      timeout: 1000,
+      interval: 10,
+    });
     fixture.detectChanges();
     await flushComponentAfterStable(fixture, 20);
     fixture.detectChanges();
@@ -13699,6 +14865,66 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     expect(document.activeElement).toBe(retryButton);
     fixture.destroy();
   });
+
+  it('schließt Weitere Aktionen ohne Auswahl und gibt den Fokus ohne Mutation zurück', async () => {
+    const fixture = setup();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const { trigger, menu } = await openHostMoreActions(fixture);
+    expect(menu.textContent).toContain('Session beenden');
+    expect(menu.textContent).not.toContain('Frage auslassen');
+    expect(menu.textContent).not.toContain('Letztes Ergebnis');
+    fixture.debugElement
+      .query(By.css('[data-testid="host-more-actions"]'))
+      .injector.get(MatMenuTrigger)
+      .closeMenu();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(document.activeElement).toBe(trigger);
+    expect(fixture.componentInstance.pendingHostMoreAction()).toBeNull();
+    expect(skipQuestionMutateMock).not.toHaveBeenCalled();
+    expect(prevQuestionMutateMock).not.toHaveBeenCalled();
+    expect(endMutateMock).not.toHaveBeenCalled();
+    fixture.destroy();
+  });
+
+  it.each(['control', 'sessionEnd', 'channel'] as const)(
+    'sperrt Weitere Aktionen während %s und verwirft eine überholte Menüauswahl',
+    async (pending) => {
+      const fixture = setup();
+      fixture.detectChanges();
+      await fixture.whenStable();
+      const component = fixture.componentInstance;
+      if (pending === 'control') component.controlPending.set(true);
+      if (pending === 'sessionEnd') component.sessionEndPending.set(true);
+      if (pending === 'channel') component.channelNavigationActionPending.set('qa');
+      fixture.detectChanges();
+      const trigger = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+        '[data-testid="host-more-actions"]',
+      );
+      expect(trigger?.getAttribute('aria-disabled')).toBe('true');
+      trigger!.click();
+      fixture.detectChanges();
+      expect(document.querySelector('.cdk-overlay-container [role="menu"]')).toBeNull();
+      const skip = vi.spyOn(component, 'skipQuestion').mockResolvedValue(undefined);
+      const previous = vi.spyOn(component, 'prevQuestion').mockResolvedValue(undefined);
+      const replace = vi.spyOn(component, 'replaceQuizBeforeStart').mockResolvedValue(undefined);
+      const leave = vi.spyOn(component, 'onLeaveHostKeepingQaOpen').mockResolvedValue(undefined);
+      const end = vi.spyOn(component, 'onSessionEndAnchorClick').mockResolvedValue(undefined);
+      for (const action of ['skip', 'previous', 'replace', 'leave', 'end'] as const) {
+        component.pendingHostMoreAction.set(action);
+        component.runHostMoreAction();
+        expect(component.pendingHostMoreAction()).toBeNull();
+      }
+      expect(skip).not.toHaveBeenCalled();
+      expect(previous).not.toHaveBeenCalled();
+      expect(replace).not.toHaveBeenCalled();
+      expect(leave).not.toHaveBeenCalled();
+      expect(end).not.toHaveBeenCalled();
+      fixture.destroy();
+    },
+  );
 
   it('weist beim Auslassen der letzten Frage darauf hin, dass die Session endet', async () => {
     const questionId = 'bbbbbbbb-2222-4222-8222-222222222222';
@@ -14023,7 +15249,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     fixture.destroy();
   });
 
-  it('zeigt bei aktiver Frage die Aktion "Ergebnis zeigen" im unteren Exit-Anker neben "Gesamte Session beenden"', async () => {
+  it('trennt bei aktiver Frage die Ergebnisaktion von weiteren Aktionen und erklärt die Zeitsperre', async () => {
     getInfoQueryMock.mockResolvedValue({ ...defaultSession, status: 'ACTIVE' });
     onStatusChangedSubscribeMock.mockImplementation(
       (_input: unknown, opts: { onData: (d: unknown) => void }) => {
@@ -14083,8 +15309,12 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     );
 
     expect(exitAnchor.className).toContain('session-host__exit-anchor--with-primary');
-    expect(buttonTexts).toEqual(['Session beenden', 'skip_nextFrage auslassen', 'Ergebnis zeigen']);
-    expect(exitAnchor.querySelector('.session-host__exit-anchor-button--skip')).not.toBeNull();
+    expect(exitAnchor.querySelectorAll('.session-host__exit-anchor-button--primary')).toHaveLength(
+      1,
+    );
+    expect(buttonTexts).toEqual(['Ergebnis zeigen', 'Weitere Aktionen']);
+    expect(exitAnchor.querySelector('.session-host__exit-anchor-button--skip')).toBeNull();
+    expect(exitAnchor.querySelector('[data-testid="host-more-actions"]')).not.toBeNull();
     expect(exitAnchor.querySelector('.session-host__exit-anchor-button--primary')).not.toBeNull();
     fixture.componentInstance.hostVoteProgress.set({
       questionId: 'bbbbbbbb-2222-4222-8222-222222222222',
@@ -14533,7 +15763,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     const text = fixture.nativeElement.textContent ?? '';
 
     expect(text).not.toContain('Peer Instruction empfohlen');
-    expect(buttonTexts).toEqual(['Session beenden', 'skip_nextFrage auslassen', 'Ergebnis zeigen']);
+    expect(buttonTexts).toEqual(['Ergebnis zeigen', 'Weitere Aktionen']);
     fixture.destroy();
   });
 
@@ -16372,7 +17602,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     fixture.destroy();
   });
 
-  it('ordnet bei Ergebnisstand Ausstieg und Rückblick vor der Aktion "Nächste Frage" an', async () => {
+  it('ordnet beim Ergebnis Rückblick und Sessionende im Menü neben Nächste Frage ein', async () => {
     getInfoQueryMock.mockResolvedValue({
       ...defaultSession,
       status: 'RESULTS',
@@ -16435,25 +17665,19 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     );
 
     expect(exitAnchor.className).toContain('session-host__exit-anchor--with-primary');
-    expect(buttonTexts).toEqual([
-      'Session beenden',
-      'Letztes Ergebnis erneut anzeigenLetztes Ergebnis',
-      'Nächste Frage',
-    ]);
-
-    const previousButton = exitAnchor.querySelector('.session-host__exit-anchor-button--previous');
-    const previousFullLabel = previousButton?.querySelector(
-      '.session-host__exit-anchor-label--previous-full',
+    expect(exitAnchor.querySelectorAll('.session-host__exit-anchor-button--primary')).toHaveLength(
+      1,
     );
-    const previousTooltip = fixture.debugElement
-      .query(By.css('.session-host__exit-anchor-button--previous'))
-      .injector.get(MatTooltip);
-    expect(previousFullLabel?.textContent).toBe('Letztes Ergebnis erneut anzeigen');
-    expect(previousTooltip.touchGestures).toBe('off');
-    expect(
-      previousButton?.querySelector('.session-host__exit-anchor-label--previous-compact')
-        ?.textContent,
-    ).toBe('Letztes Ergebnis');
+    expect(buttonTexts).toEqual(['Nächste Frage', 'Weitere Aktionen']);
+
+    const { menu } = await openHostMoreActions(fixture);
+    const previousButton = Array.from(menu.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('Letztes Ergebnis erneut anzeigen'),
+    );
+    expect(previousButton?.getAttribute('role')).toBe('menuitem');
+    expect(previousButton?.textContent).toContain('Letztes Ergebnis erneut anzeigen');
+    expect(menu.textContent).toContain('Session beenden');
+    expect(menu.textContent).not.toContain('Frage auslassen');
     fixture.destroy();
   });
 
@@ -16501,7 +17725,8 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     fixture.detectChanges();
 
     const host = fixture.nativeElement as HTMLElement;
-    expect(host.querySelector('.session-host__exit-anchor-button--previous')).toBeNull();
+    const { menu } = await openHostMoreActions(fixture);
+    expect(menu.textContent).not.toContain('Letztes Ergebnis');
     expect(host.textContent).not.toContain('Letztes Ergebnis');
     fixture.destroy();
   });
@@ -16541,7 +17766,8 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     const buttonTexts = [...host.querySelectorAll('button')].map((button) =>
       exitAnchorButtonLabel(button),
     );
-    expect(host.querySelector('.session-host__exit-anchor-button--previous')).toBeNull();
+    const { menu } = await openHostMoreActions(fixture);
+    expect(menu.textContent).not.toContain('Letztes Ergebnis');
     expect(host.textContent).not.toContain('Letztes Ergebnis');
     expect(host.querySelector('.session-host__question-last-badge')).toBeNull();
     expect(buttonTexts).toContain('Nächste Frage');
@@ -16584,7 +17810,8 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     const buttonTexts = [...host.querySelectorAll('button')].map((button) =>
       exitAnchorButtonLabel(button),
     );
-    expect(host.querySelector('.session-host__exit-anchor-button--previous')).toBeNull();
+    const { menu } = await openHostMoreActions(fixture);
+    expect(menu.textContent).not.toContain('Letztes Ergebnis');
     expect(host.textContent).toContain('Letzte Frage');
     expect(buttonTexts).not.toContain('Nächste Frage');
     expect(buttonTexts.some((text) => text.includes('Zur Gesamtauswertung'))).toBe(true);
@@ -16616,9 +17843,8 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     await flushComponentAfterStable(fixture, 50);
     fixture.detectChanges();
 
-    expect(
-      fixture.nativeElement.querySelector('.session-host__exit-anchor-button--previous'),
-    ).toBeNull();
+    const { menu } = await openHostMoreActions(fixture);
+    expect(menu.textContent).not.toContain('Letztes Ergebnis');
     fixture.destroy();
   });
 
@@ -16683,12 +17909,14 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     await flushComponentAfterStable(fixture, 50);
     fixture.detectChanges();
 
-    expect(
-      fixture.nativeElement.querySelector('.session-host__exit-anchor-button--previous'),
-    ).not.toBeNull();
-
+    const initialMenu = await openHostMoreActions(fixture);
+    expect(initialMenu.menu.textContent).toContain('Letztes Ergebnis erneut anzeigen');
     getCurrentQuestionForHostQueryMock.mockResolvedValue(surveyQuestion);
-    await fixture.componentInstance.prevQuestion();
+    const previousItem = Array.from(initialMenu.menu.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('Letztes Ergebnis erneut anzeigen'),
+    );
+    previousItem!.click();
+    await fixture.whenStable();
     fixture.detectChanges();
     await flushComponentAfterStable(fixture, 50);
     fixture.detectChanges();
@@ -16697,7 +17925,8 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     expect(prevQuestionMutateMock).toHaveBeenCalledWith({ code: 'ABC123' });
     expect(fixture.componentInstance.steppedBackToPreviousResult()).toBe(true);
     expect(fixture.componentInstance.displayedCurrentQuestionForHost()?.type).toBe('SURVEY');
-    expect(host.querySelector('.session-host__exit-anchor-button--previous')).toBeNull();
+    const { menu } = await openHostMoreActions(fixture);
+    expect(menu.textContent).not.toContain('Letztes Ergebnis');
     expect(host.querySelector('[data-testid="host-steering-retry"]')).toBeNull();
     expect(host.textContent).toContain('Gut');
     expect(host.querySelector('.session-host__extra--freetext')).toBeNull();
@@ -16780,7 +18009,9 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     expect(host.querySelector('.session-host__question-last-badge')?.tagName).toBe('SPAN');
     expect(host.querySelector('.session-host__exit-anchor-button--last-question')).toBeNull();
     expect(exitAnchor.textContent).toContain('Zur Gesamtauswertung');
-    expect(exitAnchor.textContent).toContain('Auswertung');
+    expect(
+      exitAnchor.querySelector('.session-host__exit-anchor-label--finish-evaluation-compact'),
+    ).toBeNull();
     expect(
       Array.from(exitAnchor.querySelectorAll('button'), (button) =>
         exitAnchorButtonLabel(button),
@@ -17143,118 +18374,40 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     );
 
     expect(buttonTexts).toEqual([
-      'Session beenden',
-      'Letztes Ergebnis erneut anzeigenLetztes Ergebnis',
       'Zweite Abstimmung',
       'Zur Gesamtauswertung ohne zweite Abstimmung',
+      'Weitere Aktionen',
     ]);
     expect(exitAnchor.textContent).not.toContain('Zur nächsten Frage ohne zweite Abstimmung');
     fixture.destroy();
   });
 
-  it('hält die kompakten Portrait-Labels kurz, semantisch und bei Vergrößerung umbrechbar', async () => {
+  it('bewahrt vollständige Phasenbeschriftungen und die zugänglichen Namen in allen Sprachen', async () => {
     const { readFileSync } = await import('node:fs');
     const { fileURLToPath } = await import('node:url');
     const { dirname, join } = await import('node:path');
     const componentDir = dirname(fileURLToPath(import.meta.url));
-    const styles = readFileSync(join(componentDir, 'session-host.component.scss'), 'utf8');
-    const translations = new Map([
-      ['messages.en.xlf', 'Previous'],
-      ['messages.fr.xlf', 'Précédent'],
-      ['messages.es.xlf', 'Anterior'],
-      ['messages.it.xlf', 'Precedente'],
-    ]);
-    const revealTranslations = new Map([
-      ['messages.en.xlf', 'Options'],
-      ['messages.fr.xlf', 'Réponses'],
-      ['messages.es.xlf', 'Opciones'],
-      ['messages.it.xlf', 'Opzioni'],
-    ]);
-    const revealAriaTranslations = new Map([
-      ['messages.en.xlf', 'Reveal answer options'],
-      ['messages.fr.xlf', 'Afficher les options de réponse'],
-      ['messages.es.xlf', 'Mostrar opciones de respuesta'],
-      ['messages.it.xlf', 'Mostra opzioni di risposta'],
-    ]);
-
-    expect(styles).toMatch(
-      /@media \(max-width: 599px\) and \(orientation: portrait\)[\s\S]*?session-host__exit-anchor-label--previous-compact,\s*\.session-host__exit-anchor-label--reveal-options-compact,\s*\.session-host__exit-anchor-label--finish-evaluation-compact\s*\{[^}]*white-space:\s*normal[^}]*overflow-wrap:\s*anywhere[^}]*hyphens:\s*auto/,
-    );
-    expect(styles).toMatch(
-      /session-host__exit-anchor-action-pair\s*>\s*\.session-host__exit-anchor-button--paired-secondary\s*\{[^}]*grid-column:\s*1[^}]*grid-row:\s*1/,
-    );
-    expect(styles).toMatch(
-      /session-host__exit-anchor-action-pair\s*>\s*\.session-host__exit-anchor-button--primary\s*\{[^}]*grid-column:\s*2[^}]*grid-row:\s*1/,
-    );
-    expect(styles).toMatch(
-      /session-host__exit-anchor--with-primary\s*>\s*\.session-host__exit-anchor-button--end \{[^}]*grid-row:\s*2/,
-    );
-    expect(styles).toMatch(
-      /session-host__exit-anchor--with-primary\s*>\s*\.session-host__exit-anchor-button--end \{[^}]*background:\s*transparent/,
-    );
-    expect(styles).toMatch(
-      /\.session-host__exit-anchor \{[^}]*surface-container-highest[^}]*primary-container/,
-    );
-    expect(styles).toMatch(/\.session-host__exit-clearance\s*\{[^}]*min-height:\s*var\(/);
-    expect(styles).toMatch(/session-host__exit-anchor-button--end/);
-    expect(styles).not.toContain('exit-anchor-button--lifecycle');
-    expect(styles).not.toContain('exit-anchor-button--retention');
-    expect(styles).toMatch(
-      /\.session-host__exit-anchor-button--skip,\s*\.session-host__exit-anchor-button--previous/,
-    );
-    expect(styles).toMatch(
-      /session-host__exit-anchor:not\(\.session-host__exit-anchor--with-primary\)[\s\S]*?exit-anchor-button--end \{[^}]*mat-button-text-horizontal-padding:\s*1\.1rem[^}]*padding-block:\s*0\.75rem/,
-    );
-
-    for (const [fileName, expectedLabel] of translations) {
+    const template = readFileSync(join(componentDir, 'session-host.component.html'), 'utf8');
+    expect(template).not.toContain('session-host__exit-anchor-label--reveal-options-compact');
+    expect(template).not.toContain('session-host__exit-anchor-label--finish-evaluation-compact');
+    for (const fileName of [
+      'messages.en.xlf',
+      'messages.fr.xlf',
+      'messages.es.xlf',
+      'messages.it.xlf',
+    ]) {
       const catalog = readFileSync(join(componentDir, '../../../../locale', fileName), 'utf8');
-      const unitStart = catalog.indexOf('<trans-unit id="sessionHost.prevQuestionAnchorCompact"');
-      const unitEnd = catalog.indexOf('</trans-unit>', unitStart);
-      const unit = catalog.slice(unitStart, unitEnd);
-
-      expect(unitStart).toBeGreaterThanOrEqual(0);
-      expect(unit).toContain(`<target>${expectedLabel}</target>`);
-      expect(expectedLabel.length).toBeLessThanOrEqual(11);
-    }
-
-    for (const [fileName, expectedLabel] of revealTranslations) {
-      const catalog = readFileSync(join(componentDir, '../../../../locale', fileName), 'utf8');
-      const unitStart = catalog.indexOf('<trans-unit id="sessionHost.revealAnswerOptionsCompact"');
-      const unitEnd = catalog.indexOf('</trans-unit>', unitStart);
-      const unit = catalog.slice(unitStart, unitEnd);
-
-      expect(unitStart).toBeGreaterThanOrEqual(0);
-      expect(unit).toContain(`<target>${expectedLabel}</target>`);
-      expect(expectedLabel.length).toBeLessThanOrEqual(8);
-    }
-
-    for (const [fileName, expectedLabel] of revealAriaTranslations) {
-      const catalog = readFileSync(join(componentDir, '../../../../locale', fileName), 'utf8');
-      const unitStart = catalog.indexOf('<trans-unit id="sessionHost.revealAnswerOptionsAria"');
-      const unitEnd = catalog.indexOf('</trans-unit>', unitStart);
-      const unit = catalog.slice(unitStart, unitEnd);
-
-      expect(unitStart).toBeGreaterThanOrEqual(0);
-      expect(unit).toContain(`<target>${expectedLabel}</target>`);
-    }
-
-    const finishEvaluationTranslations = new Map([
-      ['messages.en.xlf', 'Results'],
-      ['messages.fr.xlf', 'Bilan'],
-      ['messages.es.xlf', 'Resumen'],
-      ['messages.it.xlf', 'Sintesi'],
-    ]);
-    for (const [fileName, expectedLabel] of finishEvaluationTranslations) {
-      const catalog = readFileSync(join(componentDir, '../../../../locale', fileName), 'utf8');
-      const unitStart = catalog.indexOf(
-        '<trans-unit id="sessionHost.finishEvaluationAnchorCompact"',
-      );
-      const unitEnd = catalog.indexOf('</trans-unit>', unitStart);
-      const unit = catalog.slice(unitStart, unitEnd);
-
-      expect(unitStart).toBeGreaterThanOrEqual(0);
-      expect(unit).toContain(`<target>${expectedLabel}</target>`);
-      expect(expectedLabel.length).toBeLessThanOrEqual(11);
+      for (const id of [
+        'sessionHost.revealAnswerOptionsAria',
+        'sessionHost.finishEvaluationAnchorAria',
+        'sessionHost.prevQuestionAnchor',
+      ]) {
+        const start = catalog.indexOf(`<trans-unit id="${id}"`);
+        expect(start).toBeGreaterThanOrEqual(0);
+        expect(catalog.slice(start, catalog.indexOf('</trans-unit>', start))).toMatch(
+          /<target>[^<]+<\/target>/,
+        );
+      }
     }
   });
 
@@ -17366,10 +18519,13 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     );
 
     expect(exitAnchor.className).toContain('session-host__exit-anchor--with-primary');
+    expect(exitAnchor.querySelectorAll('.session-host__exit-anchor-button--primary')).toHaveLength(
+      1,
+    );
     expect(buttonTexts).toEqual([
-      'Session beenden',
       'Zweite Abstimmung',
       'Zur nächsten Frage ohne zweite Abstimmung',
+      'Weitere Aktionen',
     ]);
     const actionPairButtons = Array.from(
       exitAnchor.querySelectorAll('.session-host__exit-anchor-action-pair button'),
@@ -17381,7 +18537,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     fixture.destroy();
   });
 
-  it('zieht im Blitzlicht-Kanal die Aktion "Stopp" in die untere Action-Bar neben "Gesamte Session beenden"', async () => {
+  it('zeigt im Blitzlicht die bestehende Stopp-Aktion beim Ergebnis und Session-Ende getrennt', async () => {
     getInfoQueryMock.mockResolvedValue({
       ...defaultSession,
       status: 'ACTIVE',
@@ -17403,6 +18559,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     await flushComponentAfterStable(fixture, 50);
     fixture.componentInstance.activeChannel.set('quickFeedback');
     fixture.detectChanges();
+    await flushComponentAfterStable(fixture, 50);
 
     const exitAnchor = fixture.nativeElement.querySelector(
       '.session-host__exit-anchor',
@@ -17410,10 +18567,17 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     const buttons = Array.from(exitAnchor.querySelectorAll('button'));
     const buttonTexts = buttons.map((button) => exitAnchorButtonLabel(button));
 
-    expect(exitAnchor.className).toContain('session-host__exit-anchor--with-primary');
-    expect(buttonTexts).toEqual(['Session beenden', 'Stopp']);
-
-    (buttons[1] as HTMLButtonElement | undefined)?.click();
+    expect(exitAnchor.className).not.toContain('session-host__exit-anchor--with-primary');
+    expect(exitAnchor.querySelectorAll('.session-host__exit-anchor-button--primary')).toHaveLength(
+      0,
+    );
+    expect(buttonTexts).toEqual(['Session beenden']);
+    const roundControl = fixture.nativeElement.querySelector(
+      '[data-testid="feedback-primary-round-control"]',
+    ) as HTMLButtonElement;
+    expect(roundControl.textContent).toContain('Stopp');
+    expect(roundControl.closest('app-feedback-host')).not.toBeNull();
+    roundControl.click();
     await fixture.whenStable();
 
     expect(quickFeedbackToggleLockMutateMock).toHaveBeenCalledWith({ sessionCode: 'ABC123' });
@@ -18151,12 +19315,124 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
         },
       ],
     });
+    getSessionConfidenceSummaryQueryMock.mockResolvedValue(
+      fixture.componentInstance.finishedConfidenceSummary(),
+    );
+    fixture.detectChanges();
+    await flushComponentAfterStable(fixture, 50);
     fixture.detectChanges();
 
     const text = fixture.nativeElement.textContent as string;
     expect(text).toContain('Lernstand und Selbsteinschätzung');
     expect(text).toContain('Anteil Fehlkonzept-Hinweis');
     expect(text).toContain('Nachbesprechungsplan ansehen');
+    const host = fixture.nativeElement as HTMLElement;
+    const finished = host.querySelector('#host-session-finished-card');
+    const summary = host.querySelector('.session-host__finished-confidence-question-markdown');
+    expect(finished).not.toBeNull();
+    expect(summary).not.toBeNull();
+    expect(
+      finished!.compareDocumentPosition(summary!) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(finished?.querySelectorAll('.mat-mdc-unelevated-button')).toHaveLength(1);
+    let resolveExport!: (result: 'pdf-download') => void;
+    const exportPlan = vi
+      .spyOn(TestBed.inject(SessionResultsExportService), 'exportPdfFromSessionCode')
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveExport = resolve;
+          }),
+      );
+    const planButton = host.querySelector<HTMLButtonElement>('.session-host__export-pdf-btn')!;
+    const lateSnapshot = fixture.componentInstance.finishedConfidenceSummary();
+    expect(lateSnapshot).not.toBeNull();
+    let resolveSummary!: (summary: typeof lateSnapshot) => void;
+    getSessionConfidenceSummaryQueryMock.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveSummary = resolve;
+        }),
+    );
+    const lateSummary = fixture.componentInstance.loadFinishedConfidenceSummary();
+    planButton.focus();
+    const finishedFocus = vi.spyOn(finished as HTMLElement, 'focus');
+    resolveSummary({ ...lateSnapshot! });
+    await lateSummary;
+    fixture.detectChanges();
+    await flushComponentAfterStable(fixture, 50);
+    fixture.detectChanges();
+    expect(document.activeElement).toBe(planButton);
+    expect(finishedFocus).not.toHaveBeenCalled();
+    planButton.click();
+    fixture.detectChanges();
+    expect(exportPlan).toHaveBeenCalledWith(
+      'ABC123',
+      expect.objectContaining({ profile: 'visual' }),
+    );
+    expect(planButton.getAttribute('aria-busy')).toBe('true');
+    expect(planButton.getAttribute('aria-disabled')).toBe('true');
+    expect(document.activeElement).toBe(planButton);
+    expect(host.querySelector('.session-host__export-progress')?.getAttribute('role')).toBe(
+      'status',
+    );
+    planButton.click();
+    expect(exportPlan).toHaveBeenCalledTimes(1);
+    resolveExport('pdf-download');
+    await vi.waitUntil(() => !fixture.componentInstance.exportExporting(), {
+      timeout: 1000,
+      interval: 10,
+    });
+    fixture.detectChanges();
+    expect(document.activeElement).toBe(planButton);
+    expect(planButton.getAttribute('aria-disabled')).not.toBe('true');
+    expect(fixture.componentInstance.exportStatus()).toBe('Ergebnis-PDF heruntergeladen.');
+    const exportTrigger = host.querySelector<HTMLButtonElement>('.session-host__export-more-btn');
+    expect(exportTrigger?.textContent).toContain('Exportieren');
+    exportTrigger!.focus();
+    exportTrigger!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const exportMenu = document.querySelector('.cdk-overlay-container [role="menu"]');
+    expect(exportMenu?.textContent).toContain('Standard (mit Diagrammen)');
+    expect(exportMenu?.textContent).toContain('Barrierefrei (PDF/UA-1)');
+    expect(exportMenu?.textContent).toContain('Rohdaten als CSV exportieren');
+    let resolveMenuExport!: (result: 'pdf-download') => void;
+    exportPlan.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveMenuExport = resolve;
+        }),
+    );
+    const accessiblePdf = Array.from(exportMenu!.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('PDF/UA-1'),
+    );
+    accessiblePdf!.click();
+    fixture.detectChanges();
+    expect(exportPlan).toHaveBeenLastCalledWith(
+      'ABC123',
+      expect.objectContaining({ profile: 'pdfUa' }),
+    );
+    expect(exportTrigger!.disabled).toBe(false);
+    expect(exportTrigger!.getAttribute('aria-disabled')).toBe('true');
+    expect(exportTrigger!.getAttribute('aria-busy')).toBe('true');
+    expect(document.activeElement).toBe(exportTrigger);
+    const exportMenuTrigger = fixture.debugElement
+      .query(By.css('.session-host__export-more-btn'))
+      .injector.get(MatMenuTrigger);
+    exportTrigger!.click();
+    planButton.click();
+    fixture.detectChanges();
+    expect(exportMenuTrigger.menuOpen).toBe(false);
+    expect(exportPlan).toHaveBeenCalledTimes(2);
+    resolveMenuExport('pdf-download');
+    await vi.waitUntil(() => !fixture.componentInstance.exportExporting(), {
+      timeout: 1000,
+      interval: 10,
+    });
+    fixture.detectChanges();
+    expect(document.activeElement).toBe(exportTrigger);
+    expect(exportTrigger!.getAttribute('aria-disabled')).not.toBe('true');
     expect(text).toContain('Welche Aussage stimmt?');
     expect(
       fixture.nativeElement.querySelector('.session-host__finished-confidence-question-markdown h4')

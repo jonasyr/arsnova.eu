@@ -51,6 +51,7 @@ import {
   type ToleranceLevel,
   type MatchingPairInput,
   DEMO_QUIZ_HISTORY_SCOPE_ID,
+  isDemoQuizHistoryScopeId,
   type OrderingItemInput,
   type CategorizationCategoryInput,
   type CategorizationItemInput,
@@ -1477,6 +1478,7 @@ export class QuizStoreService implements OnDestroy {
       throw new Error('Quiz nicht gefunden.');
     }
 
+    this.markDemoQuizUserModified(quizId);
     this.quizDocuments.update((current) => current.filter((quiz) => quiz.id !== quizId));
     this.persistToStorage();
   }
@@ -1682,8 +1684,20 @@ export class QuizStoreService implements OnDestroy {
         ? document.description.slice(0, UPLOAD_DESCRIPTION_MAX - 3) + '...'
         : document.description;
 
+    let historyScopeId = document.id;
+    if (document.id === DEMO_QUIZ_ID) {
+      const existingScope = document.lastServerQuizAccessProof;
+      historyScopeId =
+        isDemoQuizHistoryScopeId(existingScope) && existingScope !== DEMO_QUIZ_HISTORY_SCOPE_ID
+          ? existingScope
+          : `${DEMO_QUIZ_HISTORY_SCOPE_ID.slice(0, 4)}${generateUuid().slice(4)}`;
+      if (historyScopeId !== existingScope) {
+        this.setLastServerQuizAccessProof(document.id, historyScopeId);
+      }
+    }
+
     const payload: QuizUploadInput = {
-      historyScopeId: document.id,
+      historyScopeId,
       name: document.name,
       ...(description ? { description } : {}),
       motifImageUrl: normalizeMotifImageUrlInput(document.motifImageUrl) ?? null,

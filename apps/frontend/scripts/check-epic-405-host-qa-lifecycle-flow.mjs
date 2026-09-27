@@ -12,6 +12,7 @@
  *     npm run smoke:epic-405-host-qa-lifecycle -w @arsnova/frontend
  */
 import { createTRPCProxyClient, httpBatchLink } from '@trpc/client';
+import assert from 'node:assert/strict';
 import { chromium, webkit } from 'playwright';
 import { configureQaSessionIfNeeded } from '../../../scripts/load/lib/configure-qa-if-needed.mjs';
 
@@ -94,9 +95,16 @@ async function createConfiguredQaSession() {
 async function seedHostBrowser(context, session) {
   await context.addInitScript(
     ({ browserCapability, card, code, hostToken, prefixes }) => {
+      const marker = `arsnova-smoke-host-seeded:${code}`;
+      if (globalThis.sessionStorage.getItem(marker)) return;
       globalThis.sessionStorage.setItem(`${prefixes.token}${code}`, hostToken);
       globalThis.localStorage.setItem(`${prefixes.capability}-${code}`, browserCapability);
       globalThis.sessionStorage.setItem(`${prefixes.card}-${code}`, JSON.stringify(card));
+      globalThis.localStorage.setItem(
+        'arsnova-host-scenario:v1',
+        JSON.stringify({ version: 1, scenario: 'CLASSROOM' }),
+      );
+      globalThis.sessionStorage.setItem(marker, '1');
     },
     {
       browserCapability: session.hostBrowserCapability,
@@ -138,6 +146,45 @@ async function dismissJoinOverlay(page) {
   await overlay.waitFor({ state: 'hidden', timeout: 5_000 });
 }
 
+async function verifySingleQaNavigation(host, code) {
+  const trigger = host.getByTestId('add-channel-trigger');
+  await trigger.waitFor({ state: 'visible' });
+  assert.equal(await host.locator('.session-channel-tabs').count(), 0);
+  assert.equal(
+    await host.evaluate(
+      (sessionCode) => sessionStorage.getItem(`arsnova-host-scenario-session:v1:${sessionCode}`),
+      code,
+    ),
+    null,
+  );
+  await trigger.focus();
+  await trigger.press('Enter');
+  await host.getByTestId('add-channel-quiz').waitFor({ state: 'visible' });
+  assert(await host.getByTestId('add-channel-quickFeedback').isVisible());
+  assert.equal(await host.getByTestId('add-channel-qa').count(), 0);
+  assert.equal(await host.getByRole('menuitem').count(), 2);
+  await host.keyboard.press('Escape');
+  await host.waitForFunction(
+    () => document.activeElement?.getAttribute('data-testid') === 'add-channel-trigger',
+  );
+  logStep(true, 'Bestehendes Q&A bleibt ohne Aufgaben-Zuordnung und ohne Tab-Leiste');
+}
+
+async function verifyClosedQaNavigation(host) {
+  await host.waitForFunction(
+    () => document.querySelectorAll('.session-channel-tabs mat-button-toggle').length === 2,
+  );
+  const qaTab = host.locator('.session-channel-tabs mat-button-toggle').first();
+  assert.equal((await qaTab.locator('.session-channel-tabs__label').innerText()).trim(), 'Q&A');
+  assert.match(await qaTab.locator('.session-channel-tabs__badge').innerText(), /^(Zu|Closed)$/i);
+  await host.getByTestId('add-channel-trigger').click();
+  await host.getByTestId('add-channel-quiz').waitFor({ state: 'visible' });
+  assert.equal(await host.getByRole('menuitem').count(), 1);
+  assert.equal(await host.getByTestId('add-channel-qa').count(), 0);
+  assert.equal(await host.getByTestId('add-channel-quickFeedback').count(), 0);
+  await host.keyboard.press('Escape');
+}
+
 async function main() {
   if (!(await waitForServer(BASE_URL))) {
     throw new Error(`Frontend nicht erreichbar unter ${BASE_URL}.`);
@@ -172,6 +219,7 @@ async function main() {
     await dismissJoinOverlay(host).catch((error) => {
       failures.push(`Beitritts-Overlay: ${error instanceof Error ? error.message : String(error)}`);
     });
+    await verifySingleQaNavigation(host, session.code);
 
     const qaSettings = host.getByRole('button', { name: /Q&A-Einstellungen/i });
     const settingsOk = await qaSettings.isVisible().catch(() => false);
@@ -194,6 +242,20 @@ async function main() {
         );
       }
     }
+
+    await host.getByTestId('add-channel-trigger').click();
+    await host.getByTestId('add-channel-quickFeedback').click();
+    await host.waitForFunction(
+      () => document.querySelectorAll('.session-channel-tabs mat-button-toggle').length === 2,
+    );
+    await createTrpcClient(session.hostToken).session.closeQaChannel.mutate({ code: session.code });
+    await host.reload({ waitUntil: 'domcontentloaded' });
+    await dismissJoinOverlay(host);
+    await verifyClosedQaNavigation(host);
+    logStep(
+      true,
+      'Geschlossenes Q&A bleibt nach Reload als »Zu« sichtbar und ist kein hinzufügbares Format',
+    );
 
     await hostContext.close();
 
@@ -238,6 +300,11 @@ async function main() {
           .catch(() => '')) || ''
       ).slice(0, 400);
       failures.push(`Wiederherstellung landete nicht in der Host-Ansicht. DOM: ${bodyText}`);
+    } else {
+      await dismissRecoveryCard(recovery);
+      await dismissJoinOverlay(recovery);
+      await verifyClosedQaNavigation(recovery);
+      logStep(true, 'Host-Recovery erhält aktivierte Formate und den geschlossenen Q&A-Status');
     }
 
     await recoveryContext.close();

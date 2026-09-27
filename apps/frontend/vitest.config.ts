@@ -9,6 +9,8 @@ export default defineConfig({
   root: projectRoot,
   plugins: [angular()],
   test: {
+    // Keep Angular TestBed and browser globals isolated even with a single worker.
+    pool: 'forks',
     globals: true,
     environment: 'jsdom',
     testTimeout: 15_000,

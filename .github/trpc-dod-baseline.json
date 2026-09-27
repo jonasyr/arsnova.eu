@@ -539,7 +539,7 @@
     },
     "session.getActiveQuizIds": {
       "kind": "query",
-      "fingerprint": "sha256:087856e13476b31ff179e953520407b5564c64c8e2fa785453bbe4eebf0e76e7",
+      "fingerprint": "sha256:06cb4c6a13d9d70f5f8b996f3b5c62e661ecb2c74313694e3800070187ae5bf6",
       "missing": []
     },
     "session.getBonusTokens": {

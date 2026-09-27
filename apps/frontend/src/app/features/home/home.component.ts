@@ -29,6 +29,7 @@ import {
   MatCardTitle,
 } from '@angular/material/card';
 import { MatIcon } from '@angular/material/icon';
+import { MatMenu, MatMenuItem, MatMenuTrigger } from '@angular/material/menu';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltip } from '@angular/material/tooltip';
@@ -46,6 +47,7 @@ import {
 import { ConfirmLeaveDialogComponent } from '../../shared/confirm-leave-dialog/confirm-leave-dialog.component';
 import { createDefaultLiveSessionOnboardingProfile } from '../../core/home-preset-storage';
 import { ThemePresetService } from '../../core/theme-preset.service';
+import { HostScenarioService, type HostScenario } from '../../core/host-scenario.service';
 import { PresetSnackbarFocusService } from '../../core/preset-snackbar-focus.service';
 import {
   localizeKnownServerError,
@@ -119,6 +121,12 @@ type HostSessionCta = {
 
 const HOST_SESSION_CTA_LIMIT = 8;
 const HOST_SESSION_INFO_FETCH_LIMIT = 32;
+const HOST_SESSION_DIRECT_OPEN_LIMIT = 2;
+const HOST_SCENARIO_CARD_IDS: Record<HostScenario, string> = {
+  CLASSROOM: 'home-host-quiz',
+  EVENT: 'home-host-qa',
+  QUICK: 'host-quick-feedback',
+};
 
 function resolveSessionServerNow(
   session: Pick<SessionInfoDTO, 'serverTime' | 'serverNow'>,
@@ -198,6 +206,9 @@ function isFinishedWithoutJoinableQa(resolution: {
     MatCardTitle,
     MatIcon,
     MatIconButton,
+    MatMenu,
+    MatMenuItem,
+    MatMenuTrigger,
     MatTooltip,
     CdkTrapFocus,
     MarkdownImageLightboxDirective,
@@ -221,6 +232,8 @@ export class HomeComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('syncLinkInput') private readonly syncLinkInput?: ElementRef<HTMLInputElement>;
   @ViewChild('syncToggleBtn', { read: ElementRef })
   private readonly syncToggleBtn?: ElementRef<HTMLButtonElement>;
+  @ViewChild('hostSessionMenuTrigger')
+  private readonly hostSessionMenuTrigger?: MatMenuTrigger;
 
   sessionCode = signal('');
   codeInputFocused = signal(false);
@@ -245,6 +258,7 @@ export class HomeComponent implements OnInit, AfterViewInit, OnDestroy {
   sessionBoundFeedbackType = signal<QuickFeedbackType | null>(null);
 
   readonly themePreset = inject(ThemePresetService);
+  readonly hostScenario = inject(HostScenarioService);
   private readonly quizStore = inject(QuizStoreService);
   readonly librarySharingMode = this.quizStore.librarySharingMode;
   readonly syncOriginDeviceLabel = this.quizStore.originDeviceLabel;
@@ -286,6 +300,18 @@ export class HomeComponent implements OnInit, AfterViewInit, OnDestroy {
   });
   readonly hasHostedQuiz = computed(() => this.latestHostedQuizId() !== null);
   readonly hostSessionCtas = signal<HostSessionCta[]>([]);
+  readonly hostSessionMenuCtas = computed(() => {
+    const openItems = this.hostSessionCtas().filter((item) => item.qaOpen === true);
+    return openItems.length > HOST_SESSION_DIRECT_OPEN_LIMIT ? openItems : [];
+  });
+  readonly directHostSessionCtas = computed(() => {
+    const menuItems = this.hostSessionMenuCtas();
+    if (menuItems.length === 0) {
+      return this.hostSessionCtas();
+    }
+    const menuCodes = new Set(menuItems.map((item) => item.code));
+    return this.hostSessionCtas().filter((item) => !menuCodes.has(item.code));
+  });
   readonly showHostRecoveryCta = computed(() => this.hostSessionCtas().length > 0);
   readonly hostSessionCtaBusy = signal(false);
   private hostSessionCtaLoadGeneration = 0;
@@ -327,6 +353,37 @@ export class HomeComponent implements OnInit, AfterViewInit, OnDestroy {
   isValidSessionCode = computed(() => /^[A-Z0-9]{6}$/.test(this.sessionCode()));
   readonly codeSlots = [0, 1, 2, 3, 4, 5];
   readonly quickFeedbackPresetChips = QUICK_FEEDBACK_HOME_CHIPS;
+
+  selectHostScenario(scenario: HostScenario, event?: MouseEvent): void {
+    this.hostScenario.selectScenario(scenario);
+    if (!isPlatformBrowser(this.platformId)) {
+      return;
+    }
+    const moveFocusToCard = event?.detail === 0;
+
+    afterNextRender(
+      () => {
+        if (this.destroyRef.destroyed) {
+          return;
+        }
+        const target = this.document.getElementById(HOST_SCENARIO_CARD_IDS[scenario]);
+        const reduceMotion =
+          this.document.defaultView?.matchMedia?.('(prefers-reduced-motion: reduce)').matches ===
+          true;
+        target?.scrollIntoView({
+          behavior: reduceMotion ? 'auto' : 'smooth',
+          block: 'start',
+          inline: 'nearest',
+        });
+        if (moveFocusToCard) {
+          target
+            ?.querySelector<HTMLElement>('.home-card__scenario-focus-target')
+            ?.focus({ preventScroll: true });
+        }
+      },
+      { injector: this.injector },
+    );
+  }
 
   /** Leertaste schon in keydown verarbeitet → keyup nicht erneut auslösen (vermeidet Doppel-Submit, nutzt keyup für virtuelle Tastatur). */
   private spaceHandledInKeydown = false;
@@ -628,7 +685,11 @@ export class HomeComponent implements OnInit, AfterViewInit, OnDestroy {
     return $localize`:@@homeLiveCard.removeCtaAria:Q&A-Session ${item.code}:code: löschen`;
   }
 
-  async removeHostSessionCta(item: HostSessionCta, event?: Event): Promise<void> {
+  async removeHostSessionCta(
+    item: HostSessionCta,
+    event?: Event,
+    returnToMenuTrigger = false,
+  ): Promise<void> {
     event?.preventDefault();
     event?.stopPropagation();
     if (this.hostSessionCtaBusy()) {
@@ -636,6 +697,9 @@ export class HomeComponent implements OnInit, AfterViewInit, OnDestroy {
     }
     this.hostSessionCtaBusy.set(true);
     try {
+      if (returnToMenuTrigger) {
+        await this.closeHostSessionMenuBeforeDialog();
+      }
       const consequences = [
         this.hostSessionCtaOpenDescription(item),
         this.hostSessionCtaQuestionDescription(item),
@@ -660,7 +724,7 @@ export class HomeComponent implements OnInit, AfterViewInit, OnDestroy {
           .afterClosed(),
       );
       if ((decision !== true && decision !== 'alternate') || !isPlatformBrowser(this.platformId)) {
-        this.focusHostSessionCtaControl(item.code);
+        this.focusHostSessionCtaControl(item.code, returnToMenuTrigger);
         return;
       }
       this.hostSessionCtas.update((items) => items.filter((entry) => entry.code !== item.code));
@@ -668,7 +732,7 @@ export class HomeComponent implements OnInit, AfterViewInit, OnDestroy {
         const ended = await this.endHostedSessionFromHome(item.code);
         if (!ended) {
           await this.loadHostSessionCtas();
-          this.focusHostSessionCtaControl(item.code);
+          this.focusHostSessionCtaControl(item.code, returnToMenuTrigger);
           return;
         }
       }
@@ -676,13 +740,25 @@ export class HomeComponent implements OnInit, AfterViewInit, OnDestroy {
       forgetHostedSessionOnThisDevice(item.code);
       clearHostToken(item.code);
       await this.loadHostSessionCtas();
-      this.focusHostSessionCtaControl();
+      this.focusHostSessionCtaControl(undefined, returnToMenuTrigger);
     } finally {
       this.hostSessionCtaBusy.set(false);
     }
   }
 
-  private focusHostSessionCtaControl(preferredCode?: string): void {
+  private async closeHostSessionMenuBeforeDialog(): Promise<void> {
+    const trigger = this.hostSessionMenuTrigger;
+    if (!trigger?.menuOpen) {
+      return;
+    }
+    const closed = firstValueFrom(trigger.menuClosed);
+    trigger.closeMenu();
+    // MatMenu restores focus before menuClosed emits. Open the dialog only
+    // after the trigger is the stable return target for every dialog outcome.
+    await closed;
+  }
+
+  private focusHostSessionCtaControl(preferredCode?: string, preferMenuTrigger = false): void {
     if (!isPlatformBrowser(this.platformId)) {
       return;
     }
@@ -696,10 +772,15 @@ export class HomeComponent implements OnInit, AfterViewInit, OnDestroy {
         const nextRemove = this.document.querySelector<HTMLButtonElement>(
           '[data-testid="home-host-session-remove"]',
         );
+        const menuTrigger = this.document.querySelector<HTMLButtonElement>(
+          '[data-testid="home-host-session-menu-trigger"]',
+        );
         const qaCreate = this.document.querySelector<HTMLButtonElement>(
           '[data-testid="home-live-qa-create"]',
         );
-        (preferred ?? nextRemove ?? qaCreate)?.focus({ preventScroll: true });
+        (preferred ?? (preferMenuTrigger ? menuTrigger : null) ?? nextRemove ?? qaCreate)?.focus({
+          preventScroll: true,
+        });
       },
       { injector: this.injector },
     );
@@ -1001,8 +1082,10 @@ export class HomeComponent implements OnInit, AfterViewInit, OnDestroy {
   async openHeroHostTab(
     tab: 'quiz' | 'qa' | 'quickFeedback',
     feedbackType?: QuickFeedbackType,
+    quickFeedbackAfterQa = false,
   ): Promise<void> {
     if (this.hostSessionStarting()) return;
+    const scenario = this.hostScenario.scenarioForAction();
 
     this.joinError.set(null);
     this.joinErrorSessionFinished.set(false);
@@ -1014,13 +1097,13 @@ export class HomeComponent implements OnInit, AfterViewInit, OnDestroy {
 
     try {
       if (tab === 'qa') {
-        await this.startHeroHostSession(tab, feedbackType);
+        await this.startHeroHostSession(tab, feedbackType, scenario, quickFeedbackAfterQa);
         return;
       }
 
       const code = this.resolveHeroHostCode();
       if (!code) {
-        await this.startHeroHostSession(tab, feedbackType);
+        await this.startHeroHostSession(tab, feedbackType, scenario);
         return;
       }
 
@@ -1030,11 +1113,11 @@ export class HomeComponent implements OnInit, AfterViewInit, OnDestroy {
           anonymousClientId: getAnonymousClientId(),
         });
         if (tab === 'quickFeedback' && session.status === 'FINISHED') {
-          await this.startHeroHostSession(tab, feedbackType);
+          await this.startHeroHostSession(tab, feedbackType, scenario);
           return;
         }
         if (tab === 'quiz' && session.status === 'FINISHED' && !isQaChannelJoinable(session)) {
-          await this.startHeroHostSession(tab, feedbackType);
+          await this.startHeroHostSession(tab, feedbackType, scenario);
           return;
         }
         if (
@@ -1042,7 +1125,7 @@ export class HomeComponent implements OnInit, AfterViewInit, OnDestroy {
           feedbackType &&
           !this.isHeroTabAvailableForSession(session, tab)
         ) {
-          await this.startHeroHostSession(tab, feedbackType);
+          await this.startHeroHostSession(tab, feedbackType, scenario);
           return;
         }
         const queryParams =
@@ -1065,7 +1148,9 @@ export class HomeComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private async startHeroHostSession(
     tab: 'quiz' | 'qa' | 'quickFeedback',
-    feedbackType?: QuickFeedbackType,
+    feedbackType: QuickFeedbackType | undefined,
+    scenario: HostScenario,
+    quickFeedbackAfterQa = false,
   ): Promise<void> {
     try {
       const onboardingProfile = createDefaultLiveSessionOnboardingProfile(
@@ -1116,6 +1201,10 @@ export class HomeComponent implements OnInit, AfterViewInit, OnDestroy {
         browserCapability: result.hostBrowserCapability,
         recoveryCard: result.hostRecoveryCard,
       });
+      this.hostScenario.assignToSession(result.code, scenario);
+      if (tab === 'qa' && quickFeedbackAfterQa) {
+        this.hostScenario.requestQuickFeedbackAfterQa(result.code);
+      }
       if (tab === 'quickFeedback') {
         this.snackBar.open(
           $localize`:@@homeLiveCard.quickFeedbackCreatedSnack:Neue Blitzlicht-Session gestartet.`,

@@ -228,7 +228,7 @@
   }
 }
 
-.session-host--with-channel-tabs {
+.session-host--with-channel-navigation {
   --session-host-tabs-height: 3.5rem;
 }
 
@@ -254,8 +254,8 @@
   }
 }
 
-.session-host--with-channel-tabs .session-host__live-shell-row,
-.session-host--with-channel-tabs .session-host__live-banner {
+.session-host--with-channel-navigation .session-host__live-shell-row,
+.session-host--with-channel-navigation .session-host__live-banner {
   position: static;
   top: auto;
   left: auto;
@@ -263,11 +263,11 @@
   z-index: auto;
 }
 
-.session-host--with-channel-tabs .session-host__live-shell-row {
+.session-host--with-channel-navigation .session-host__live-shell-row {
   margin-top: calc(-0.45 * var(--session-host-zone-gap));
 }
 
-.session-host--with-channel-tabs .session-host__run {
+.session-host--with-channel-navigation .session-host__run {
   padding-top: 0;
 }
 
@@ -345,29 +345,6 @@
   color: var(--mat-sys-on-error-container);
 }
 
-.session-host__exit-anchor:has(.session-host__exit-anchor-button--previous)
-  .session-host__exit-anchor-button--end {
-  margin-inline-end: 0;
-}
-
-.session-host__exit-anchor-button--previous {
-  margin-inline-end: auto;
-}
-
-/* Reaktionen füllen den Freiraum zwischen Links- und Rechts-Aktionen. */
-.session-host__exit-anchor:has(.session-host__emoji-reactions)
-  .session-host__exit-anchor-button--end,
-.session-host__exit-anchor:has(.session-host__emoji-reactions)
-  .session-host__exit-anchor-button--previous {
-  margin-inline-end: 0;
-}
-
-.session-host__exit-anchor-label--previous-compact,
-.session-host__exit-anchor-label--reveal-options-compact,
-.session-host__exit-anchor-label--finish-evaluation-compact {
-  display: none;
-}
-
 .session-host__timer-accommodation-warning {
   flex: 1 1 100%;
   display: flex;
@@ -405,7 +382,7 @@
   }
 
   .session-host:has(.session-host__exit-anchor--with-primary) .session-host__exit-clearance {
-    /* Zwei Button-Zeilen, wenn eine Quiz-Primäraktion über „Session beenden“ liegt. */
+    /* Platz für Phasenaktion und getrennte Zusatzaktionen. */
     min-height: var(
       --session-host-exit-clearance,
       calc(var(--host-mobile-safe-bottom) + var(--app-footer-visible-offset, 0px) + 13.5rem)
@@ -432,7 +409,7 @@
     padding-bottom: var(--host-mobile-safe-bottom);
   }
 
-  .session-host--with-channel-tabs .session-host__channel-panel {
+  .session-host--with-channel-navigation .session-host__channel-panel {
     padding-bottom: var(--host-mobile-safe-bottom);
   }
 
@@ -484,58 +461,9 @@
     min-height: 3.25rem;
   }
 
-  /* Sekundär-Aktionen: nicht dieselbe dunkle Karte wie Antwortzeilen. */
-  .session-host__exit-anchor-button--skip,
-  .session-host__exit-anchor-button--previous,
-  .session-host__exit-anchor-button--paired-secondary,
-  .session-host__exit-anchor-button--reveal-options,
-  .session-host__exit-anchor-button--finish-evaluation {
-    border: 1px solid color-mix(in srgb, var(--mat-sys-outline) 42%, var(--mat-sys-outline-variant));
-    background: color-mix(
-      in srgb,
-      var(--mat-sys-surface) 82%,
-      var(--mat-sys-surface-container-high)
-    );
-    color: var(--mat-sys-on-surface);
-  }
-
-  /*
-   * Primäraktionen oben (Auslassen | Ergebnis), Session beenden darunter als ruhige
-   * Destruktiv-Aktion — nicht als Full-Width-CTA.
-   */
-  .session-host__exit-anchor--with-primary:has(.session-host__exit-anchor-button--skip)
-    > .session-host__exit-anchor-button--skip,
-  .session-host__exit-anchor--with-primary:has(.session-host__exit-anchor-button--previous)
-    > .session-host__exit-anchor-button--previous {
-    grid-column: 1;
-    grid-row: 1;
-    order: 1;
-  }
-
-  .session-host__exit-anchor--with-primary:has(.session-host__exit-anchor-button--skip)
-    > .session-host__exit-anchor-button--primary,
-  .session-host__exit-anchor--with-primary:has(.session-host__exit-anchor-button--previous)
-    > .session-host__exit-anchor-button--primary {
-    grid-column: 2;
-    grid-row: 1;
-    order: 2;
-  }
-
-  .session-host__exit-anchor--with-primary:has(.session-host__exit-anchor-action-pair)
-    > .session-host__exit-anchor-action-pair {
+  .session-host__exit-anchor--with-primary > .session-host__exit-anchor-button--primary,
+  .session-host__exit-anchor--with-primary > .session-host__exit-anchor-action-pair {
     grid-column: 1 / -1;
-    grid-row: 1;
-    order: 1;
-  }
-
-  /* Solo-Primary (Blitzlicht, erste Ergebnis-Frage ohne Zurück): volle Breite oben. */
-  .session-host__exit-anchor--with-primary:not(:has(.session-host__exit-anchor-button--skip)):not(
-      :has(.session-host__exit-anchor-button--previous)
-    ):not(:has(.session-host__exit-anchor-action-pair))
-    > .session-host__exit-anchor-button--primary {
-    grid-column: 1 / -1;
-    grid-row: 1;
-    order: 1;
   }
 
   /* Mit Primary immer: Session beenden darunter als ruhiger Text-Link. */
@@ -559,10 +487,6 @@
   .session-host__exit-anchor--with-primary > .session-host__exit-anchor-button--end:focus-visible {
     background: color-mix(in srgb, var(--mat-sys-error) 10%, transparent);
     border-color: color-mix(in srgb, var(--mat-sys-error) 28%, var(--mat-sys-outline-variant));
-  }
-
-  .session-host__exit-anchor-button--primary {
-    grid-column: 2;
   }
 
   .session-host__emoji-reactions {
@@ -589,46 +513,46 @@
   .session-host__exit-anchor-action-pair {
     grid-column: 1 / -1;
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr);
     gap: 0.5rem;
-  }
-
-  .session-host__exit-anchor-action-pair > .session-host__exit-anchor-button--paired-secondary {
-    grid-column: 1;
-    grid-row: 1;
-  }
-
-  .session-host__exit-anchor-action-pair > .session-host__exit-anchor-button--primary {
-    grid-column: 2;
-    grid-row: 1;
-  }
-
-  .session-host__exit-anchor-button--end,
-  .session-host__exit-anchor-button--previous {
-    margin-inline-end: 0;
   }
 }
 
-@media (max-width: 599px) and (orientation: portrait) {
-  .session-host__exit-anchor-button--previous,
-  .session-host__exit-anchor-button--reveal-options,
-  .session-host__exit-anchor-button--finish-evaluation {
-    padding-inline: 0.5rem;
+/* Quiz phase actions precede their alternatives and the separate overflow in DOM and layout. */
+.session-host__exit-anchor--quiz {
+  justify-content: center;
+
+  .session-host__more-actions {
+    order: 3;
+    margin-inline-start: auto;
   }
 
-  .session-host__exit-anchor-label--previous-full,
-  .session-host__exit-anchor-label--reveal-options-full,
-  .session-host__exit-anchor-label--finish-evaluation-full {
-    display: none;
-  }
-
-  .session-host__exit-anchor-label--previous-compact,
-  .session-host__exit-anchor-label--reveal-options-compact,
-  .session-host__exit-anchor-label--finish-evaluation-compact {
-    display: inline;
+  .session-host__exit-anchor-button {
+    min-height: 2.75rem;
+    height: auto;
+    padding-block: 0.65rem;
     white-space: normal;
-    overflow-wrap: anywhere;
-    hyphens: auto;
+    line-height: 1.4;
+  }
+
+  .session-host__timer-accommodation-warning {
+    order: -1;
+  }
+}
+
+@media (max-width: 599px) {
+  .session-host__exit-anchor--quiz {
+    display: flex;
+    flex-direction: column;
+
+    .session-host__exit-anchor-action-pair {
+      width: 100%;
+    }
+
+    .session-host__more-actions {
+      width: auto;
+      margin-inline: auto;
+    }
   }
 }
 
@@ -639,7 +563,7 @@
   transform: none;
   z-index: auto;
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: center;
   gap: 0.45rem;
@@ -652,11 +576,27 @@
 
 .session-host__channel-nav {
   display: inline-flex;
+  flex-wrap: wrap;
   flex: 0 1 auto;
   align-items: center;
   gap: 0.45rem;
   min-width: 0;
   max-width: 100%;
+}
+
+.session-host__add-channel {
+  flex: 0 1 auto;
+  min-height: 2.75rem;
+  white-space: normal;
+}
+
+.session-host__channel-status {
+  width: var(--session-host-shell-width);
+  max-width: 100%;
+  margin: 0 auto;
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-body-medium);
+  line-height: 1.5;
 }
 
 .session-host__view-controls {
@@ -689,10 +629,6 @@
 }
 
 .session-host__view-controls--inline {
-  flex: 0 0 auto;
-}
-
-.session-host__view-controls--meta {
   flex: 0 0 auto;
 }
 
@@ -850,7 +786,7 @@
 
 /*
  * Compact (<600) + Medium (600–839): eine Nowrap-Zeile überfüllt Phone/iPad Mini.
- * Shell darf umbrechen; lange Labels und „Aus“-Badges entfallen; Tab-Scroll ohne sichtbaren Balken.
+ * Shell darf umbrechen; aktivierte Tabs behalten ihre Status-Badges.
  */
 @media (max-width: 839.98px) {
   .session-channel-tabs-shell {
@@ -992,7 +928,7 @@
   }
 
   .session-channel-tabs-shell {
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     overflow-x: visible;
     column-gap: 0.75rem;
   }
@@ -1050,14 +986,6 @@
   font-size: 1.08rem;
 }
 
-.session-channel-tabs__toggle--inactive {
-  opacity: 0.72;
-}
-
-.session-channel-tabs__toggle--inactive .session-channel-tabs__label {
-  color: var(--mat-sys-on-surface-variant);
-}
-
 .session-channel-tabs__badge {
   display: inline-flex;
   align-items: center;
@@ -1079,24 +1007,6 @@
 .session-channel-tabs__badge--status {
   background: color-mix(in srgb, var(--mat-sys-primary) 14%, transparent);
   color: var(--mat-sys-primary);
-}
-
-.session-channel-tabs__badge--inactive {
-  background: color-mix(in srgb, var(--mat-sys-outline-variant) 22%, transparent);
-  color: var(--mat-sys-on-surface-variant);
-}
-
-/* Nach der Basis-Badge-Regel: sonst gewinnt display:inline-flex gegen die Compact/Medium-Ausblendung. */
-@media (max-width: 839.98px) {
-  .session-channel-tabs__badge.session-channel-tabs__badge--inactive {
-    display: none;
-  }
-}
-
-@media (max-width: 599px) {
-  .session-channel-tabs__badge {
-    display: none;
-  }
 }
 
 .session-channel-card {
@@ -1163,18 +1073,8 @@
 }
 
 .session-host__qa-title-heading {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-width: 0;
-  border-radius: var(--mat-sys-corner-extra-small);
-  outline-offset: 0.15rem;
-
-  &:focus {
-    outline: none;
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--mat-sys-primary);
-  }
 }
 
 .session-host__qa-title-edit-btn {
@@ -1864,8 +1764,8 @@
 }
 
 @media (max-width: 599px) {
-  .session-host--with-channel-tabs .session-host__live-shell-row,
-  .session-host--with-channel-tabs .session-host__live-banner {
+  .session-host--with-channel-navigation .session-host__live-shell-row,
+  .session-host--with-channel-navigation .session-host__live-banner {
     position: static;
     top: auto;
     left: auto;
@@ -2080,6 +1980,61 @@
   margin: 0;
   font: var(--mat-sys-body-large);
   color: var(--mat-sys-on-surface-variant);
+}
+
+.session-qa-review-pending,
+.session-host__feedback-round-control {
+  align-self: flex-start;
+  max-width: 100%;
+  height: auto;
+  min-height: 2.75rem;
+  padding-block: 0.65rem;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.session-qa-tools {
+  width: 100%;
+  min-width: 0;
+  border-block-start: 1px solid var(--mat-sys-outline-variant);
+  padding-block-start: 0.75rem;
+}
+
+.session-qa-tools__toggle {
+  max-width: 100%;
+  min-height: 2.75rem;
+  height: auto;
+  padding-block: 0.65rem;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.session-qa-tools__content:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding-block-start: 1rem;
+}
+
+.session-qa-active-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  min-width: 0;
+
+  &:empty {
+    display: none;
+  }
+
+  > button {
+    max-width: 100%;
+    min-height: 2.75rem;
+    height: auto;
+    padding-block: 0.65rem;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-align: start;
+  }
 }
 
 .session-qa-summary {
@@ -2737,6 +2692,10 @@
 
 .session-qa-card__action-btn {
   min-width: 0;
+  height: auto;
+  min-height: 2.75rem;
+  padding-block: 0.5rem;
+  white-space: normal;
   --mdc-filled-button-container-shape: var(--mat-sys-corner-full);
   --mdc-outlined-button-container-shape: var(--mat-sys-corner-full);
   font-weight: 600;
@@ -2872,7 +2831,6 @@
 
   .session-qa-card__action-btn {
     width: 100%;
-    min-height: 2.5rem;
   }
 }
 
@@ -5528,19 +5486,6 @@
   background: var(--mat-sys-surface-container-low);
   border-radius: var(--mat-sys-corner-medium, 8px);
   text-align: center;
-}
-
-.session-host__steering {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.75rem;
-  margin: 1.75rem 0 0;
-}
-
-.session-host__steering--prestart {
-  justify-content: center;
-  margin-top: 0.5rem;
 }
 
 // Diskussionsphase-Button: MD3 tonal (Primary Container), Styleguide-Tokens
@@ -8535,4 +8480,58 @@ $round2-color: var(--mat-sys-primary);
     flex-direction: column;
     align-items: flex-start;
   }
+}
+
+.session-host__quiz-tools {
+  width: var(--session-host-shell-width);
+  max-width: 100%;
+  margin-inline: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem 1.5rem;
+  padding-block: 1rem;
+  border-top: 1px solid var(--mat-sys-outline-variant);
+}
+
+.session-host__tool-label {
+  margin: 0 0 0.5rem;
+  font: var(--mat-sys-title-small);
+  color: var(--mat-sys-on-surface-variant);
+  overflow-wrap: anywhere;
+}
+
+.session-host__moderation-stack > .session-host__tool-label {
+  margin: 0;
+  font: var(--mat-sys-label-medium);
+  text-align: center;
+}
+
+.session-host__display-tools,
+.session-host__sound-tools {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.session-host__view-controls--labeled {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.65rem;
+}
+
+.session-host__display-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.session-host__quiz-tools button {
+  width: auto;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 2.75rem;
+  height: auto;
+  padding-block: 0.65rem;
+  white-space: normal;
+  line-height: 1.4;
 }

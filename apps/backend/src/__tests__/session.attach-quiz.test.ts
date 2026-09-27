@@ -477,7 +477,7 @@ describe('session.attachQuizToSession', () => {
   });
 
   it('hängt das Showcase-Demo-Quiz nach dem ersten Join an eine gestartete Q&A-Session an', async () => {
-    const { DEMO_QUIZ_HISTORY_SCOPE_ID } = await import('@arsnova/shared-types');
+    const demoHistoryScopeId = 'de50abcd-1234-4567-8abc-1234567890ab';
     prismaMock.session.findUnique.mockResolvedValue({
       id: SESSION_ID,
       type: 'QUIZ',
@@ -505,7 +505,7 @@ describe('session.attachQuizToSession', () => {
     });
     prismaMock.quiz.findUnique.mockResolvedValue({
       id: QUIZ_ID,
-      historyScopeId: DEMO_QUIZ_HISTORY_SCOPE_ID,
+      historyScopeId: demoHistoryScopeId,
       nicknameTheme: 'KINDERGARTEN',
       allowCustomNicknames: false,
       anonymousMode: false,

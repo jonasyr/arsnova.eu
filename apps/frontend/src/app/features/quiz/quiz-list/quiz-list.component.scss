@@ -322,6 +322,14 @@
   white-space: pre-line;
 }
 
+.quiz-list__info-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.5rem;
+}
+
 .quiz-list__info-list-title {
   margin: 0.5rem 0 0;
   font-weight: 600;
@@ -751,7 +759,7 @@
 
 .quiz-list-item__actions {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
   gap: 0.5rem 1rem;
   box-sizing: border-box;
@@ -788,8 +796,10 @@ mat-card-actions.quiz-list-item__actions {
 }
 
 .quiz-list-item__actions-primary {
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   justify-content: flex-end;
+  border-top: 1px solid color-mix(in srgb, var(--mat-sys-outline) 18%, transparent);
+  padding-top: 0.5rem;
 }
 
 .quiz-list-item__actions :is(a[mat-button], button[mat-button], button[matButton]) {

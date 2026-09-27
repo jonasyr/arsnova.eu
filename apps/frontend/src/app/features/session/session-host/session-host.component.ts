@@ -95,6 +95,7 @@ import { AnswerOptionBadgeComponent } from '../../../shared/answer-option-badge/
 import { InfoLandingLinkComponent } from '../../../shared/info-landing-link/info-landing-link.component';
 import { INFO_LANDING_ANCHORS } from '../../../core/info-landing-url';
 import { ThemePresetService } from '../../../core/theme-preset.service';
+import { HostScenarioService } from '../../../core/host-scenario.service';
 import { SoundService } from '../../../core/sound.service';
 import { HostDisplayModeService } from '../../../core/host-display-mode.service';
 import {
@@ -625,6 +626,7 @@ type HostSteeringCalloutState = {
   title: string;
   body: string;
   retry: () => void;
+  retryLabel?: string;
   errorRequestId: string;
   suggestedArea: ProductFeedbackInAppArea;
 };
@@ -745,6 +747,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   readonly skipCurrentResultQuestionOnNext = signal(false);
   /** Auffälliger Hinweis bei fehlgeschlagenen Host-Steuer-Mutationen (Netz/Server). */
   readonly hostSteeringCallout = signal<HostSteeringCalloutState | null>(null);
+  readonly qaQuickFeedbackPending = signal(false);
   readonly activeChannel = signal<SessionChannelTab>('quiz');
   readonly qaQuestions = signal<QaQuestionDTO[]>([]);
   readonly qaListTotalCount = signal(0);
@@ -791,8 +794,12 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   @ViewChild('qaMobileMore', { read: ElementRef })
   private qaMobileMoreRef?: ElementRef<HTMLButtonElement>;
   @ViewChild('qaMobileMoreTrigger') private qaMobileMoreTrigger?: MatMenuTrigger;
-  @ViewChild('qaPinnedFilter') private qaPinnedFilterRef?: ElementRef<HTMLButtonElement>;
   @ViewChild('qaPendingFilter') qaPendingFilterRef?: ElementRef<HTMLButtonElement>;
+  @ViewChild('qaToolsToggle', { read: ElementRef })
+  private qaToolsToggleRef?: ElementRef<HTMLButtonElement>;
+  @ViewChild('qaReviewPending', { read: ElementRef })
+  private qaReviewPendingRef?: ElementRef<HTMLButtonElement>;
+  readonly qaToolsOpen = signal(false);
   @ViewChild('qaPendingSummary') qaPendingSummaryRef?: ElementRef<HTMLButtonElement>;
   @ViewChild('moderationCompassButton') moderationCompassButtonRef?: ElementRef<HTMLButtonElement>;
   @ViewChild('exitAnchor') private exitAnchorRef?: ElementRef<HTMLElement>;
@@ -864,6 +871,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   private readonly quizStore = inject(QuizStoreService);
   private readonly wordCloudTermExtractor = inject(WordCloudTermExtractorService);
   private readonly sessionTokenStorage = inject(SessionTokenStorageService);
+  private readonly hostScenario = inject(HostScenarioService);
   readonly contextualFeedbackOffer = inject(ContextualFeedbackOfferService);
   private presenterWindowOpenInFlight = false;
   private auxPollTimer: ReturnType<typeof setInterval> | null = null;
@@ -1181,6 +1189,11 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   /** true ab ≤7s Rest (nach Musik-Ausblendung) → kein Countdown-Track mehr, nur SFX. */
   readonly countdownSfxPhase = signal(false);
   readonly channelActivationPending = signal<SessionChannelTab | null>(null);
+  readonly channelNavigationActionPending = signal<SessionChannelTab | null>(null);
+  readonly channelNavigationBusy = computed(
+    () =>
+      this.channelNavigationActionPending() !== null || this.channelActivationPending() !== null,
+  );
   readonly channelVisibilityPending = signal<SessionChannelTab | null>(null);
   readonly Math = Math;
   /** ARIA für sichtbaren Session-Code (Lokalisation wie Blitzlicht-Teilnehmeransicht). */
@@ -1604,10 +1617,16 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     if (channels.quickFeedback) result.push('quickFeedback');
     return result;
   });
-  readonly availableChannels = computed<SessionChannelTab[]>(() => {
+  readonly addableChannels = computed<SessionChannelTab[]>(() => {
     const session = this.session();
-    if (!session) return [];
-    return ['quiz', 'qa', 'quickFeedback'];
+    if (!session || session.hostEnded === true || this.sessionUnavailable()) return [];
+    return (['quiz', 'qa', 'quickFeedback'] as const).filter(
+      (channel) =>
+        !this.isChannelEnabled(channel) &&
+        (this.effectiveStatus() !== 'FINISHED' ||
+          this.qaHostWritesAllowed() ||
+          (this.qaChannelNeedsConfiguration() && channel !== 'quiz')),
+    );
   });
   readonly liveChannelsRemainAfterQuiz = computed(() => {
     if (this.effectiveStatus() !== 'FINISHED') {
@@ -1624,9 +1643,10 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     );
   });
   readonly showChannelTabs = computed(
-    () =>
-      this.availableChannels().length > 1 &&
-      (this.effectiveStatus() !== 'FINISHED' || this.liveChannelsRemainAfterQuiz()),
+    () => this.visibleChannels().length > 1 && this.session()?.hostEnded !== true,
+  );
+  readonly showChannelNavigation = computed(
+    () => this.showChannelTabs() || this.isLiveHostSurface(),
   );
   readonly showPrimaryLiveView = computed(() => {
     const active = this.activeChannel();
@@ -1741,6 +1761,33 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     return this.effectiveStatus() !== 'FINISHED' || this.liveChannelsRemainAfterQuiz();
   });
   readonly showHostViewControls = computed(() => this.isLiveHostSurface());
+  readonly pendingHostMoreAction = signal<'skip' | 'previous' | 'replace' | 'leave' | 'end' | null>(
+    null,
+  );
+
+  /** Material restores the persistent menu trigger before emitting menuClosed. */
+  runHostMoreAction(): void {
+    const action = this.pendingHostMoreAction();
+    this.pendingHostMoreAction.set(null);
+    if (this.controlPending() || this.sessionEndPending() || this.channelNavigationBusy()) return;
+    switch (action) {
+      case 'skip':
+        void this.skipQuestion();
+        break;
+      case 'previous':
+        void this.prevQuestion();
+        break;
+      case 'replace':
+        void this.replaceQuizBeforeStart();
+        break;
+      case 'leave':
+        void this.onLeaveHostKeepingQaOpen();
+        break;
+      case 'end':
+        void this.onSessionEndAnchorClick();
+        break;
+    }
+  }
   readonly pairedHostConnected = signal(false);
   readonly canManagePairedHosts = signal(getHostSessionRole(this.code) !== 'PAIRED_HOST');
   readonly isPairedHostClient = signal(getHostSessionRole(this.code) === 'PAIRED_HOST');
@@ -2801,6 +2848,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   }
 
   clearQaListFocus(): void {
+    this.preserveQaToolsFocusBeforeRemoval('.session-qa-focus-bar');
     this.clearQaCompassFocus();
     this.moderationCompassFocusedTerm.set(null);
   }
@@ -3414,6 +3462,16 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   private readonly injector = inject(Injector);
 
   constructor() {
+    effect(() => {
+      const reviewVisible = this.session()?.channels?.qa?.moderationMode === true;
+      if (
+        (!reviewVisible &&
+          this.qaReviewPendingRef?.nativeElement === this.document.activeElement) ||
+        (reviewVisible && this.qaPendingSummaryRef?.nativeElement === this.document.activeElement)
+      ) {
+        untracked(() => this.focusQaToolsToggle());
+      }
+    });
     effect(() => {
       this.ensureActiveChannel();
     });
@@ -4350,14 +4408,18 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       this.document.querySelector<HTMLElement>('[aria-controls="session-host-join-info"]');
     this.joinInfoFocusReturn = null;
     this.joinInfoPopoverOpen.set(false);
-    queueMicrotask(() => {
-      if (focusReturn?.isConnected) {
-        scrollIntoAppMain(focusReturn, { block: 'nearest' });
-        focusReturn.focus({ preventScroll: true });
-      } else if (this.effectiveStatus() === 'LOBBY') {
-        this.scrollHostLiveContentIntoView();
-      }
-    });
+    // Restore after the overlay's focus trap has restored its captured element.
+    afterNextRender(
+      () => {
+        if (focusReturn?.isConnected) {
+          scrollIntoAppMain(focusReturn, { block: 'nearest' });
+          focusReturn.focus({ preventScroll: true });
+        } else if (this.effectiveStatus() === 'LOBBY') {
+          this.scrollHostLiveContentIntoView();
+        }
+      },
+      { injector: this.injector },
+    );
   }
 
   @HostListener('document:keydown', ['$event'])
@@ -4374,6 +4436,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       return;
     }
     if (this.participantDirectoryOpen()) {
+      this.preserveQaToolsFocusBeforeRemoval('#session-participant-directory-content');
       this.participantDirectoryOpen.set(false);
       ev.preventDefault();
       return;
@@ -4490,21 +4553,95 @@ export class SessionHostComponent implements OnInit, OnDestroy {
 
   /** Nach Einrichtung/Zugangskarte nicht in der leeren Lobby hängen bleiben; Button bleibt für Reload. */
   private async startQaAfterCreateSetup(): Promise<void> {
-    if (!this.channels().qa) {
+    if (
+      !this.channels().qa ||
+      this.qaChannelNeedsConfiguration() ||
+      getStagedHostRecoveryCard(this.code)
+    ) {
       return;
     }
-    if (this.effectiveStatus() !== 'LOBBY') {
+    if (this.effectiveStatus() === 'LOBBY' && !(await this.startQa())) {
+      this.hostSteeringCallout.update((callout) =>
+        callout ? { ...callout, retry: () => void this.startQaAfterCreateSetup() } : callout,
+      );
       return;
     }
-    await this.startQa();
-    afterNextRender(() => this.focusQaWallAfterCreateSetup(), { injector: this.injector });
+    await this.completeQaQuickFeedbackStart();
+    if (!this.hostSteeringCallout()) {
+      afterNextRender(() => this.focusQaWallAfterCreateSetup(), { injector: this.injector });
+    }
+  }
+
+  /** A one-shot local launch intent; server-confirmed channels remain authoritative. */
+  private async completeQaQuickFeedbackStart(): Promise<void> {
+    if (
+      !this.hostScenario.hasQuickFeedbackAfterQa(this.code) ||
+      this.destroyRef.destroyed ||
+      this.qaQuickFeedbackPending() ||
+      this.channelActivationPending() ||
+      this.effectiveStatus() !== 'ACTIVE' ||
+      !this.isChannelOpen('qa') ||
+      this.qaChannelNeedsConfiguration() ||
+      getStagedHostRecoveryCard(this.code) ||
+      this.hostAccessRevoked() ||
+      this.sessionUnavailable()
+    ) {
+      return;
+    }
+    this.qaQuickFeedbackPending.set(true);
+    try {
+      if (!this.channels().quickFeedback) {
+        await this.enableChannel('quickFeedback');
+      }
+      if (
+        this.destroyRef.destroyed ||
+        this.hostAccessRevoked() ||
+        this.sessionUnavailable() ||
+        this.effectiveStatus() !== 'ACTIVE' ||
+        !this.isChannelOpen('qa')
+      ) {
+        return;
+      }
+      await this.selectChannel('qa');
+      if (!this.channels().quickFeedback || this.session()?.preferredChannel !== 'qa') {
+        this.openHostSteeringCalloutForSteeringFailure(
+          () => void this.completeQaQuickFeedbackStart(),
+        );
+        this.hostSteeringCallout.update((callout) =>
+          callout
+            ? {
+                ...callout,
+                title: $localize`:@@sessionHost.qaQuickFeedbackPartialTitle:Q&A ist geöffnet`,
+                body: $localize`:@@sessionHost.qaQuickFeedbackPartialBody:Q&A ist bereit. Blitzlicht konnte noch nicht vollständig hinzugefügt werden. Du kannst es hier unter demselben Sessioncode erneut versuchen.`,
+                retryLabel: $localize`:@@sessionHost.qaQuickFeedbackRetry:Blitzlicht hinzufügen`,
+              }
+            : callout,
+        );
+        return;
+      }
+      this.hostScenario.clearQuickFeedbackAfterQa(this.code);
+      // Keep the retry control until the visible questions-wall heading can receive focus.
+      afterNextRender(
+        () => {
+          this.focusQaWallAfterCreateSetup();
+          this.hostSteeringCallout.set(null);
+        },
+        { injector: this.injector },
+      );
+    } finally {
+      this.qaQuickFeedbackPending.set(false);
+    }
   }
 
   private focusQaWallAfterCreateSetup(): void {
     if (this.effectiveStatus() !== 'ACTIVE') {
       return;
     }
-    this.qaChannelHeadingRef?.nativeElement.focus({ preventScroll: true });
+    const heading = this.qaChannelHeadingRef?.nativeElement;
+    if (heading && this.isElementVisibleForFocus(heading)) {
+      heading.scrollIntoView?.({ block: 'center' });
+      heading.focus({ preventScroll: true });
+    }
   }
 
   async ngOnInit(): Promise<void> {
@@ -4530,11 +4667,14 @@ export class SessionHostComponent implements OnInit, OnDestroy {
         abortUnconfiguredSessionOnCancel: true,
       });
     } else {
-      await this.showStagedRecoveryCard(
+      const recoveryResult = await this.showStagedRecoveryCard(
         this.requestedQaCreateSetup && !this.qaCreateSetupCompleted
           ? { setupStep: 2, setupStepCount: 2 }
           : undefined,
       );
+      if (recoveryResult === undefined && this.hostScenario.hasQuickFeedbackAfterQa(this.code)) {
+        await this.startQaAfterCreateSetup();
+      }
     }
     void this.refreshPairedHostStatus();
     try {
@@ -4574,7 +4714,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       return;
     }
     if (!this.channels().quiz) {
-      await this.selectChannel('quiz');
+      await this.addChannel('quiz');
       return;
     }
     if (this.canStartAnotherQuiz()) {
@@ -5572,10 +5712,15 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       return;
     }
     const toolbar = active.closest('.session-host__view-controls');
-    const scope = toolbar?.parentElement ?? active.closest('.session-host') ?? this.document.body;
+    const scope = active.closest('.session-host') ?? this.document.body;
     const preferred = Array.from(
       (toolbar ?? scope).querySelectorAll<HTMLElement>(
         '.session-host__view-toggle--fullscreen, .session-host__view-toggle--frame',
+      ),
+    );
+    const navigation = Array.from(
+      scope.querySelectorAll<HTMLElement>(
+        '[data-testid="add-channel-trigger"], .session-host__channel-visibility-action, .session-channel-tabs button',
       ),
     );
     const broader = Array.from(
@@ -5593,7 +5738,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
         ].join(', '),
       ),
     );
-    const fallback = [...preferred, ...broader].find(
+    const fallback = [...preferred, ...navigation, ...broader].find(
       (candidate) =>
         candidate !== active &&
         !candidate.closest('[data-testid="open-presenter-view"]') &&
@@ -5686,6 +5831,17 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     await this.ngZone.run(async () => {
       await this.router.navigateByUrl(this.localizedPath('/'), { replaceUrl: true });
     });
+  }
+
+  async onLeaveHostKeepingQaOpen(): Promise<void> {
+    if (!this.keepQaOpenOnHostLeave()) {
+      return;
+    }
+    if (this.effectiveStatus() === 'FINISHED') {
+      await this.navigateHomeFromFinishedSession();
+      return;
+    }
+    await this.leaveHostViewKeepingQaOpen();
   }
 
   private async closeQuickFeedbackBeforeKeepingQa(): Promise<void> {
@@ -5789,6 +5945,10 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   }
 
   dismissHostSteeringCallout(): void {
+    if (this.qaQuickFeedbackPending() || this.channelNavigationBusy()) return;
+    if (this.hostSteeringCallout()?.retryLabel) {
+      this.focusQaWallAfterCreateSetup();
+    }
     this.hostSteeringCallout.set(null);
   }
 
@@ -5854,6 +6014,8 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       errorRequestId: 'host.steering:failed',
       suggestedArea: 'LIVE_CONTROL',
     });
+    // The channel action restores focus after rendering its final navigation state.
+    if (this.channelNavigationActionPending()) return;
     this.scrollHostSteeringCalloutIntoView();
     setTimeout(() => {
       const target = this.hostElement.nativeElement.querySelector<HTMLButtonElement>(
@@ -6035,14 +6197,18 @@ export class SessionHostComponent implements OnInit, OnDestroy {
    * wenn die Session noch läuft.
    */
   async onSessionEndAnchorClick(event?: Event): Promise<void> {
-    if (!this.isSessionActive() || this.sessionEndPending()) {
+    const canEndGlobalSession =
+      this.isSessionActive() ||
+      (this.effectiveStatus() === 'FINISHED' && this.keepQaOpenOnHostLeave());
+    if (!canEndGlobalSession || this.sessionEndPending()) {
       return;
     }
-    if (this.keepQaOpenOnHostLeave()) {
-      await this.leaveHostViewKeepingQaOpen();
-      return;
-    }
-    const focusReturn = event?.currentTarget instanceof HTMLElement ? event.currentTarget : null;
+    const focusReturn =
+      event?.currentTarget instanceof HTMLElement
+        ? event.currentTarget
+        : this.document.activeElement instanceof HTMLElement
+          ? this.document.activeElement
+          : null;
     this.sessionEndPending.set(true);
     let shouldShowFinishedView = false;
     try {
@@ -6247,6 +6413,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       return;
     }
     this.qaCreateAbortInFlight = true;
+    this.hostScenario.clearQuickFeedbackAfterQa(this.code);
     this.dialog.closeAll();
     clearStagedHostRecoveryCard(this.code);
     clearHostBrowserCapability(this.code);
@@ -6780,35 +6947,17 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   }
 
   private preserveQaToolbarFocusAcrossLayout(compactToolbar: boolean): void {
-    if (compactToolbar === this.qaCompactToolbar()) {
-      return;
-    }
-    const activeElement = this.document.activeElement;
+    if (compactToolbar === this.qaCompactToolbar()) return;
+    const active = this.document.activeElement;
     const focusMovesWithToolbar = compactToolbar
-      ? activeElement !== null &&
-        this.qaDesktopSortRef?.nativeElement.contains(activeElement) === true
-      : activeElement !== null &&
-        (this.qaMobileMoreRef?.nativeElement.contains(activeElement) === true ||
+      ? active !== null && this.qaDesktopSortRef?.nativeElement.contains(active) === true
+      : active !== null &&
+        (this.qaMobileMoreRef?.nativeElement.contains(active) === true ||
           this.qaMobileMoreTrigger?.menuOpen === true);
-    if (!focusMovesWithToolbar) {
-      return;
-    }
-
-    afterNextRender(
-      () => {
-        if (this.destroyRef.destroyed) return;
-        const target = compactToolbar
-          ? this.qaMobileMoreRef?.nativeElement
-          : (this.qaDesktopSortRef?.nativeElement.querySelector<HTMLButtonElement>(
-              '.mat-button-toggle-checked button, button[aria-pressed="true"]',
-            ) ??
-            this.qaDesktopSortRef?.nativeElement.querySelector<HTMLButtonElement>(
-              'button:not([disabled])',
-            ));
-        target?.focus({ preventScroll: true });
-      },
-      { injector: this.injector },
-    );
+    if (!focusMovesWithToolbar) return;
+    this.qaMobileMoreTrigger?.closeMenu();
+    // A stable visible target exists before either responsive control is removed.
+    this.focusQaToolsToggle();
   }
 
   private recalculateTeamFoyerDirections(): void {
@@ -8907,7 +9056,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       return '...';
     }
     if (!this.channels()[channel]) {
-      return $localize`:@@sessionTabs.channelInactive:Aus`;
+      return null;
     }
     if (!this.isChannelOpen(channel)) {
       return $localize`:@@sessionTabs.channelClosed:Zu`;
@@ -9091,6 +9240,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   }
 
   async selectQaAuthorFromDirectory(nickname: string): Promise<void> {
+    this.preserveQaToolsFocusBeforeRemoval('#session-participant-directory-content');
     const trimmedNickname = nickname.trim();
     if (!trimmedNickname) {
       return;
@@ -9114,6 +9264,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   }
 
   clearQaAuthorSelection(): void {
+    this.preserveQaToolsFocusBeforeRemoval('[data-testid="qa-clear-author"]');
     if (this.qaSelectedAuthorNickname() !== null) {
       this.qaSelectedAuthorNickname.set(null);
     }
@@ -9132,6 +9283,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
 
   private async applyQaAuthorFilter(nickname: string): Promise<void> {
     this.captureUnfilteredQaChrome();
+    this.preserveQaToolsFocusBeforeRemoval('#session-participant-directory-content');
     this.qaSelectedAuthorNickname.set(nickname);
     this.participantDirectoryOpen.set(false);
     if (this.activeChannel() !== 'qa') {
@@ -9362,7 +9514,6 @@ export class SessionHostComponent implements OnInit, OnDestroy {
           if (this.destroyRef.destroyed) return;
           const host = this.hostElement.nativeElement as HTMLElement;
           const target =
-            (host.querySelector('#host-session-finished-card') as HTMLElement | null) ??
             (host.querySelector('#session-finished-heading') as HTMLElement | null) ??
             (this.sessionFinishedHeadingRef?.nativeElement as HTMLElement | undefined) ??
             null;
@@ -9665,29 +9816,64 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     await this.requestQaWordCloudLemmaSmoothing();
   }
 
+  async addChannel(channel: string): Promise<void> {
+    if (
+      (channel !== 'quiz' && channel !== 'qa' && channel !== 'quickFeedback') ||
+      !this.addableChannels().includes(channel)
+    ) {
+      return;
+    }
+    await this.runChannelNavigationAction(channel, () =>
+      channel === 'quiz' ? this.activateQuizChannel() : this.enableChannel(channel),
+    );
+  }
+
+  private async runChannelNavigationAction(
+    channel: SessionChannelTab,
+    action: () => Promise<void>,
+  ): Promise<void> {
+    if (this.channelNavigationBusy() || this.channelVisibilityPending()) return;
+    this.initialPreferredChannelApplied = true;
+    this.initialUrlTabApplied = true;
+    const previousCallout = this.hostSteeringCallout();
+    this.channelNavigationActionPending.set(channel);
+    try {
+      await action();
+    } finally {
+      this.channelNavigationActionPending.set(null);
+      if (!this.destroyRef.destroyed) {
+        afterNextRender(
+          () => {
+            if (this.destroyRef.destroyed || this.dialog.openDialogs?.length > 0) return;
+            const selected = this.hostElement.nativeElement.querySelector<HTMLElement>(
+              '.session-channel-tabs button[aria-checked="true"]',
+            );
+            const trigger = this.hostElement.nativeElement.querySelector<HTMLElement>(
+              '[data-testid="add-channel-trigger"]',
+            );
+            const activated = this.isChannelEnabled(channel) && this.activeChannel() === channel;
+            const target = activated ? (selected ?? trigger) : (trigger ?? selected);
+            if (target && this.isElementVisibleForFocus(target)) {
+              scrollAndFocusInAppMain(target, { block: 'nearest' });
+              if (activated && previousCallout && this.hostSteeringCallout() === previousCallout) {
+                this.hostSteeringCallout.set(null);
+              }
+            }
+          },
+          { injector: this.injector },
+        );
+      }
+    }
+  }
+
   async selectChannel(channel: string): Promise<void> {
     if (channel === 'quiz' || channel === 'qa' || channel === 'quickFeedback') {
+      if (!this.isChannelEnabled(channel) || this.channelNavigationBusy()) return;
       // Eine bewusste Auswahl darf nicht von einem noch ausstehenden Initial-Snapshot überschrieben werden.
       this.initialPreferredChannelApplied = true;
       this.initialUrlTabApplied = true;
-      if (
-        this.effectiveStatus() === 'FINISHED' &&
-        !this.isChannelEnabled(channel) &&
-        !this.qaHostWritesAllowed() &&
-        !(this.qaChannelNeedsConfiguration() && (channel === 'qa' || channel === 'quickFeedback'))
-      ) {
-        return;
-      }
       if (channel === 'qa' && this.qaChannelNeedsConfiguration()) {
-        await this.enableChannel('qa');
-        return;
-      }
-      if (!this.isChannelEnabled(channel)) {
-        if (channel === 'quiz') {
-          await this.activateQuizChannel();
-        } else {
-          await this.enableChannel(channel);
-        }
+        await this.runChannelNavigationAction('qa', () => this.enableChannel('qa'));
         return;
       }
       if (
@@ -9838,7 +10024,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
         await this.attachUploadedQuizToSession(uploadedQuizId, choice.adoptQuizTeams);
       } catch (error) {
         this.openHostSteeringCalloutForSteeringFailure(
-          () => void this.startQuizSelectionFlow(),
+          () => void this.runChannelNavigationAction('quiz', () => this.startQuizSelectionFlow()),
           error,
         );
       } finally {
@@ -9866,12 +10052,15 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       this.activeChannel.set('quiz');
       this.ensureActiveChannel();
       await this.finalizeQuizChannelActivation();
-      this.dismissHostSteeringCallout();
+      if (!this.channelNavigationActionPending()) this.dismissHostSteeringCallout();
     } catch (error) {
       const retry = attached
-        ? () => void this.finalizeQuizChannelActivation()
-        : () => void this.attachUploadedQuizToSession(uploadedQuizId, adoptQuizTeams);
-      this.openHostSteeringCalloutForSteeringFailure(retry, error);
+        ? () => this.finalizeQuizChannelActivation()
+        : () => this.attachUploadedQuizToSession(uploadedQuizId, adoptQuizTeams);
+      this.openHostSteeringCalloutForSteeringFailure(
+        () => void this.runChannelNavigationAction('quiz', retry),
+        error,
+      );
     }
   }
 
@@ -10032,7 +10221,9 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       try {
         await this.openQaConfigurationDialog({ numberSetupSequence: true });
       } catch {
-        this.openHostSteeringCalloutForSteeringFailure(() => void this.enableChannel(channel));
+        this.openHostSteeringCalloutForSteeringFailure(
+          () => void this.runChannelNavigationAction(channel, () => this.enableChannel(channel)),
+        );
       } finally {
         this.channelActivationPending.set(null);
       }
@@ -10059,7 +10250,9 @@ export class SessionHostComponent implements OnInit, OnDestroy {
         this.showStagedRecoveryCard();
       }
     } catch {
-      this.openHostSteeringCalloutForSteeringFailure(() => void this.enableChannel(channel));
+      this.openHostSteeringCalloutForSteeringFailure(
+        () => void this.runChannelNavigationAction(channel, () => this.enableChannel(channel)),
+      );
     } finally {
       this.channelActivationPending.set(null);
     }
@@ -10409,7 +10602,10 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       if (this.isQuizPausedByHost()) {
         return $localize`:@@sessionHost.resumeQuiz:Quiz fortsetzen`;
       }
-      if (status === 'QUESTION_OPEN' || status === 'ACTIVE') {
+      if (
+        (status === 'QUESTION_OPEN' || status === 'ACTIVE') &&
+        this.hasCurrentQuizQuestionForHost()
+      ) {
         return $localize`:@@sessionHost.pauseQuiz:Quiz pausieren`;
       }
       return null;
@@ -10489,7 +10685,8 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       this.channelVisibilityPending() ||
       !this.isChannelEnabled('quiz') ||
       !this.code ||
-      (status !== 'QUESTION_OPEN' && status !== 'ACTIVE' && !this.isQuizPausedByHost())
+      (status !== 'QUESTION_OPEN' && status !== 'ACTIVE' && !this.isQuizPausedByHost()) ||
+      ((status === 'QUESTION_OPEN' || status === 'ACTIVE') && !this.hasCurrentQuizQuestionForHost())
     ) {
       return;
     }
@@ -10665,7 +10862,11 @@ export class SessionHostComponent implements OnInit, OnDestroy {
 
   async startSessionFlow(): Promise<void> {
     if (this.activeChannel() === 'qa' && this.channels().qa) {
-      await this.startQa();
+      if (this.hostScenario.hasQuickFeedbackAfterQa(this.code)) {
+        await this.startQaAfterCreateSetup();
+      } else {
+        await this.startQa();
+      }
       return;
     }
 
@@ -10887,8 +11088,8 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     }
   }
 
-  async startQa(): Promise<void> {
-    if (this.controlPending() || !this.code) return;
+  async startQa(): Promise<boolean> {
+    if (this.controlPending() || !this.code) return false;
     this.controlPending.set(true);
     try {
       const result = await trpc.session.startQa.mutate({ code: this.code.toUpperCase() });
@@ -10896,28 +11097,24 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       this.statusUpdate.set(result);
       this.syncCurrentQuestionForHost(null);
       this.dismissHostSteeringCallout();
+      return true;
     } catch {
       this.openHostSteeringCalloutForSteeringFailure(() => void this.startQa());
+      return false;
     } finally {
       this.controlPending.set(false);
     }
   }
 
   private ensureActiveChannel(): void {
-    const available = this.availableChannels();
-    if (available.length === 0) {
+    const visible = this.visibleChannels();
+    if (visible.length === 0) {
       return;
     }
 
     let active = this.activeChannel();
-    const visible = this.visibleChannels();
-    if (!this.isChannelEnabled(active) && visible.length > 0) {
+    if (!visible.includes(active)) {
       active = visible[0]!;
-      this.activeChannel.set(active);
-    }
-
-    if (!available.includes(active)) {
-      active = available[0]!;
       this.activeChannel.set(active);
     }
 
@@ -11126,21 +11323,15 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   }
 
   private preserveFocusBeforeRemovingQaPendingControls(): void {
-    const activeElement = this.document.activeElement;
-    if (!activeElement) {
-      return;
-    }
+    const active = this.document.activeElement;
+    if (!active) return;
     const pendingSummaryHasFocus =
-      this.qaPendingSummaryRef?.nativeElement.contains(activeElement) === true;
+      this.qaPendingSummaryRef?.nativeElement.contains(active) === true;
     const pendingFilterWillDisappear =
       this.session()?.channels?.qa?.moderationMode !== true &&
-      this.qaPendingFilterRef?.nativeElement.contains(activeElement) === true;
-    if (!pendingSummaryHasFocus && !pendingFilterWillDisappear) {
-      return;
-    }
-    (this.qaPinnedFilterRef?.nativeElement ?? this.qaChannelHeadingRef?.nativeElement)?.focus({
-      preventScroll: true,
-    });
+      (this.qaPendingFilterRef?.nativeElement.contains(active) === true ||
+        active.closest('[data-testid="qa-clear-pending"]') !== null);
+    if (pendingSummaryHasFocus || pendingFilterWillDisappear) this.focusQaToolsToggle();
   }
 
   private hostQaListQueryInput(cursor?: string | null) {
@@ -11180,8 +11371,52 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     }
   }
 
+  toggleQaTools(): void {
+    if (this.qaToolsOpen()) {
+      // Close overlays before hiding their trigger; Material owns menu return focus.
+      this.qaMobileMoreTrigger?.closeMenu();
+      this.preserveQaToolsFocusBeforeRemoval('#qa-tools-content');
+    }
+    this.qaToolsOpen.update((open) => !open);
+  }
+
+  private focusQaToolsToggle(): void {
+    const target = this.qaToolsToggleRef?.nativeElement;
+    if (!target || !this.isElementVisibleForFocus(target)) return;
+    scrollAndFocusInAppMain(target, { block: 'start', behavior: 'instant' });
+  }
+
+  private preserveQaToolsFocusBeforeRemoval(selector: string): void {
+    const active = this.document.activeElement;
+    if (active?.closest(selector) && this.hostElement.nativeElement.contains(active)) {
+      this.focusQaToolsToggle();
+    }
+  }
+
+  async reviewPendingQaQuestions(): Promise<void> {
+    // An explicit review starts with the whole moderation queue, even after a search.
+    if (this.qaSearchTimer) {
+      clearTimeout(this.qaSearchTimer);
+      this.qaSearchTimer = null;
+    }
+    this.preserveQaToolsFocusBeforeRemoval('[data-testid="qa-active-filters"]');
+    this.qaSearchDraft.set('');
+    this.qaSearch.set('');
+    this.clearQaAuthorSelection();
+    this.releaseQaChromeIfUnfiltered();
+    this.qaShowPinnedOnly.set(false);
+    this.qaShowPendingOnly.set(true);
+    this.ensureQaSubscription();
+    await this.refreshQaQuestions({ replaceStale: true });
+    this.scrollQaListToTop();
+    // No delayed focus: the existing failure callout owns error and retry focus.
+  }
+
   async setQaPinnedFilter(pinnedOnly: boolean): Promise<void> {
     if (this.qaShowPinnedOnly() === pinnedOnly) return;
+    this.preserveQaToolsFocusBeforeRemoval(
+      '[data-testid="qa-clear-pinned"], [data-testid="qa-clear-pending"]',
+    );
     this.qaShowPinnedOnly.set(pinnedOnly);
     if (pinnedOnly) {
       this.qaShowPendingOnly.set(false);
@@ -11193,6 +11428,9 @@ export class SessionHostComponent implements OnInit, OnDestroy {
 
   async setQaPendingFilter(pendingOnly: boolean): Promise<void> {
     if (this.qaShowPendingOnly() === pendingOnly) return;
+    this.preserveQaToolsFocusBeforeRemoval(
+      '[data-testid="qa-clear-pending"], [data-testid="qa-clear-pinned"]',
+    );
     this.qaShowPendingOnly.set(pendingOnly);
     if (pendingOnly) {
       this.qaShowPinnedOnly.set(false);
@@ -11203,12 +11441,9 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   }
 
   async toggleQaPendingFilterFromSummary(): Promise<void> {
-    const pendingOnly = !this.qaShowPendingOnly();
-    await this.setQaPendingFilter(pendingOnly);
-    const focusTarget = pendingOnly
-      ? this.qaPendingFilterRef?.nativeElement
-      : this.qaPendingSummaryRef?.nativeElement;
-    (focusTarget ?? this.qaChannelHeadingRef?.nativeElement)?.focus({ preventScroll: true });
+    await this.setQaPendingFilter(!this.qaShowPendingOnly());
+    // The summary stays outside the disclosure. Never focus a hidden filter or
+    // steal focus after a delayed list response.
   }
 
   onQaSearchInput(value: string): void {
@@ -11240,6 +11475,9 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   }
 
   clearQaSearch(): void {
+    this.preserveQaToolsFocusBeforeRemoval(
+      '[data-testid="qa-clear-search"], [data-testid="qa-tools-clear-search"]',
+    );
     if (this.qaSearchTimer) {
       clearTimeout(this.qaSearchTimer);
       this.qaSearchTimer = null;
@@ -12546,10 +12784,6 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       this.finishedConfidenceSummary.set(summary);
     } catch {
       this.finishedConfidenceSummary.set(null);
-    }
-    if (this.effectiveStatus() === 'FINISHED') {
-      // Confidence-Block liegt über „Session beendet“ — nach Layout-Shift erneut dorthin.
-      this.scrollHostFinishedIntoView();
     }
   }
 

@@ -79,40 +79,86 @@ async function primaryFocusState(page) {
 }
 
 async function isActiveLocator(locator) {
-  return locator.evaluate((element) => element === document.activeElement);
+  return locator.evaluate((element) => element.matches(':focus'));
+}
+
+async function activeElementLabel(page) {
+  return page.evaluate(() => {
+    const active = document.activeElement;
+    if (!(active instanceof HTMLElement)) return String(active);
+    return `${active.tagName.toLowerCase()}${active.id ? `#${active.id}` : ''}${
+      active.className ? `.${String(active.className).trim().replaceAll(/\s+/g, '.')}` : ''
+    } ${active.textContent?.trim().replaceAll(/\s+/g, ' ').slice(0, 80) ?? ''}`;
+  });
 }
 
 async function assertNextTabContinuesHeroFlow(page) {
-  // Volle Tab-Reihe: erste Host-Aktion ist jetzt „Neues Quiz“ (Link).
-  // Reduziertes Safari-Tab überspringt Links und landet auf dem Q&A-Button.
+  const scenarioOptions = page.locator('.home-scenario__option');
   const quizCreate = page.locator('.home-card--create .home-prepare-create').first();
-  const qaCreate = page.locator('.home-live-grid .home-choice-button').first();
-  const continues = async () =>
-    (await isActiveLocator(quizCreate)) || (await isActiveLocator(qaCreate));
-
+  const quizLibrary = page.locator('.home-card--create .home-library-button').first();
+  const syncToggle = page.locator('.home-card--create .home-card__sync-btn');
+  const quizInfo = page.locator('.home-card--create .home-card__info-landing .info-landing-link');
+  const qaCreate = page.getByTestId('home-live-qa-create');
+  let forwardKey = 'Tab';
   await page.keyboard.press('Tab');
-  if (await continues()) return;
-
-  const codeInputActive = await page
-    .locator('.home-code-segments__input')
-    .evaluate((element) => element === document.activeElement);
-  if (codeInputActive) {
-    await page.keyboard.press('Tab');
-    if (await continues()) return;
+  if (!(await isActiveLocator(scenarioOptions.first()))) {
+    const codeInputActive = await page
+      .locator('.home-code-segments__input')
+      .evaluate((element) => element === document.activeElement);
+    if (codeInputActive) {
+      // WebKit can consume the first Tab while it restores the segmented input.
+      // A second Tab still has to enter the task selector, never skip it.
+      await page.keyboard.press('Tab');
+    }
+    if (!(await isActiveLocator(scenarioOptions.first()))) {
+      assert(
+        BROWSER_NAME === 'webkit' && codeInputActive,
+        `Tab nach dem MOTD-Rücksprung erreicht nicht die erste Aufgabenauswahl: ${await activeElementLabel(page)}`,
+      );
+      // Safari's reduced keyboard mode needs Option+Tab for all controls.
+      await page.locator('.home-code-segments__input').focus();
+      forwardKey = 'Alt+Tab';
+      await page.keyboard.press(forwardKey);
+    }
   }
 
-  // Safari überspringt bei deaktivierter vollständiger Tab-Navigation Links
-  // mit Tab. Der Q&A-Button bleibt tabbar; ⌥ Tab ist der Fallback.
   assert(
-    BROWSER_NAME === 'webkit' && codeInputActive,
-    'Tab nach dem MOTD-Rücksprung folgt weder der vollständigen noch der Safari-reduzierten Tab-Reihe.',
+    await isActiveLocator(scenarioOptions.first()),
+    `${forwardKey} erreicht nicht „Meinen Kurs begleiten“: ${await activeElementLabel(page)}`,
   );
-  await page.locator('.home-code-segments__input').focus();
-  await page.keyboard.press('Alt+Tab');
-  if (await continues()) return;
+  for (let index = 1; index < 3; index += 1) {
+    await page.keyboard.press(forwardKey);
+    assert(
+      await isActiveLocator(scenarioOptions.nth(index)),
+      `${forwardKey} überspringt Aufgabenauswahl ${index + 1}: ${await activeElementLabel(page)}`,
+    );
+  }
+  await page.keyboard.press(forwardKey);
+  if (await isActiveLocator(quizCreate)) {
+    for (const [locator, label] of [
+      [quizLibrary, 'Quiz-Sammlung öffnen'],
+      [syncToggle, 'Geteilte Sammlung nutzen'],
+      [quizInfo, 'Einsatzmöglichkeiten'],
+      [qaCreate, 'Neue Q&A-Session'],
+    ]) {
+      await page.keyboard.press(forwardKey);
+      assert(
+        await isActiveLocator(locator),
+        `${forwardKey} überspringt die Host-Aktion „${label}“: ${await activeElementLabel(page)}`,
+      );
+    }
+    return;
+  }
+
+  // Safari's reduced navigation skips links, while buttons remain in order.
+  assert(
+    BROWSER_NAME === 'webkit' && forwardKey === 'Tab' && (await isActiveLocator(syncToggle)),
+    `${forwardKey} setzt den Hero-Flow nach der Aufgabenauswahl weder vollständig noch Safari-reduziert fort: ${await activeElementLabel(page)}`,
+  );
+  await page.keyboard.press('Tab');
   assert(
     await isActiveLocator(qaCreate),
-    '⌥ Tab nach dem MOTD-Rücksprung setzt den Safari-Hero-Flow nicht beim Q&A-Button fort.',
+    `Safari-reduziertes Tab erreicht nach „Geteilte Sammlung nutzen“ nicht „Neue Q&A-Session“: ${await activeElementLabel(page)}`,
   );
 }
 

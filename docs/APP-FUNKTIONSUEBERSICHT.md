@@ -82,24 +82,33 @@ Von der Startseite aus können Hosts direkt:
 - die **Quiz-Sammlung** öffnen
 - einen **Q&A-Kanal** starten
 - ein **Blitzlicht** starten
-- gespeicherte **Host-Zugänge** wieder öffnen (Live-Karte, höchstens 8 von 32 Capabilities)
+- gespeicherte **Host-Zugänge** wieder öffnen (Live-Karte, höchstens 8 von 32 Capabilities; ab 3 offenen Sessions gebündelt im Pulldown)
 - ohne gespeicherte Capability über **Host-Zugang wiederherstellen** nach `/host-recovery`
+
+Die optionale Aufgabenwahl **Was hast du heute vor?** steht unmittelbar über den drei Host-Karten. **Meinen Kurs begleiten** priorisiert den Quizstart und das Sammeln von Kursfragen; **Eine Veranstaltung moderieren** bietet **Fragen sammeln**, **Stimmung/Tempo erfassen** und **Beides**; **Schnell ein Format einsetzen** lässt die direkten Formatstarts im Vordergrund. Nach der Auswahl scrollt die Startseite zur zugehörigen, visuell hervorgehobenen Karte; der Tastaturfokus bleibt auf der Auswahl. Alle drei Karten und bestehende Q&A-Zugänge bleiben erreichbar. Die Quiz-Sammlung priorisiert für Kurs- und Direktstarts **Starten** neben **Bearbeiten**; weitere Kartenaktionen bleiben in den bestehenden Menüs.
+
+Der direkte Q&A-Start und **Beides** führen durch zwei bestehende Schritte: Teilnahmeprofil auf der Startseite, danach Bestätigung der Host-Zugangskarte. Die Session übernimmt die Q&A-Initialwerte bereits beim Anlegen; ein zusätzlicher Q&A-Konfigurationsdialog gehört nicht zu diesem Einstieg. Frist und Vormoderation bleiben über **Q&A-Einstellungen** erreichbar. Erst nach Bestätigung der Zugangskarte und erfolgreichem Q&A-Start wird bei **Beides** Blitzlicht unter demselben Sessioncode hinzugefügt; die Fragenwand bleibt der priorisierte Einstieg. Schlägt nur das Hinzufügen von Blitzlicht fehl, bleibt Q&A offen und **Blitzlicht hinzufügen** wiederholt den fehlenden Schritt in derselben Session.
+
+Abbruch des Teilnahmeprofils erzeugt keine Session. Abbruch der Zugangskarte erhält dagegen die bereits angelegte Session in der Lobby und merkt die Karte sowie den Beides-Folgeschritt für später vor; Blitzlicht wird noch nicht aktiviert. Die Session wird dadurch nicht beendet. Der separate Q&A-Konfigurationsdialog wird bei noch unkonfiguriertem Q&A, beim entsprechenden **Format hinzufügen** und in den späteren Einstellungen verwendet; dessen Abbruchregeln sind davon getrennt.
+
+Die App merkt sich nur eine ausdrücklich gewählte Aufgabe als lokale Präferenz. Für neu gestartete Sessions wird die Aufgabe pro Code im aktuellen Tab gespeichert; ohne vorherige Wahl gilt der direkte Kartenstart als Schnellstart. Ein direkter Host-Link oder eine Wiederherstellung ohne diesen Eintrag übernimmt keine globale Präferenz und erhält keine zusätzlichen Rechte. Die Host-Kanalnavigation folgt dem bestätigten Sessionzustand. Die Quiz-Host-Ansicht ist nach Phasen geordnet: ein dominanter nächster Schritt, sichtbare Peer-Instruction-Alternativen, getrennte Bereiche **Auf Bildschirm zeigen**, **Ton** und **Moderation** sowie **Weitere Aktionen** für Auslassen, voriges Ergebnis und Session-Ende. Persönliche Timer und Nachteilsausgleich bleiben an den Phasenaktionen sichtbar. Nach Quizabschluss steht der Nachbesprechungsplan im Vordergrund; PDF-Varianten und CSV liegen unter **Exportieren**, weitere offene Formate bleiben erreichbar, ebenso ein nächstes Quiz, soweit nach bestehendem Kanalzustand zulässig. Im Q&A-Host bündelt **Auswertung & Werkzeuge** die Zusatzfunktionen: Suche, alle vier Sortierungen, Filter, Teilnahmeverzeichnis, CSV und Wortwolke sind aufklappbar. Aktive Filter bleiben davor sichtbar und einzeln lösbar. Bei Vorabmoderation führt **Fragen prüfen** mit dem sitzungsweiten Pending-Zähler zur gesamten Warteschlange. Im sessiongebundenen Blitzlicht stehen Ergebnis/Tempo-Trend, Beteiligung und **Stopp/Fortsetzen** vor den **Rundeneinstellungen** mit Formatwechsel, Vergleichsrunde, Zurücksetzen und Live-Ergebnis-Anzeige.
+
+Die [Szenario- und Zustandsmatrix der Host-Führung](ui/HOST-FUEHRUNG.md) beschreibt die direkten und neutralen Einstiege, Zusatzaktionen und Nachweisgrenzen. Ungültige oder verweigerte Speicherung der Aufgabenpräferenz blockiert diese Auswahl nicht; sie ist unabhängig von den Presets Seriös und Spielerisch.
 
 Wichtig ist: Q&A und Blitzlicht können nicht nur als Zusatzkanäle einer bestehenden Session laufen, sondern auch sehr schnell aus dem Home-Bereich heraus initialisiert werden. Ein noch offenes Q&A-Forum überlebt ein beendetes Quiz (Epic #405).
 
-### 2.3 Standalone-Blitzlicht von der Startseite
+### 2.3 Sessiongebundenes Blitzlicht von der Startseite
 
-Die Startseite bietet vordefinierte Blitzlicht-Typen als Sofortstart:
+Die Startseite bietet genau vier Blitzlicht-Chips als Sofortstart:
 
+- Tempo-Feedback mit `🙂 Ich folge`, `🐇 Schneller`, `🐢 Langsamer`, `🙈 Verloren`
 - Stimmungsbild
 - Ja / Nein / Vielleicht
-- Ja / Nein
-- Wahr / Falsch / Weiß nicht
 - Sterne
-- ABCD
-- Tempo-Feedback mit `🙂 Ich folge`, `🐇 Schneller`, `🐢 Langsamer`, `🙈 Verloren`
 
-Ein Klick erzeugt eine neue Runde, Host-Token und Beitrittslink. Danach wechselt die App direkt in die Host-Ansicht des Blitzlichts.
+Ja / Nein, Wahr / Falsch / Weiß nicht und ABCD stehen in der Formatwahl der Blitzlicht-Arbeitsfläche zur Verfügung.
+
+Ein Klick erzeugt eine Session mit aktiviertem Blitzlicht-Kanal, Host-Token und Beitrittslink und startet die gewählte Runde ohne zusätzlichen Auswahldialog. Danach wechselt die App direkt in den Blitzlicht-Kanal der Session-Host-Ansicht. Die noch vorhandenen Standalone-Routen sind Legacy und werden über die Startseite nicht angelegt.
 
 ### 2.4 Sync-Link für die Quiz-Sammlung
 
@@ -144,7 +153,7 @@ Die Sammlung unterstützt:
 - Quiz duplizieren
 - Quiz löschen
 - Sortierung nach Aktualität
-- Erkennung, ob ein Quiz gerade live verwendet wird
+- Erkennung, ob ein Quiz gerade live verwendet wird; auch nach Löschen und erneutem Anlegen einer normalen lokalen Quizkarte führt **Starten** mit vorhandenem Hostzugang zurück in die laufende Session derselben Quiz-Historie. Fehlt der Browserzugang, stehen **Als Kopie neu starten** und **Host-Zugang wiederherstellen** zur Wahl. Die lokale Quizkarte kann unabhängig davon gelöscht werden; eine laufende Session wird dadurch nicht beendet. Ein gelöschtes Demo-Quiz wird beim nächsten Laden als frische Demo-Instanz mit eigener Historie angelegt.
 - Zugriff auf vergangene Bonuscodes und letztes Session-Feedback pro Quiz-Historie
 
 ### 3.3 Quiz-Metadaten
@@ -374,7 +383,17 @@ Für diese Kanäle kann der Host:
 - sie aktivieren
 - sie schließen und wieder öffnen
 - einen bevorzugten Live-Kanal setzen
-- kanalabhängige UI-Tabs steuern
+- zwischen aktivierten Formaten über Tabs wechseln; bei nur einem Format entfällt die Tab-Leiste
+
+**Format hinzufügen** bietet ausschließlich noch nicht aktivierte Formate an. Quiz verwendet die bestehende Quiz-Auswahl, Q&A die vorhandene Ersteinrichtung und Blitzlicht den direkten Aktivierungspfad. Erst nach Serverbestätigung erscheinen der neue Tab und dessen Arbeitsfläche. Abbruch oder fehlgeschlagene Aktivierung erhält den bisherigen Kanal; der Fokus kehrt zum Hinzufügen-Button zurück. Geschlossene aktivierte Formate bleiben als **Zu** sichtbar und können über ihre vorhandenen Kanalaktionen wieder geöffnet werden. Reload und Wiederverbindung stellen die Navigation aus bestätigten Sessiondaten her. Nach Quizabschluss bleiben weitere offene Kanäle und **Nächstes Quiz in diesem Raum** gemäß dem bestehenden Session-Lifecycle erreichbar; das ausdrückliche Session-Ende bleibt davon getrennt.
+
+#### Quizabschluss, Fragenwand und Sessionende
+
+**Quiz beendet** kennzeichnet die Gesamtauswertung, wenn danach noch weitere Formate verfügbar bleiben. **Session beendet** bleibt der Titel bei tatsächlichem Host-Ende oder wenn keine solchen Formate mehr verbleiben. Quizabschluss allein schließt eine weiterhin offene Fragenwand oder ein offenes Blitzlicht nicht.
+
+**Fragenwand schließen** stoppt neue Q&A-Beiträge und erhält die Frist; innerhalb der zulässigen Frist kann der Host wieder öffnen. **Zur Startseite** verlässt die Host-Ansicht. Aus einer laufenden Session mit offenem Q&A erhält diese Aktion die Fragenwand und versucht, ein ebenfalls offenes Blitzlicht zu schließen. Ein Fehler beim Schließen des Blitzlichts blockiert das Verlassen nicht. Der eigene Home-Pfad aus der bereits erreichten Quiz-Abschlussansicht nimmt dagegen nur die Abschlussprojektion zurück und schließt kein Nebenformat.
+
+**Session beenden** nutzt die bestehende Bestätigung und beendet die Session für alle. Solange Q&A offen ist, steht im Verlassen-Menü **Zur Startseite**. In der laufenden Session muss zum globalen Ende zuerst die Fragenwand bewusst geschlossen werden; im bereits erreichten Abschlusszustand gelten die beschriebenen Home-Wege. Die direkte Endaktion ist bei offener Fragenwand nicht gleichzeitig verfügbar.
 
 #### Laufende Anpassungen
 
@@ -544,7 +563,7 @@ Im aktuellen Stand sind umgesetzt:
 
 Blitzlicht kann laufen:
 
-- **standalone** mit eigenem Code und Host-Token
+- **standalone** mit eigenem Code und Host-Token als Legacy-Pfad; kein neuer Start über die Startseite (Rückbau: Story 8.10)
 - **sessiongebunden** als Kanal einer normalen Live-Session
 
 ### 6.3 Host-Funktionen

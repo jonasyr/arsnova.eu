@@ -11,8 +11,8 @@
  *   BASE_URL=http://localhost:4200/de TRPC_URL=http://localhost:3000/trpc \
  *     npm run smoke:session-question-progress -w @arsnova/frontend
  */
+import { randomUUID } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createTRPCProxyClient, httpBatchLink } from '@trpc/client';
 import {
@@ -24,7 +24,7 @@ import { chromium, webkit } from 'playwright';
 const BASE_URL = (process.env.BASE_URL || 'http://localhost:4200/de').replace(/\/+$/, '');
 const TRPC_URL = process.env.TRPC_URL || 'http://localhost:3000/trpc';
 const ARTIFACT_DIR =
-  process.env.SMOKE_ARTIFACT_DIR || join(tmpdir(), 'arsnova-session-question-progress-e2e');
+  process.env.SMOKE_ARTIFACT_DIR || join('tmp', 'session-question-progress-e2e', randomUUID());
 const HOST_TOKEN_STORAGE_PREFIX = 'arsnova-host-token:';
 const DESKTOP = { width: 1440, height: 1000 };
 const MOBILE = { width: 430, height: 932 };
@@ -342,11 +342,16 @@ async function main() {
     await waitForHostVote(host);
     logStep('Teilnehmer stimmt auf Frage 2 ab und Host sieht die Stimme');
 
-    const skipButton = host.locator('button[aria-label="Aktuelle Frage auslassen"]').first();
+    const moreActions = host.getByTestId('host-more-actions');
+    await moreActions.click();
+    const skipButton = host.getByRole('menuitem', {
+      name: 'Aktuelle Frage auslassen',
+      exact: true,
+    });
     await skipButton.waitFor({ state: 'visible', timeout: 10_000 });
     ensure(
-      (await skipButton.getAttribute('class'))?.includes('mat-tonal-button'),
-      'Die sichtbare Skip-Aktion ist nicht als zurückhaltender Tonal-Button gerendert.',
+      (await skipButton.getAttribute('role')) === 'menuitem',
+      'Die Skip-Aktion ist nicht im Menü Weitere Aktionen erreichbar.',
     );
     await skipButton.click();
     const dialog = host.locator('.cdk-overlay-container').first();
@@ -397,7 +402,8 @@ async function main() {
     ]);
     logStep('Live-Ergebnis enthält nur die durchgeführte Frage 3');
 
-    await clickButton(host, END_SESSION_RE);
+    await host.getByTestId('host-more-actions').click();
+    await host.getByRole('menuitem', { name: END_SESSION_RE }).click();
     const endDialog = host.locator('mat-dialog-container');
     await endDialog.getByRole('button', { name: CONFIRM_END_RE }).first().click();
     await host.locator('#session-finished-heading').first().waitFor({

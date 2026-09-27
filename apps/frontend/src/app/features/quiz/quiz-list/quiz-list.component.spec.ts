@@ -8,7 +8,7 @@ import {
   createLegacyQuizHistoryAccessProof,
   QUIZ_UPLOAD_MAX_PAYLOAD_BYTES,
 } from '@arsnova/shared-types';
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { QuizListComponent } from './quiz-list.component';
 import { DEMO_QUIZ_ID, QuizStoreService, type QuizSummary } from '../data/quiz-store.service';
 import {
@@ -16,17 +16,22 @@ import {
   storeHostBrowserCapability,
 } from '../../../core/host-recovery-access';
 import { clearHostToken, setHostToken } from '../../../core/host-session-token';
+import { HostScenarioService, type HostScenario } from '../../../core/host-scenario.service';
 
 const {
   getActiveQuizIdsQueryMock,
   getQuizCollectionHistoryAvailabilityQueryMock,
   bindQuizHistoryScopeMutationMock,
   snackBarOpenMock,
+  uploadQuizMutationMock,
+  createSessionMutationMock,
 } = vi.hoisted(() => ({
   getActiveQuizIdsQueryMock: vi.fn(),
   getQuizCollectionHistoryAvailabilityQueryMock: vi.fn(),
   bindQuizHistoryScopeMutationMock: vi.fn(),
   snackBarOpenMock: vi.fn(),
+  uploadQuizMutationMock: vi.fn(),
+  createSessionMutationMock: vi.fn(),
 }));
 
 vi.mock('../../../shared/markdown-image-lightbox/markdown-image-lightbox.directive', async () => {
@@ -46,7 +51,9 @@ vi.mock('../../../core/trpc.client', () => ({
   setHostToken: vi.fn(),
   setPendingHostSessionCode: vi.fn(),
   trpc: {
+    quiz: { upload: { mutate: uploadQuizMutationMock } },
     session: {
+      create: { mutate: createSessionMutationMock },
       getActiveQuizIds: {
         query: getActiveQuizIdsQueryMock,
       },
@@ -147,6 +154,8 @@ describe('QuizListComponent', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.removeItem('arsnova-host-scenario:v1');
+    sessionStorage.removeItem('arsnova-host-scenario-session:v1:NEW123');
     quizzesSignal.set([]);
     mockRoute.snapshot.queryParamMap = convertToParamMap({});
     mockStore.librarySharingMode.set('local');
@@ -169,6 +178,8 @@ describe('QuizListComponent', () => {
     getActiveQuizIdsQueryMock.mockResolvedValue([]);
     getQuizCollectionHistoryAvailabilityQueryMock.mockResolvedValue([]);
     bindQuizHistoryScopeMutationMock.mockReset();
+    uploadQuizMutationMock.mockResolvedValue({ quizId: '11111111-1111-4111-8111-111111111111' });
+    createSessionMutationMock.mockResolvedValue({ code: 'NEW123', hostToken: 'host-token' });
     TestBed.configureTestingModule({
       imports: [QuizListComponent, NoopAnimationsModule],
       providers: [
@@ -186,6 +197,11 @@ describe('QuizListComponent', () => {
         },
       ],
     });
+  });
+
+  afterEach(() => {
+    localStorage.removeItem('arsnova-host-scenario:v1');
+    sessionStorage.removeItem('arsnova-host-scenario-session:v1:NEW123');
   });
 
   it('startet ohne eigene Quizzes bei der Aktionsleiste statt einem Willkommen-Text', () => {
@@ -602,7 +618,8 @@ describe('QuizListComponent', () => {
     fixture.destroy();
   });
 
-  it('zeigt im More-Menü den Eintrag Bearbeiten', async () => {
+  it('zeigt im Szenario EVENT weiterhin Bearbeiten im More-Menü', async () => {
+    TestBed.inject(HostScenarioService).selectScenario('EVENT');
     quizzesSignal.set([
       {
         id: 'e31fef3f-f7b1-4705-a739-28c8ec4486bf',
@@ -631,7 +648,102 @@ describe('QuizListComponent', () => {
     fixture.detectChanges();
     await fixture.whenStable();
 
-    expect(document.body.textContent).toContain('Bearbeiten');
+    expect(document.querySelector('[role="menu"]')?.textContent).toContain('Bearbeiten');
+    expect(fixture.nativeElement.querySelector('.quiz-list-item__actions-primary a')).toBeNull();
+  });
+
+  it.each<HostScenario>(['CLASSROOM', 'QUICK'])(
+    'zeigt im Szenario %s Starten primär und Bearbeiten direkt daneben',
+    async (scenario) => {
+      // Relative RouterLinks need a real route tree; the shortcut mock only supplies query params.
+      TestBed.overrideProvider(ActivatedRoute, {
+        useFactory: (router: Router) => router.routerState.root,
+        deps: [Router],
+      });
+      TestBed.inject(HostScenarioService).selectScenario(scenario);
+      quizzesSignal.set([
+        {
+          id: 'e31fef3f-f7b1-4705-a739-28c8ec4486bf',
+          name: 'Datenbanken',
+          description: null,
+          createdAt: '2026-03-08T10:00:00.000Z',
+          updatedAt: '2026-03-08T11:30:00.000Z',
+          questionCount: 2,
+          teamMode: false,
+          hasBonus: false,
+          lastServerQuizId: null,
+          lastServerQuizAccessProof: null,
+        },
+      ]);
+      const fixture = TestBed.createComponent(QuizListComponent);
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      const actions: HTMLElement = fixture.nativeElement.querySelector(
+        '.quiz-list-item__actions-primary',
+      );
+      expect(actions.querySelector('button.mat-mdc-unelevated-button')?.textContent).toContain(
+        'Starten',
+      );
+      expect(actions.querySelector('a')?.textContent).toContain('Bearbeiten');
+      expect(actions.querySelector('a')?.getAttribute('href')).toContain(
+        'e31fef3f-f7b1-4705-a739-28c8ec4486bf',
+      );
+      actions.querySelector<HTMLButtonElement>('.quiz-list-item__menu-trigger')!.click();
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      const menuText = document.querySelector('[role="menu"]')?.textContent;
+      expect(menuText).not.toContain('Bearbeiten');
+      expect(menuText).toContain('Exportieren');
+      expect(menuText).toContain('Duplizieren');
+    },
+  );
+
+  it.each<HostScenario | null>([null, 'CLASSROOM', 'EVENT', 'QUICK'])(
+    'ordnet einer neu erstellten Sitzung nur den beim Start erfassten Kontext %s zu',
+    async (scenario) => {
+      const service = TestBed.inject(HostScenarioService);
+      if (scenario) service.selectScenario(scenario);
+      const fixture = TestBed.createComponent(QuizListComponent);
+      const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+      const starting = fixture.componentInstance.openLiveStartDialog('local-quiz', 'Quiz', 1);
+      service.selectScenario(scenario === 'EVENT' ? 'CLASSROOM' : 'EVENT');
+
+      await starting;
+
+      expect(createSessionMutationMock).toHaveBeenCalledWith({
+        quizId: '11111111-1111-4111-8111-111111111111',
+        type: 'QUIZ',
+        timeZone: expect.any(String),
+      });
+      expect(service.getForSession('NEW123')).toBe(scenario ?? 'QUICK');
+      expect(navigate).toHaveBeenCalledWith(
+        expect.stringContaining('/session/NEW123/host?tab=quiz'),
+      );
+      expect(fixture.componentInstance.liveStartPending()).toBe(false);
+    },
+  );
+
+  it('setzt nach einem fehlgeschlagenen Quiz-Start keinen Sitzungskontext und erlaubt Wiederholung', async () => {
+    const service = TestBed.inject(HostScenarioService);
+    service.selectScenario('CLASSROOM');
+    createSessionMutationMock.mockRejectedValueOnce(new Error('offline'));
+    const fixture = TestBed.createComponent(QuizListComponent);
+    vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+
+    await fixture.componentInstance.openLiveStartDialog('local-quiz', 'Quiz', 1);
+
+    expect(service.getForSession('NEW123')).toBeNull();
+    expect(fixture.componentInstance.actionError()).not.toBeNull();
+    expect(fixture.componentInstance.liveStartPending()).toBe(false);
+
+    await fixture.componentInstance.openLiveStartDialog('local-quiz', 'Quiz', 1);
+
+    expect(service.getForSession('NEW123')).toBe('CLASSROOM');
+    expect(fixture.componentInstance.actionError()).toBeNull();
+    expect(createSessionMutationMock).toHaveBeenCalledTimes(2);
   });
 
   it('markiert Quizzes mit aktiver Session als live', async () => {
@@ -678,6 +790,8 @@ describe('QuizListComponent', () => {
   });
 
   it('öffnet eine laufende Sitzung wieder, wenn dieser Browser die Host-Fähigkeit hat', async () => {
+    const scenarioService = TestBed.inject(HostScenarioService);
+    scenarioService.selectScenario('EVENT');
     const localQuizId = 'e31fef3f-f7b1-4705-a739-28c8ec4486bf';
     const serverQuizId = '11111111-1111-4111-8111-111111111111';
     quizzesSignal.set([
@@ -711,6 +825,7 @@ describe('QuizListComponent', () => {
     expect(navigateByUrl).toHaveBeenCalledWith(
       expect.stringContaining('/session/LIVE01/host?tab=quiz'),
     );
+    expect(scenarioService.getForSession('LIVE01')).toBeNull();
     clearHostBrowserCapability('LIVE01');
   });
 
@@ -742,9 +857,85 @@ describe('QuizListComponent', () => {
     const fixture = TestBed.createComponent(QuizListComponent);
 
     await fixture.componentInstance.openLiveStartDialog(localQuizId, 'Datenbanken', 2);
+    fixture.detectChanges();
 
     expect(fixture.componentInstance.actionInfo()).toContain('bereits live');
+    expect(fixture.componentInstance.actionInfo()).toContain('unabhängige Kopie');
+    const startCopy = fixture.nativeElement.querySelector(
+      '[data-testid="quiz-live-start-copy"]',
+    ) as HTMLButtonElement | null;
+    expect(startCopy?.textContent).toContain('Als Kopie neu starten');
+    const recovery = fixture.nativeElement.querySelector(
+      '[data-testid="quiz-live-recovery"]',
+    ) as HTMLAnchorElement | null;
+    expect(recovery?.textContent).toContain('Host-Zugang wiederherstellen');
+    expect(fixture.componentInstance.hostRecoveryCommands).toContain('host-recovery');
     expect(mockStore.getUploadPayload).not.toHaveBeenCalled();
+  });
+
+  it('startet ohne Host-Wiederherstellung eine unabhängige Quiz-Kopie', async () => {
+    const localQuizId = 'e31fef3f-f7b1-4705-a739-28c8ec4486bf';
+    const copyQuizId = '91f3dd2b-27cf-424f-ae33-0bb13df0ab81';
+    mockStore.duplicateQuiz.mockReturnValue({ id: copyQuizId });
+    const fixture = TestBed.createComponent(QuizListComponent);
+    const router = TestBed.inject(Router);
+    const navigateByUrl = vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
+
+    await fixture.componentInstance.startAsNewQuizCopy(localQuizId);
+
+    expect(mockStore.duplicateQuiz).toHaveBeenCalledWith(localQuizId);
+    expect(mockStore.getUploadPayload).toHaveBeenCalledWith(copyQuizId);
+    expect(uploadQuizMutationMock).toHaveBeenCalled();
+    expect(createSessionMutationMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        quizId: '11111111-1111-4111-8111-111111111111',
+        type: 'QUIZ',
+      }),
+    );
+    expect(navigateByUrl).toHaveBeenCalledWith(
+      expect.stringContaining('/session/NEW123/host?tab=quiz'),
+    );
+  });
+
+  it('löscht eine lokale Quizkarte auch dann, wenn ihre Session weiterläuft', async () => {
+    const { of } = await import('rxjs');
+    const localQuizId = 'e31fef3f-f7b1-4705-a739-28c8ec4486bf';
+    const serverQuizId = '11111111-1111-4111-8111-111111111111';
+    quizzesSignal.set([
+      {
+        id: localQuizId,
+        name: 'Datenbanken',
+        description: null,
+        createdAt: '2026-03-08T10:00:00.000Z',
+        updatedAt: '2026-03-08T11:30:00.000Z',
+        questionCount: 2,
+        teamMode: false,
+        hasBonus: false,
+        lastServerQuizId: serverQuizId,
+        lastServerQuizAccessProof: localQuizId,
+      },
+    ]);
+    const fixture = TestBed.createComponent(QuizListComponent);
+    fixture.componentInstance.activeLiveQuizParticipants.set(new Map([[serverQuizId, 2]]));
+    const dialogOpenSpy = vi.spyOn(fixture.componentInstance['dialog'], 'open').mockReturnValue({
+      afterClosed: () => of(true),
+    } as never);
+
+    fixture.componentInstance.deleteQuiz(localQuizId, 'Datenbanken');
+    await Promise.resolve();
+
+    expect(dialogOpenSpy).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        data: expect.objectContaining({
+          message: expect.stringContaining('laufende Session bleibt geöffnet'),
+          consequences: expect.arrayContaining([
+            expect.stringContaining('nicht moderieren oder beenden'),
+          ]),
+        }),
+      }),
+    );
+    expect(mockStore.deleteQuiz).toHaveBeenCalledWith(localQuizId);
   });
 
   it('setzt die ältere Sitzung fort, für die dieser Browser eine Fähigkeit hat', async () => {

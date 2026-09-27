@@ -4367,6 +4367,7 @@ export type GetQaWordCloudProjectionOutput = z.infer<typeof GetQaWordCloudProjec
 
 /** DTO: Live-Zustand authorisierter Quiz-Kopien (Story 1.10). */
 export const ActiveQuizLiveStateDTOSchema = z.object({
+  /** Angefragte aktuelle Quizkopie; Live-Zustände umfassen ihre autorisierte Historie. */
   quizId: z.uuid(),
   /** Aktuell verbundene Personen inkl. Host/Dozent:in. */
   participantCountIncludingHost: z.number().int().min(1),
@@ -5995,10 +5996,21 @@ export const SC_FORMAT_PRESETS: Record<ScFormat, { label: string; answers: strin
 };
 
 /**
- * Stabile ID des Showcase-Demo-Quiz (lokale Bibliothek + `historyScopeId` nach Upload).
- * Ermöglicht Session-Sonderregeln (z. B. Team-Bootstrap auf teamlose Sessions).
+ * Stabile lokale ID und Präfix der instanzbezogenen `historyScopeId` des Showcase-Demo-Quiz.
+ * Das Präfix erhält Session-Sonderregeln; der variable Rest trennt Live-Sessions je Demo-Karte.
  */
 export const DEMO_QUIZ_HISTORY_SCOPE_ID = 'de500000-0000-4000-a000-000000000001';
+
+/**
+ * Demo-Instanzen teilen die Kennung `de50`, erhalten aber pro lokaler Karte einen eigenen Scope.
+ * So bleiben Demo-Sonderregeln erkennbar, ohne Live-Sessions verschiedener Browser zu koppeln.
+ */
+export function isDemoQuizHistoryScopeId(value: string | null | undefined): value is string {
+  return (
+    typeof value === 'string' &&
+    /^de50[0-9a-f]{4}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+  );
+}
 
 /** Preset-Konfigurationen (Story 1.11) — clientseitig angewandt */
 export const QUIZ_PRESETS: Record<QuizPreset, Partial<CreateQuizInput>> = {

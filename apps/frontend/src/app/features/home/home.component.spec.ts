@@ -7,11 +7,13 @@ import { ActivatedRoute, convertToParamMap, provideRouter, Router } from '@angul
 import { provideHttpClient } from '@angular/common/http';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { of } from 'rxjs';
+import { of, Subject } from 'rxjs';
 import { HomeComponent } from './home.component';
+import { QUICK_FEEDBACK_HOME_CHIPS } from '../feedback/feedback.config';
 import { QuizStoreService } from '../quiz/data/quiz-store.service';
 import { clearHostToken, setHostToken } from '../../core/host-session-token';
 import { MotdHeaderStateService } from '../../core/motd-header-state.service';
+import { HostScenarioService } from '../../core/host-scenario.service';
 import {
   getHostBrowserCapability,
   storeHostBrowserCapability,
@@ -264,6 +266,400 @@ describe('HomeComponent', () => {
     clearHostToken('PART01');
   });
 
+  describe('Host-Szenario', () => {
+    it('hält alle Karten im DOM und führt Tastaturfokus und Scrollziel zur passenden Karte', async () => {
+      const fixture = createHomeFixture();
+      fixture.detectChanges();
+      const root = fixture.nativeElement as HTMLElement;
+      const chooser = root.querySelector('section.home-scenario') as HTMLElement;
+      const cards = Array.from(root.querySelectorAll('.home-host-stack > mat-card'));
+      const choices = Array.from(chooser.querySelectorAll('button'));
+      const targetIds = ['home-host-quiz', 'home-host-qa', 'host-quick-feedback'];
+
+      expect(root.querySelector('#home-host-title')?.textContent).toContain(
+        'Was hast du heute vor?',
+      );
+      expect(chooser.querySelector('#home-scenario-title')).toBeNull();
+      expect(chooser.getAttribute('aria-labelledby')).toBe('home-host-title');
+      expect(chooser.nextElementSibling?.classList.contains('home-host-stack')).toBe(true);
+      expect(cards).toHaveLength(3);
+      expect(choices).toHaveLength(3);
+      expect(choices.every((button) => button.getAttribute('aria-pressed') === 'false')).toBe(true);
+
+      for (const [index, choice] of choices.entries()) {
+        const scrollIntoView = vi.fn();
+        const target = root.querySelector<HTMLElement>(`#${targetIds[index]}`);
+        expect(target).not.toBeNull();
+        target!.scrollIntoView = scrollIntoView;
+        choice.focus();
+        choice.click();
+        fixture.detectChanges();
+        await fixture.whenStable();
+        const focusTarget = target!.querySelector<HTMLElement>('.home-card__scenario-focus-target');
+        expect(focusTarget?.tabIndex).toBe(-1);
+        expect(document.activeElement).toBe(focusTarget);
+        expect(choice.getAttribute('aria-pressed')).toBe('true');
+        expect(
+          cards.filter((card) => card.classList.contains('home-card--scenario-selected')),
+        ).toEqual([target]);
+        expect(scrollIntoView).toHaveBeenCalledWith({
+          behavior: 'smooth',
+          block: 'start',
+          inline: 'nearest',
+        });
+        expect(
+          choices.filter((button) => button.getAttribute('aria-pressed') === 'true'),
+        ).toHaveLength(1);
+        expect(Array.from(root.querySelectorAll('.home-host-stack > mat-card'))).toEqual(cards);
+        for (const card of cards) {
+          expect(card.hasAttribute('inert')).toBe(false);
+          expect(card.hasAttribute('hidden')).toBe(false);
+          const action = card.querySelector<HTMLButtonElement | HTMLAnchorElement>(
+            'button, a[href]',
+          );
+          expect(action?.tabIndex).toBeGreaterThanOrEqual(0);
+        }
+      }
+      expect(TestBed.inject(HostScenarioService).preference()).toBe('QUICK');
+      expect(matDialogMock.open).not.toHaveBeenCalled();
+    });
+
+    it('behält bei Pointer-Auswahl den Fokus auf dem Auswahlbutton', async () => {
+      const fixture = createHomeFixture();
+      fixture.detectChanges();
+      const root = fixture.nativeElement as HTMLElement;
+      const choice = root.querySelectorAll<HTMLButtonElement>('.home-scenario__option')[1];
+      const target = root.querySelector<HTMLElement>('#home-host-qa');
+      const scrollIntoView = vi.fn();
+      target!.scrollIntoView = scrollIntoView;
+      choice.focus();
+
+      choice.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      expect(document.activeElement).toBe(choice);
+      expect(scrollIntoView).toHaveBeenCalledOnce();
+      expect(target?.classList.contains('home-card--scenario-selected')).toBe(true);
+    });
+
+    it('scrollt bei reduzierter Bewegung ohne Animation zur ausgewählten Karte', async () => {
+      vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({ matches: true }));
+      const fixture = createHomeFixture();
+      fixture.detectChanges();
+      const target = fixture.nativeElement.querySelector('#host-quick-feedback') as HTMLElement;
+      const scrollIntoView = vi.fn();
+      target.scrollIntoView = scrollIntoView;
+
+      fixture.componentInstance.selectHostScenario('QUICK');
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      expect(scrollIntoView).toHaveBeenCalledWith({
+        behavior: 'auto',
+        block: 'start',
+        inline: 'nearest',
+      });
+    });
+
+    it('bietet im Kurs eigene Quizaktionen und Kursfragen an, ohne Demo als letztes Quiz', () => {
+      const fixture = createHomeFixture();
+      fixture.componentInstance.hostScenario.selectScenario('CLASSROOM');
+      fixture.detectChanges();
+      const root = fixture.nativeElement as HTMLElement;
+      expect(root.querySelector('.home-card--create')?.textContent).toContain('Quiz auswählen');
+      expect(
+        root.querySelector('.home-library-button')?.classList.contains('mat-mdc-unelevated-button'),
+      ).toBe(true);
+      expect(root.querySelector('.home-card--create')?.textContent).toContain('Neues Quiz');
+      expect(root.querySelector('.home-card--live')?.textContent).toContain(
+        'Fragen aus dem Kurs sammeln',
+      );
+      expect(root.querySelector('[data-testid="home-live-last-quiz"]')).toBeNull();
+      expect(root.querySelector('.home-card--live')?.textContent).toContain(
+        'Gemeinsam Unklarheiten klären',
+      );
+
+      TestBed.inject(QuizStoreService).createQuiz({ name: 'Eigener Kurs', description: '' });
+      fixture.detectChanges();
+      const latest = root.querySelector('[data-testid="home-live-last-quiz"]');
+      expect(latest?.textContent).toContain('Letztes Quiz starten');
+      expect(latest?.getAttribute('href')).toContain('startLiveQuiz=');
+      expect(
+        root.querySelector('.home-library-button')?.classList.contains('mat-mdc-unelevated-button'),
+      ).toBe(false);
+    });
+
+    it('öffnet bestehendes Q&A in jedem Szenario ohne Setup und erhält dessen Zuordnung', async () => {
+      const { trpc } = await import('../../core/trpc.client');
+      seedHostCapability();
+      vi.mocked(trpc.session.getInfo.query).mockResolvedValue(hostSessionGetInfo('ABC123', true));
+      const fixture = createHomeFixture();
+      const service = TestBed.inject(HostScenarioService);
+      service.assignToSession('ABC123', 'CLASSROOM');
+      vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+      fixture.detectChanges();
+      await fixture.whenStable();
+      await vi.waitUntil(() => {
+        fixture.detectChanges();
+        return fixture.nativeElement.querySelector('[data-testid="home-host-recovery"]') !== null;
+      });
+
+      for (const scenario of ['CLASSROOM', 'EVENT', 'QUICK'] as const) {
+        service.selectScenario(scenario);
+        fixture.detectChanges();
+        const recovery = fixture.nativeElement.querySelector(
+          '[data-testid="home-host-recovery"]',
+        ) as HTMLAnchorElement;
+        expect(recovery.getAttribute('href')).toContain('/session/ABC123/host?tab=qa');
+        expect(recovery.getAttribute('href')).not.toContain('qaSetup');
+        recovery.click();
+        expect(service.getForSession('ABC123')).toBe('CLASSROOM');
+      }
+      expect(matDialogMock.open).not.toHaveBeenCalled();
+      expect(trpc.session.create.mutate).not.toHaveBeenCalled();
+      restoreDefaultSessionGetInfo(vi.mocked(trpc.session.getInfo.query));
+    });
+
+    it('ordnet einem wiederhergestellten Q&A ohne Code-Eintrag keine globale Präferenz zu', async () => {
+      const { trpc } = await import('../../core/trpc.client');
+      localStorage.setItem(
+        'arsnova-host-scenario:v1',
+        JSON.stringify({ version: 1, scenario: 'EVENT' }),
+      );
+      seedHostCapability();
+      vi.mocked(trpc.session.getInfo.query).mockResolvedValue(hostSessionGetInfo('ABC123', true));
+      const fixture = createHomeFixture();
+      vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+      fixture.detectChanges();
+      await vi.waitUntil(() => {
+        fixture.detectChanges();
+        return fixture.nativeElement.querySelector('[data-testid="home-host-recovery"]') !== null;
+      });
+
+      expect(fixture.componentInstance.hostScenario.preference()).toBe('EVENT');
+      const recovery = fixture.nativeElement.querySelector(
+        '[data-testid="home-host-recovery"]',
+      ) as HTMLAnchorElement;
+      recovery.click();
+
+      expect(fixture.componentInstance.hostScenario.getForSession('ABC123')).toBeNull();
+      expect(trpc.session.create.mutate).not.toHaveBeenCalled();
+      expect(matDialogMock.open).not.toHaveBeenCalled();
+      restoreDefaultSessionGetInfo(vi.mocked(trpc.session.getInfo.query));
+    });
+
+    it.each([false, true])(
+      'hält einen bestehenden Host-Code beim Karten-Resume neutral (Lookup-Fehler: %s)',
+      async (lookupFails) => {
+        const { trpc } = await import('../../core/trpc.client');
+        localStorage.setItem(
+          'arsnova-host-scenario:v1',
+          JSON.stringify({ version: 1, scenario: 'EVENT' }),
+        );
+        restoreDefaultSessionGetInfo(vi.mocked(trpc.session.getInfoForReconnect.query));
+        if (lookupFails) {
+          vi.mocked(trpc.session.getInfoForReconnect.query).mockRejectedValueOnce(
+            new Error('offline'),
+          );
+        }
+        setHostToken('TEST01', 'host-token');
+        const component = createHomeComponent();
+        component.sessionCode.set('TEST01');
+        const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+
+        await component.openHeroHostTab('quiz');
+
+        expect(navigate).toHaveBeenCalledWith(['session', 'TEST01', 'host'], {
+          queryParams: { tab: 'quiz' },
+        });
+        expect(component.hostScenario.getForSession('TEST01')).toBeNull();
+        expect(trpc.session.create.mutate).not.toHaveBeenCalled();
+      },
+    );
+
+    it('startet über die Event-Tempoaktion Blitzlicht statt eine frühere Q&A-Session zu öffnen', async () => {
+      const { trpc } = await import('../../core/trpc.client');
+      vi.mocked(trpc.session.getInfoForReconnect.query).mockResolvedValueOnce({
+        ...hostSessionGetInfo('TEST01', true),
+        channels: {
+          quiz: { enabled: false },
+          qa: { enabled: true, open: true, state: 'OPEN' },
+          quickFeedback: { enabled: false, open: false },
+        },
+      });
+      setHostToken('TEST01', 'host-token');
+      const fixture = createHomeFixture();
+      fixture.componentInstance.sessionCode.set('TEST01');
+      fixture.componentInstance.hostScenario.selectScenario('EVENT');
+      const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+      fixture.detectChanges();
+      const action = fixture.nativeElement.querySelector(
+        '[data-testid="home-event-feedback"]',
+      ) as HTMLButtonElement;
+
+      action.click();
+      await vi.waitFor(() =>
+        expect(navigate).toHaveBeenCalledWith(
+          '/session/HERO01/host?tab=quickFeedback&feedbackType=TEMPO',
+        ),
+      );
+
+      expect(trpc.session.create.mutate).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ type: 'QUIZ', quickFeedbackEnabled: true }),
+      );
+      expect(trpc.quickFeedback.create.mutate).not.toHaveBeenCalled();
+      expect(fixture.componentInstance.hostScenario.getForSession('TEST01')).toBeNull();
+      expect(fixture.componentInstance.hostScenario.getForSession('HERO01')).toBe('EVENT');
+    });
+
+    it('verwendet QUICK beim direkten Formatstart ohne die Präferenz automatisch zu setzen', async () => {
+      const component = createHomeComponent();
+      vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+
+      await component.startSessionBoundQuickFeedback('TEMPO');
+
+      expect(component.hostScenario.getForSession('HERO01')).toBe('QUICK');
+      expect(component.hostScenario.preference()).toBeNull();
+    });
+
+    it('erfasst das Szenario vor dem asynchronen Q&A-Start und überträgt es nur lokal', async () => {
+      const { trpc } = await import('../../core/trpc.client');
+      const component = createHomeComponent();
+      const service = component.hostScenario;
+      service.selectScenario('CLASSROOM');
+      vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+
+      const start = component.openHeroHostTab('qa');
+      service.selectScenario('EVENT');
+      await start;
+
+      expect(service.getForSession('HERO01')).toBe('CLASSROOM');
+      expect(service.preference()).toBe('EVENT');
+      expect(trpc.session.create.mutate).toHaveBeenCalledWith(
+        expect.not.objectContaining({ scenario: expect.anything() }),
+      );
+    });
+
+    it('bietet Event-Aktionen an und merkt für Beides nur den Folgeauftrag nach dem Q&A-Start', async () => {
+      const { trpc } = await import('../../core/trpc.client');
+      const fixture = createHomeFixture();
+      fixture.componentInstance.hostScenario.selectScenario('EVENT');
+      vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+      fixture.detectChanges();
+      const root = fixture.nativeElement as HTMLElement;
+      expect(root.querySelector('[data-testid="home-live-qa-create"]')?.textContent).toContain(
+        'Fragen sammeln',
+      );
+      expect(
+        root
+          .querySelector('[data-testid="home-live-qa-create"]')
+          ?.classList.contains('mat-mdc-unelevated-button'),
+      ).toBe(true);
+      expect(root.querySelector('.home-card--live')?.textContent).toContain(
+        'Publikumsfragen für deine Veranstaltung',
+      );
+      expect(root.querySelector('[data-testid="home-event-feedback"]')?.textContent).toContain(
+        'Stimmung/Tempo erfassen',
+      );
+      expect(root.querySelector('[data-testid="home-event-both"]')?.textContent).toContain(
+        'Beides',
+      );
+
+      await fixture.componentInstance.openHeroHostTab('qa', undefined, true);
+
+      expect(trpc.session.create.mutate).toHaveBeenCalledTimes(1);
+      expect(trpc.session.create.mutate).toHaveBeenCalledWith(
+        expect.objectContaining({ qaEnabled: true }),
+      );
+      expect(trpc.session.create.mutate).toHaveBeenCalledWith(
+        expect.not.objectContaining({ quickFeedbackEnabled: true }),
+      );
+      expect(trpc.quickFeedback.create.mutate).not.toHaveBeenCalled();
+      expect(fixture.componentInstance.hostScenario.getForSession('HERO01')).toBe('EVENT');
+      expect(fixture.componentInstance.hostScenario.hasQuickFeedbackAfterQa('HERO01')).toBe(true);
+      expect(matDialogMock.open).toHaveBeenCalledTimes(1);
+    });
+
+    it.each(['home-live-qa-create', 'home-event-both'])(
+      'erhält %s als Fokusziel während des Profildialogs und sperrt doppelte Starts',
+      async (testId) => {
+        const { trpc } = await import('../../core/trpc.client');
+        const closed = new Subject<undefined>();
+        matDialogMock.open.mockImplementationOnce(() => ({ afterClosed: () => closed }));
+        const fixture = createHomeFixture();
+        const component = fixture.componentInstance;
+        component.hostScenario.selectScenario('EVENT');
+        fixture.detectChanges();
+        const start = vi.spyOn(component, 'openHeroHostTab');
+        const button = fixture.nativeElement.querySelector(
+          `[data-testid="${testId}"]`,
+        ) as HTMLButtonElement;
+        button.focus();
+        button.click();
+        fixture.detectChanges();
+
+        expect(button.disabled).toBe(false);
+        expect(button.getAttribute('aria-disabled')).toBe('true');
+        expect(button.getAttribute('aria-busy')).toBe('true');
+        button.focus();
+        expect(document.activeElement).toBe(button);
+        button.click();
+        expect(matDialogMock.open).toHaveBeenCalledTimes(1);
+        expect(trpc.session.create.mutate).not.toHaveBeenCalled();
+
+        closed.next(undefined);
+        closed.complete();
+        await start.mock.results[0]!.value;
+        fixture.detectChanges();
+        expect(button.getAttribute('aria-disabled')).not.toBe('true');
+        expect(button.getAttribute('aria-busy')).toBeNull();
+        expect(document.activeElement).toBe(button);
+        expect(component.hostSessionStarting()).toBeNull();
+        expect(trpc.session.create.mutate).not.toHaveBeenCalled();
+        fixture.destroy();
+      },
+    );
+
+    it('hinterlässt nach Abbruch von Beides keine Sessionzuordnung oder Folgeaktion', async () => {
+      const { trpc } = await import('../../core/trpc.client');
+      const component = createHomeComponent();
+      component.hostScenario.selectScenario('EVENT');
+      matDialogMock.open.mockImplementationOnce(() => ({ afterClosed: () => of(undefined) }));
+
+      await component.openHeroHostTab('qa', undefined, true);
+
+      expect(trpc.session.create.mutate).not.toHaveBeenCalled();
+      expect(component.hostScenario.getForSession('HERO01')).toBeNull();
+      expect(component.hostScenario.hasQuickFeedbackAfterQa('HERO01')).toBe(false);
+      expect(component.hostSessionStarting()).toBeNull();
+    });
+
+    it('hält Event-Aktionen bei Fehler bedienbar und kündigt den Fehler an', async () => {
+      const { trpc } = await import('../../core/trpc.client');
+      vi.mocked(trpc.session.create.mutate).mockRejectedValueOnce(
+        new Error('Start fehlgeschlagen'),
+      );
+      const fixture = createHomeFixture();
+      fixture.componentInstance.hostScenario.selectScenario('EVENT');
+      fixture.detectChanges();
+      const button = fixture.nativeElement.querySelector(
+        '[data-testid="home-event-both"]',
+      ) as HTMLButtonElement;
+      button.focus();
+
+      await fixture.componentInstance.openHeroHostTab('qa', undefined, true);
+      fixture.detectChanges();
+
+      expect(button.disabled).toBe(false);
+      expect(document.activeElement).toBe(button);
+      expect(
+        fixture.nativeElement.querySelector('.home-card--live [role="alert"]')?.textContent,
+      ).toContain('Start fehlgeschlagen');
+      expect(fixture.componentInstance.hostScenario.hasQuickFeedbackAfterQa('HERO01')).toBe(false);
+    });
+  });
+
   describe('Accessibility', () => {
     it('stiehlt dem Skip-Link beim Start nicht per Autofokus die erste Tabposition', () => {
       const sentinel = document.createElement('button');
@@ -464,7 +860,7 @@ describe('HomeComponent', () => {
       expect(hero.textContent).toMatch(/Quiz/);
       expect(hero.querySelector('.home-hero-divider')).not.toBeNull();
       expect(levelTwoTitles).toEqual(
-        expect.arrayContaining(['Session beitreten', 'Was möchtest du tun?']),
+        expect.arrayContaining(['Session beitreten', 'Was hast du heute vor?']),
       );
       expect(taskTitles).toEqual(['Quiz', 'Q&A', 'Blitzlicht']);
       expect(
@@ -1155,6 +1551,9 @@ describe('HomeComponent', () => {
       expect(recoveryActions).toHaveLength(2);
       expect(recoveryActions[0]?.getAttribute('data-session-code')).toBe('BBB222');
       expect(recoveryActions[1]?.getAttribute('data-session-code')).toBe('AAA111');
+      expect(
+        fixture.nativeElement.querySelector('[data-testid="home-host-session-menu-trigger"]'),
+      ).toBeNull();
       expect(recoveryActions[0]?.getAttribute('href') ?? '').toContain('session/BBB222/host');
       expect(recoveryActions[0]?.getAttribute('href') ?? '').toContain('tab=qa');
       expect(
@@ -1163,6 +1562,108 @@ describe('HomeComponent', () => {
       expect(
         fixture.nativeElement.querySelector('[data-testid="home-host-recovery-link"]'),
       ).toBeNull();
+      restoreDefaultSessionGetInfo(vi.mocked(trpc.session.getInfo.query));
+    });
+
+    it('bündelt ab drei offenen Sessions die offenen CTAs im Pulldown und lässt geschlossene direkt sichtbar', async () => {
+      const { trpc } = await import('../../core/trpc.client');
+      for (const code of ['AAA111', 'BBB222', 'CCC333', 'ZZZ999']) {
+        storeHostBrowserCapability(code, `${code}-browser-capability-abcdefghijklmnopqrstuvwxyz`);
+      }
+      vi.mocked(trpc.session.getInfo.query).mockImplementation(async (input: { code: string }) =>
+        hostSessionGetInfo(input.code, input.code !== 'ZZZ999'),
+      );
+      const fixture = createHomeFixture();
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+      await vi.waitUntil(
+        () =>
+          fixture.nativeElement.querySelector('[data-testid="home-host-session-menu-trigger"]') !==
+          null,
+        { timeout: 1000, interval: 10 },
+      );
+
+      const trigger = fixture.nativeElement.querySelector<HTMLButtonElement>(
+        '[data-testid="home-host-session-menu-trigger"]',
+      )!;
+      const directCodes = Array.from(
+        fixture.nativeElement.querySelectorAll<HTMLElement>(
+          '.home-host-session-cta-row [data-testid="home-host-recovery"]',
+        ),
+      ).map((action) => action.getAttribute('data-session-code'));
+
+      expect(trigger.textContent).toContain('Deine Q&A-Sessions');
+      expect(trigger.textContent).toContain('(3)');
+      expect(trigger.getAttribute('aria-haspopup')).toBe('menu');
+      expect(directCodes).toEqual(['ZZZ999']);
+
+      trigger.click();
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      const menuCodes = Array.from(
+        document.querySelectorAll<HTMLElement>('[data-testid="home-host-recovery-menu"]'),
+      ).map((action) => action.getAttribute('data-session-code'));
+      expect(menuCodes).toEqual(['AAA111', 'BBB222', 'CCC333']);
+      expect(
+        document.querySelectorAll('[data-testid="home-host-session-menu-remove"]'),
+      ).toHaveLength(3);
+      expect(document.querySelector('.cdk-overlay-container [role="menu"]')).not.toBeNull();
+
+      restoreDefaultSessionGetInfo(vi.mocked(trpc.session.getInfo.query));
+    });
+
+    it('schließt das Host-Session-Menü und stellt dessen Fokus vor dem Löschdialog wieder her', async () => {
+      const { trpc } = await import('../../core/trpc.client');
+      for (const code of ['AAA111', 'BBB222', 'CCC333']) {
+        storeHostBrowserCapability(code, `${code}-browser-capability-abcdefghijklmnopqrstuvwxyz`);
+      }
+      vi.mocked(trpc.session.getInfo.query).mockImplementation(async (input: { code: string }) =>
+        hostSessionGetInfo(input.code, true),
+      );
+      const fixture = createHomeFixture();
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+      await vi.waitUntil(
+        () =>
+          fixture.nativeElement.querySelector('[data-testid="home-host-session-menu-trigger"]') !==
+          null,
+        { timeout: 1000, interval: 10 },
+      );
+
+      const trigger = fixture.nativeElement.querySelector<HTMLButtonElement>(
+        '[data-testid="home-host-session-menu-trigger"]',
+      )!;
+      trigger.click();
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      const closed = new Subject<boolean | 'alternate' | undefined>();
+      let focusAtDialogOpen: Element | null = null;
+      matDialogMock.open.mockImplementationOnce(() => {
+        focusAtDialogOpen = document.activeElement;
+        return { afterClosed: () => closed };
+      });
+      document
+        .querySelector<HTMLButtonElement>(
+          '[data-testid="home-host-session-menu-remove"][data-session-code="AAA111"]',
+        )!
+        .click();
+      await vi.waitUntil(() => matDialogMock.open.mock.calls.length === 1, {
+        timeout: 1000,
+        interval: 10,
+      });
+
+      expect(focusAtDialogOpen).toBe(trigger);
+      expect(trigger.getAttribute('aria-expanded')).toBe('false');
+      closed.next(undefined);
+      closed.complete();
+      await fixture.whenStable();
+      fixture.detectChanges();
+      expect(document.activeElement).toBe(trigger);
+
       restoreDefaultSessionGetInfo(vi.mocked(trpc.session.getInfo.query));
     });
 
@@ -1495,8 +1996,15 @@ describe('HomeComponent', () => {
         /:host\.route-home \.l-page:first-child\s*\{[^}]*max-width:\s*40rem/,
       );
       expect(layout).toMatch(/\.home-main\s*\{[^}]*flex-direction:\s*column/);
+      expect(compactLayout).toMatch(/\.home-scenario\s*\{[^}]*margin-block-end:\s*0\.75rem/);
       expect(compactLayout).toMatch(
         /\.home-host-stack\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/,
+      );
+      expect(compactLayout).toMatch(
+        /\.home-host-stack > \.home-card\s*\{[^}]*scroll-margin-top:\s*calc\([^)]*6\.5rem/,
+      );
+      expect(layout).toMatch(
+        /@media \(min-width:\s*840px\)[\s\S]*?\.home-host-stack > \.home-card\s*\{[^}]*scroll-margin-top:\s*calc\([^)]*8rem/,
       );
       expect(desktopLayout).toMatch(
         /:host\.route-home \.l-page:first-child\s*\{[^}]*max-width:\s*var\(--app-toolbar-max-width\)[^}]*padding-inline:\s*0/,
@@ -1507,6 +2015,7 @@ describe('HomeComponent', () => {
       expect(desktopLayout).toMatch(
         /\.home-hero-band\s*\{[^}]*margin-block:\s*3rem calc\(4rem - 1\.25rem\)[^}]*padding:\s*0\.75rem 1rem 0\.9rem/,
       );
+      expect(desktopLayout).toMatch(/\.home-scenario\s*\{[^}]*margin-block-end:\s*1\.25rem/);
       expect(desktopLayout).toMatch(
         /\.home-host-stack\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)[^}]*gap:\s*5rem/,
       );
@@ -1651,6 +2160,10 @@ describe('HomeComponent', () => {
       );
       expect(compactMaybeLabel?.textContent?.trim()).toBe('Ja · Nein · ?');
       expect(compactMaybeLabel?.getAttribute('aria-hidden')).toBe('true');
+      const yesNoMaybeButton = quickFeedbackButtons.find(
+        (button) => button.getAttribute('aria-label') === 'Ja · Nein · Vielleicht',
+      );
+      expect(yesNoMaybeButton?.classList.contains('home-feedback-chip--yes-no')).toBe(true);
 
       const prepareButtons = Array.from(
         fixture.nativeElement.querySelectorAll<HTMLElement>(
@@ -1754,8 +2267,9 @@ describe('HomeComponent', () => {
         /\.home-cta--join\.home-cta--armed\s*\{[^}]*--mat-button-filled-container-color:\s*var\(--mat-sys-tertiary\)/,
       );
       expect(scss).toMatch(
-        /\.home-prepare-create:hover:not\(:disabled\)\s*\{[^}]*surface-container-high/,
+        /\.home-prepare-create\.mat-tonal-button:hover:not\(:disabled\)\s*\{[^}]*surface-container-high/,
       );
+      expect(scss).not.toMatch(/\.home-prepare-create:hover:not\(:disabled\)/);
       expect(scss).toMatch(
         /@media \(prefers-reduced-motion:\s*no-preference\)[\s\S]*\.home-cta--ready\s*\{[^}]*home-cta-arm/,
       );
@@ -1804,6 +2318,30 @@ describe('HomeComponent', () => {
       expect(sharedSegmentRule).toMatch(/border:\s*2px solid var\(--mat-sys-outline\)/);
       expect(playful).not.toMatch(/\.home-code-segment\s*\{[^}]*border-color:\s*color-mix/);
     });
+  });
+
+  it('begrenzt den Fokusindikator von Ja/Nein/Vielleicht auf den sichtbaren Inhalt', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { dirname, join } = await import('node:path');
+    const { fileURLToPath } = await import('node:url');
+    const scssPath = join(dirname(fileURLToPath(import.meta.url)), 'home.component.scss');
+    const scss = readFileSync(scssPath, 'utf8');
+
+    expect(scss).toMatch(
+      /\.home-feedback-chip--yes-no:focus-visible\s*\{[^}]*--mat-focus-indicator-display:\s*none/,
+    );
+    expect(scss).toMatch(
+      /\.home-feedback-chip--yes-no:focus-visible \.home-feedback-chip__body\s*\{[^}]*width:\s*fit-content[^}]*outline:\s*2px solid var\(--mat-sys-primary\)/,
+    );
+    expect(scss).toMatch(
+      /\.home-host-stack > \.home-card--scenario-selected\s*\{[^}]*outline:\s*3px solid var\(--mat-sys-primary\)/,
+    );
+    expect(scss).toMatch(
+      /\.home-card__scenario-focus-target\s*\{[^}]*display:\s*inline-block[^}]*width:\s*fit-content[^}]*max-width:\s*100%/,
+    );
+    expect(scss).toMatch(
+      /\.home-card__scenario-focus-target:focus-visible\s*\{[^}]*outline:\s*3px solid var\(--mat-sys-primary\)/,
+    );
   });
 
   describe('isValidSessionCode', () => {
@@ -2098,6 +2636,40 @@ describe('HomeComponent', () => {
       expect(navSpy).toHaveBeenCalledWith(['feedback', 'ABC123']);
       expect(comp.quickFeedbackError()).toBeNull();
     });
+
+    it.each(QUICK_FEEDBACK_HOME_CHIPS)(
+      'startet den sichtbaren $type-Chip ohne Dialog genau einmal in einer Session',
+      async ({ type, label }) => {
+        const { trpc } = await import('../../core/trpc.client');
+        vi.mocked(trpc.session.create.mutate).mockResolvedValueOnce({
+          id: 'sess-chip',
+          code: 'CHP123',
+          hostToken: 'chip-host-token',
+        });
+        const fixture = createHomeFixture();
+        fixture.detectChanges();
+        const navSpy = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+        const startSpy = vi.spyOn(fixture.componentInstance, 'startSessionBoundQuickFeedback');
+        const chip = [
+          ...fixture.nativeElement.querySelectorAll('#host-quick-feedback .home-feedback-chip'),
+        ].find((button) => button.getAttribute('aria-label') === label) as HTMLButtonElement;
+        expect(chip).toBeTruthy();
+        matDialogMock.open.mockClear();
+        chip.click();
+        expect(startSpy).toHaveBeenCalledExactlyOnceWith(type);
+        await startSpy.mock.results[0]!.value;
+        expect(trpc.session.create.mutate).toHaveBeenCalledTimes(1);
+        expect(trpc.session.create.mutate).toHaveBeenCalledWith(
+          expect.objectContaining({ type: 'QUIZ', quickFeedbackEnabled: true }),
+        );
+        expect(trpc.quickFeedback.create.mutate).not.toHaveBeenCalled();
+        expect(matDialogMock.open).not.toHaveBeenCalled();
+        expect(navSpy).toHaveBeenCalledTimes(1);
+        expect(navSpy).toHaveBeenCalledWith(
+          `/session/CHP123/host?tab=quickFeedback&feedbackType=${type}`,
+        );
+      },
+    );
 
     it('startet Tempo über den Startseiten-Chip als sitzungsgebundenes Blitzlicht', async () => {
       const { trpc } = await import('../../core/trpc.client');

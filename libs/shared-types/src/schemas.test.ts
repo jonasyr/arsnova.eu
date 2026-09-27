@@ -40,6 +40,8 @@ import {
   QaPendingReleaseSnapshotOutputSchema,
   ReleasePendingQaQuestionsInputSchema,
   ReleasePendingQaQuestionsOutputSchema,
+  DEMO_QUIZ_HISTORY_SCOPE_ID,
+  isDemoQuizHistoryScopeId,
 } from './schemas.js';
 
 const sessionId = '10000000-0000-4000-8000-000000000001';
@@ -61,6 +63,13 @@ describe('öffentliche Contract-Schemas', () => {
     teamMode: false,
     nicknameTheme: 'NOBEL_LAUREATES' as const,
   };
+
+  it('erkennt feste und instanzbezogene Showcase-Demo-Historienscopes', () => {
+    expect(isDemoQuizHistoryScopeId(DEMO_QUIZ_HISTORY_SCOPE_ID)).toBe(true);
+    expect(isDemoQuizHistoryScopeId('de50abcd-1234-4567-8abc-1234567890ab')).toBe(true);
+    expect(isDemoQuizHistoryScopeId('ce50abcd-1234-4567-8abc-1234567890ab')).toBe(false);
+    expect(isDemoQuizHistoryScopeId('de50abcd-1234-6567-8abc-1234567890ab')).toBe(false);
+  });
 
   it('validiert den Vertrag für die Sammelfreigabe wartender Q&A-Fragen', () => {
     const pendingSetFingerprint = 'a'.repeat(64);

@@ -9,6 +9,7 @@
  */
 import { mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import assert from 'node:assert/strict';
 import { createTRPCProxyClient, httpBatchLink } from '@trpc/client';
 import { chromium, webkit } from 'playwright';
 import { assertNoBlockingA11y } from './axe-a11y.mjs';
@@ -274,9 +275,9 @@ async function clickChannelTab(page, index) {
 
 async function waitForChannelTabs(page, expected = 3, timeout = 15_000) {
   await page.waitForFunction(
-    (minimum) =>
-      document.querySelectorAll('.session-channel-tabs .session-channel-tabs__label').length >=
-      minimum,
+    (count) =>
+      document.querySelectorAll('.session-channel-tabs .session-channel-tabs__label').length ===
+      count,
     expected,
     { timeout },
   );
@@ -357,57 +358,175 @@ async function createUnifiedSession(trpc) {
   const created = await trpc.session.create.mutate({
     quizId,
     type: 'QUIZ',
-    qaEnabled: true,
-    quickFeedbackEnabled: true,
-  });
-  const hostTrpc = createBrowserTrpcClient(created.hostToken);
-  const selection = { kind: 'UNTIL_SESSION_END' };
-  const preview = await hostTrpc.session.previewQaConfiguration.query({
-    code: created.code,
-    mode: 'INITIAL',
-    selection,
-  });
-  await hostTrpc.session.configureQaChannel.mutate({
-    code: created.code,
-    mode: preview.mode,
-    selection,
-    expectedLifecycleRevision: preview.expectedLifecycleRevision,
-    previewServerNow: preview.serverNow,
-    confirmedQaClosesAt: preview.newQaClosesAt,
-    confirmedExpiresAt: preview.newExpiresAt,
-    confirmSessionExtension: preview.requiresSessionExtension,
-    qaTitle: 'Unified Session Smoke',
-    moderationMode: false,
+    qaEnabled: false,
+    quickFeedbackEnabled: false,
   });
   return created;
 }
 
-async function openHostSession(host, code, hardFailures) {
+async function dismissJoinOverlay(host) {
+  const close = host.locator('.session-host__join-viewport-overlay__close').first();
+  if (await close.isVisible().catch(() => false)) {
+    await close.click();
+    await close.waitFor({ state: 'hidden' });
+  }
+}
+
+async function waitForNavigationFocus(host, tabIndex = null) {
+  await host
+    .waitForFunction((index) => {
+      const active = document.activeElement;
+      const target =
+        index === null
+          ? document.querySelector('[data-testid="add-channel-trigger"]')
+          : document.querySelectorAll('.session-channel-tabs mat-button-toggle')[index];
+      if (!(active instanceof HTMLElement) || !target?.contains(active)) return false;
+      const rect = active.getBoundingClientRect();
+      const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+      return rect.width > 0 && rect.height > 0 && (hit === active || active.contains(hit));
+    }, tabIndex)
+    .catch(async (error) => {
+      const state = await host.evaluate(() => {
+        const active = document.activeElement;
+        const trigger = document.querySelector('[data-testid="add-channel-trigger"]');
+        const rect = trigger?.getBoundingClientRect();
+        return {
+          focusedElement: active?.outerHTML.slice(0, 500),
+          triggerRect: rect?.toJSON(),
+          triggerHit: rect
+            ? document
+                .elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)
+                ?.outerHTML.slice(0, 500)
+            : null,
+        };
+      });
+      throw new Error(`${error.message}\nNavigation focus: ${JSON.stringify(state)}`);
+    });
+}
+
+async function verifyNavigationReflow(host, label) {
+  for (const width of [320, 600, 840, DESKTOP.width]) {
+    await host.setViewportSize({ width, height: DESKTOP.height });
+    const fits = await host.locator('.session-host__channel-nav').evaluate((nav) => {
+      const rect = nav.getBoundingClientRect();
+      return (
+        rect.left >= -1 &&
+        rect.right <= window.innerWidth + 1 &&
+        nav.scrollWidth <= nav.clientWidth + 1
+      );
+    });
+    assert(fits, `${label}: host navigation overflows at ${width}px.`);
+  }
+  logStep(true, `${label}: navigation reflows at 320/600/840/1440px`);
+}
+
+async function openAddChannelMenu(host) {
+  await dismissJoinOverlay(host);
+  const trigger = host.getByTestId('add-channel-trigger');
+  await trigger.focus();
+  await trigger.press('Enter');
+  await host.getByRole('menu').waitFor({ state: 'visible' });
+}
+
+async function openHostSession(host, code) {
   await host.goto(`${BASE_URL}/session/${code}/host`, {
     waitUntil: 'domcontentloaded',
     timeout: 30_000,
   });
   await waitForPathSuffix(host, `/session/${code}/host`);
-  await waitForChannelTabs(host);
+  await waitForVisible(host.getByTestId('add-channel-trigger'));
+  await waitForVisible(host.getByTestId('lobby-start-session'));
+  await dismissJoinOverlay(host);
+  assert.equal(await host.locator('.session-channel-tabs').count(), 0);
   logStep(true, 'Host session started', code);
+  logStep(true, 'One enabled quiz channel has no tab bar');
+}
 
-  const hostChannelCount = await host
-    .locator('.session-channel-tabs .session-channel-tabs__label')
-    .count();
-  if (hostChannelCount >= 3) {
-    logStep(true, 'Host sees all channel tabs', String(hostChannelCount));
-    return;
+async function addHostChannels(host, code, hostTrpc) {
+  await verifyNavigationReflow(host, 'One enabled channel');
+  await openAddChannelMenu(host);
+  assert.equal(await host.getByRole('menuitem').count(), 2);
+  assert.equal(await host.getByTestId('add-channel-quiz').count(), 0);
+  await scanA11y(host, 'add-format-menu');
+  await host.getByTestId('add-channel-qa').press('Enter');
+  const qaDialog = host.locator('app-qa-channel-configuration-dialog');
+  await waitForVisible(qaDialog);
+  await qaDialog.getByRole('button', { name: /abbrechen|cancel/i }).click();
+  await qaDialog.waitFor({ state: 'hidden' });
+  await waitForNavigationFocus(host);
+  assert.equal(await host.locator('.session-channel-tabs').count(), 0);
+  const afterCancel = await hostTrpc.session.getInfo.query({ code });
+  assert.equal(afterCancel.channels.qa.enabled, false);
+  assert.equal(afterCancel.preferredChannel, 'quiz');
+  assert(await host.getByTestId('lobby-start-session').isVisible());
+  logStep(true, 'Q&A setup cancellation preserves quiz, server state and trigger focus');
+
+  await openAddChannelMenu(host);
+  await host.getByTestId('add-channel-qa').press('Enter');
+  await waitForVisible(qaDialog);
+  await qaDialog.locator('input[maxlength="200"]').fill('Unified Session Smoke');
+  const moderationSwitch = qaDialog.getByRole('switch').first();
+  if ((await moderationSwitch.getAttribute('aria-checked')) === 'true') {
+    await moderationSwitch.press('Space');
   }
+  await host.waitForFunction(
+    () =>
+      document
+        .querySelector('app-qa-channel-configuration-dialog [role="switch"]')
+        ?.getAttribute('aria-checked') === 'false',
+  );
+  await qaDialog.locator('.qa-config__actions button').last().click();
+  await qaDialog.waitFor({ state: 'hidden', timeout: 20_000 });
+  await waitForChannelTabs(host, 2);
+  await waitForNavigationFocus(host, 1);
+  const afterQa = await hostTrpc.session.getInfo.query({ code });
+  assert.equal(afterQa.channels.qa.enabled, true);
+  assert.equal(afterQa.channels.quickFeedback.enabled, false);
+  assert.equal(afterQa.preferredChannel, 'qa');
+  logStep(true, 'Confirmed Q&A activation adds one tab and focuses it');
+  await verifyNavigationReflow(host, 'Two enabled channels');
 
-  hardFailures.push('Host tabs for quiz, Q&A and quick feedback are missing.');
-  logStep(false, 'Host sees all channel tabs', String(hostChannelCount));
+  const feedbackRoute = /\/trpc\/[^?]*session\.enableQuickFeedbackChannel/;
+  await host.route(feedbackRoute, (route) => route.abort('failed'), { times: 1 });
+  await openAddChannelMenu(host);
+  assert.equal(await host.getByRole('menuitem').count(), 1);
+  await host.getByTestId('add-channel-quickFeedback').press('Enter');
+  await waitForVisible(host.locator('#host-steering-callout'));
+  await waitForNavigationFocus(host);
+  await waitForChannelTabs(host, 2);
+  const afterFailure = await hostTrpc.session.getInfo.query({ code });
+  assert.equal(afterFailure.channels.quickFeedback.enabled, false);
+  assert.equal(afterFailure.preferredChannel, 'qa');
+  assert.equal(
+    await host
+      .locator('.session-channel-tabs mat-button-toggle button')
+      .nth(1)
+      .getAttribute('aria-checked'),
+    'true',
+  );
+  logStep(true, 'Failed format activation preserves Q&A and restores trigger focus');
+
+  await host.getByTestId('host-steering-retry').click();
+  await waitForChannelTabs(host, 3);
+  await waitForNavigationFocus(host, 2);
+  assert.equal(await host.getByTestId('add-channel-trigger').count(), 0);
+  const afterRetry = await hostTrpc.session.getInfo.query({ code });
+  assert.equal(afterRetry.channels.quickFeedback.enabled, true);
+  assert.equal(afterRetry.preferredChannel, 'quickFeedback');
+  logStep(true, 'Retry activates quick feedback under the same code and focuses its tab');
+  await verifyNavigationReflow(host, 'Three enabled channels');
+
+  await host.reload({ waitUntil: 'domcontentloaded' });
+  await waitForChannelTabs(host, 3);
+  await dismissJoinOverlay(host);
+  assert.equal(await host.getByTestId('add-channel-trigger').count(), 0);
+  await waitForVisible(host.locator('app-feedback-host'));
+  logStep(true, 'Reload restores confirmed channels and preferred quick feedback');
 }
 
 async function verifyHostQaTab(host, hardFailures) {
   await clickChannelTab(host, 1);
-  const hostQaArea = host
-    .locator('.session-qa-list, .session-qa-empty, .session-qa-summary')
-    .first();
+  const hostQaArea = host.getByTestId('qa-tools-toggle');
   try {
     await waitForVisible(hostQaArea);
     logStep(true, 'Host can open Q&A tab');
@@ -568,12 +687,13 @@ async function verifyPresenterView(host, presenter, code, hardFailures) {
     logStep(false, 'Presenter Q&A questions fit HDMI viewport');
   }
 
+  const qaTools = host.getByTestId('qa-tools-toggle');
+  if ((await qaTools.getAttribute('aria-expanded')) !== 'true') await qaTools.click();
   const openWordCloud = host
     .locator('.session-host__extra-summary--button', { hasText: /wortwolke|word cloud/i })
     .first();
-  if (await openWordCloud.isVisible().catch(() => false)) {
-    await clickViaDom(openWordCloud);
-  }
+  await waitForVisible(openWordCloud);
+  await clickViaDom(openWordCloud);
   const exclusiveWordCloudVisible = await presenter
     .locator('.session-present__word-cloud-card')
     .waitFor({ state: 'visible', timeout: 10_000 })
@@ -760,7 +880,14 @@ async function endSessionAndScan(host, participant, hardFailures) {
     await joinPopoverClose.click();
   }
 
-  const leaveHomeButton = host.getByRole('button', { name: HOST_LEAVE_HOME_RE }).first();
+  const moreActions = host.getByTestId('host-more-actions');
+  const usesQuizMenu = await moreActions.isVisible().catch(() => false);
+  if (usesQuizMenu) {
+    await moreActions.click();
+    await host.getByRole('menu').waitFor({ state: 'visible' });
+  }
+  const actionRole = usesQuizMenu ? 'menuitem' : 'button';
+  const leaveHomeButton = host.getByRole(actionRole, { name: HOST_LEAVE_HOME_RE }).first();
   if (await leaveHomeButton.isVisible().catch(() => false)) {
     await leaveHomeButton.click();
     const homePathRe = /^\/(?:de|en|fr|it|es)\/?$/;
@@ -804,7 +931,7 @@ async function endSessionAndScan(host, participant, hardFailures) {
     return;
   }
 
-  const endButton = host.getByRole('button', { name: HOST_END_SESSION_RE }).first();
+  const endButton = host.getByRole(actionRole, { name: HOST_END_SESSION_RE }).first();
   if (!(await endButton.isVisible().catch(() => false))) {
     hardFailures.push('Host session leave or end action is not visible.');
     return;
@@ -935,7 +1062,8 @@ async function main() {
   const warnings = [];
 
   try {
-    const hostContext = await browser.newContext({ viewport: DESKTOP });
+    // Keep the deliberate failed activation observable by Playwright's route handler.
+    const hostContext = await browser.newContext({ viewport: DESKTOP, serviceWorkers: 'block' });
     await hostContext.addInitScript(
       ({ sessionCode, token, prefix }) => {
         globalThis.sessionStorage.setItem(`${prefix}${sessionCode}`, token);
@@ -957,8 +1085,9 @@ async function main() {
     const participant = await participantContext.newPage();
     const presenter = await presenterContext.newPage();
 
-    await openHostSession(host, code, hardFailures);
+    await openHostSession(host, code);
     await scanA11y(host, 'host-lobby');
+    await addHostChannels(host, code, createBrowserTrpcClient(hostToken));
     await verifyHostQaTab(host, hardFailures);
     await scanA11y(host, 'host-qa-empty');
     await joinParticipantSession(participant, code, warnings, hardFailures);

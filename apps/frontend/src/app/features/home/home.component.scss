@@ -379,6 +379,44 @@
   text-wrap: balance;
 }
 
+.home-scenario {
+  min-width: 0;
+  margin: 0;
+  margin-block-end: 0.75rem;
+  padding: 0;
+  border: 0;
+}
+
+.home-scenario__options {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem;
+}
+
+.home-scenario__option {
+  flex: 1 1 12rem;
+  min-width: 0;
+  min-height: 2.75rem;
+  height: auto;
+  padding: 0.65rem 0.75rem;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.4;
+
+  &[aria-pressed='true'] {
+    border-color: var(--mat-sys-primary);
+    background: var(--mat-sys-surface-container-high);
+    font-weight: 700;
+  }
+}
+
+.home-scenario-feedback {
+  width: 100%;
+  margin-bottom: 1rem;
+  white-space: normal;
+}
+
 .home-host-stack {
   --home-host-action-min-height: 4.75rem;
   display: grid;
@@ -724,6 +762,57 @@
   gap: 1rem;
 }
 
+.home-host-stack > .home-card {
+  scroll-margin-top: calc(
+    6.5rem + var(--app-offline-banner-height, 0px) + var(--app-service-status-banner-height, 0px) +
+      var(--app-service-status-banner-gap, 0px)
+  );
+}
+
+@media (min-width: 600px) {
+  .home-host-stack > .home-card {
+    scroll-margin-top: calc(
+      7rem + var(--app-offline-banner-height, 0px) + var(--app-service-status-banner-height, 0px) +
+        var(--app-service-status-banner-gap, 0px)
+    );
+  }
+}
+
+@media (min-width: 840px) {
+  .home-host-stack > .home-card {
+    scroll-margin-top: calc(
+      8rem + var(--app-offline-banner-height, 0px) + var(--app-service-status-banner-height, 0px) +
+        var(--app-service-status-banner-gap, 0px)
+    );
+  }
+}
+
+.home-host-stack > .home-card--scenario-selected {
+  outline: 3px solid var(--mat-sys-primary);
+  outline-offset: 3px;
+  box-shadow:
+    var(--mat-sys-level3),
+    0 0 0 0.5rem color-mix(in srgb, var(--mat-sys-primary) 14%, transparent);
+}
+
+.home-card__scenario-focus-target {
+  display: inline-block;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.home-card__scenario-focus-target:focus-visible {
+  outline: 3px solid var(--mat-sys-primary);
+  outline-offset: 0.25rem;
+  border-radius: var(--mat-sys-corner-extra-small);
+}
+
+.home-card--scenario-selected .home-card__icon-wrap {
+  border-color: var(--mat-sys-primary);
+  background: var(--mat-sys-primary-container);
+  color: var(--mat-sys-on-primary-container);
+}
+
 .home-qa-session-ghost {
   display: flex;
   align-items: center;
@@ -795,6 +884,49 @@
 
 .home-host-session-cta-row__item > .home-choice-button .home-choice-button__copy {
   align-items: center;
+}
+
+.home-host-session-cta-row__menu-trigger > .home-choice-button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 0.5rem;
+}
+
+.home-host-session-cta-row__menu-trigger > .home-choice-button > mat-icon {
+  margin: 0;
+}
+
+.home-host-session-menu__open.mat-mdc-menu-item {
+  height: auto;
+  min-height: 3.5rem;
+  padding-block: 0.65rem;
+}
+
+.home-host-session-menu__open .mat-mdc-menu-item-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.home-host-session-menu__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font: var(--mat-sys-label-large);
+}
+
+.home-host-session-menu__facts {
+  display: flex;
+  flex-direction: column;
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-body-small);
+  line-height: 1.4;
+}
+
+.home-host-session-menu__remove.mat-mdc-menu-item {
+  min-height: 2.75rem;
+  color: var(--mat-sys-on-surface-variant);
 }
 
 .home-host-session-cta__facts {
@@ -949,6 +1081,20 @@
   color: inherit;
 }
 
+/* Die lange Ja/Nein/Vielleicht-Karte behält ihre große Touchfläche; der sichtbare
+   Fokusindikator umfasst nur den eigentlichen Karteninhalt. */
+.home-feedback-chip--yes-no:focus-visible {
+  --mat-focus-indicator-display: none;
+}
+
+.home-feedback-chip--yes-no:focus-visible .home-feedback-chip__body {
+  width: fit-content;
+  max-width: 100%;
+  outline: 2px solid var(--mat-sys-primary);
+  outline-offset: 0.35rem;
+  border-radius: var(--mat-sys-corner-small);
+}
+
 .home-feedback-chip__icons {
   display: flex;
   align-items: center;
@@ -1052,7 +1198,7 @@
 }
 
 @media (hover: hover) {
-  .home-prepare-create:hover:not(:disabled) {
+  .home-prepare-create.mat-tonal-button:hover:not(:disabled) {
     --mdc-protected-button-container-color: var(--mat-sys-surface-container-high);
     --mat-button-tonal-container-color: var(--mat-sys-surface-container-high);
     background-color: var(--mat-sys-surface-container-high);
@@ -1251,6 +1397,14 @@
 
 /* Erst auf breiten Desktops: gemeinsame App-Bar-Achse und drei natürliche Kartenhöhen. */
 @media (min-width: 1200px) {
+  .home-scenario {
+    margin-block-end: 1.25rem;
+  }
+
+  .home-scenario__option {
+    flex-basis: 9rem;
+  }
+
   :host.route-home .l-page:first-child {
     max-width: var(--app-toolbar-max-width);
     margin-top: 0;

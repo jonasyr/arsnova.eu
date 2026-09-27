@@ -2,6 +2,7 @@ import { DOCUMENT, NgTemplateOutlet } from '@angular/common';
 import { CdkTrapFocus } from '@angular/cdk/a11y';
 import {
   Component,
+  ElementRef,
   HostListener,
   Injector,
   LOCALE_ID,
@@ -14,6 +15,7 @@ import {
   inject,
   input,
   signal,
+  viewChild,
 } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { MatCard, MatCardContent } from '@angular/material/card';
@@ -52,6 +54,7 @@ import {
 } from '@arsnova/shared-types';
 import type { Unsubscribable } from '@trpc/server/observable';
 import { ProductFeedbackLauncherService } from '../product-feedback/product-feedback-launcher.service';
+import { scrollAndFocusInAppMain } from '../session/session-auto-scroll.util';
 
 type StarAverageIcon = 'star' | 'star_half' | 'star_border';
 type TempoViewMode = 'details' | 'trend';
@@ -78,11 +81,7 @@ interface StarAverageSummary {
     MarkdownImageLightboxDirective,
   ],
   templateUrl: './feedback-host.component.html',
-  styleUrls: [
-    '../../shared/styles/dialog-title-header.scss',
-    '../../shared/styles/session-channel-card-lead-icon.scss',
-    './feedback-host.component.scss',
-  ],
+  styleUrls: ['../../shared/styles/dialog-title-header.scss', './feedback-host.component.scss'],
   host: {
     class: 'feedback-host-shell',
     '[class.feedback-host-shell--embedded]': 'embeddedInSession()',
@@ -94,6 +93,7 @@ export class FeedbackHostComponent implements OnInit, OnDestroy {
   private readonly ngZone = inject(NgZone);
   private readonly snackBar = inject(MatSnackBar);
   private readonly document = inject(DOCUMENT);
+  private readonly elementRef = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly localeId = inject(LOCALE_ID) as string;
   private readonly injector = inject(Injector);
   private readonly productFeedbackLauncher = inject(ProductFeedbackLauncherService);
@@ -104,6 +104,108 @@ export class FeedbackHostComponent implements OnInit, OnDestroy {
   private requestedFeedbackTypeHandled = false;
   readonly sessionCode = input('');
   readonly embeddedInSession = input(false);
+  readonly roundControlPending = input(false);
+  readonly roundSettingsOpen = signal(false);
+  readonly roundActionPending = signal(false);
+  readonly roundActionError = signal<string | null>(null);
+  readonly roundActionBusy = computed(
+    () =>
+      this.roundControlPending() ||
+      this.roundActionPending() ||
+      this.resetting() ||
+      this.liveResultsPending(),
+  );
+  private readonly embeddedHeading = viewChild<ElementRef<HTMLElement>>('embeddedHeading');
+  private readonly roundSettingsTrigger = viewChild<
+    ElementRef<HTMLButtonElement>,
+    ElementRef<HTMLButtonElement>
+  >('roundSettingsTrigger', { read: ElementRef });
+  private readonly roundSettingsContent =
+    viewChild<ElementRef<HTMLElement>>('roundSettingsContent');
+
+  toggleRoundSettings(): void {
+    if (
+      this.roundSettingsOpen() &&
+      this.roundSettingsContent()?.nativeElement.contains(this.document.activeElement)
+    ) {
+      if (!this.focusEmbeddedTarget(this.roundSettingsTrigger()?.nativeElement)) {
+        return;
+      }
+    }
+    this.roundSettingsOpen.update((open) => !open);
+  }
+
+  private focusEmbeddedTarget(target: HTMLElement | undefined): boolean {
+    if (!target?.isConnected || target.closest('[hidden], [inert]')) {
+      return false;
+    }
+    const style = this.document.defaultView?.getComputedStyle(target);
+    if (style?.display === 'none' || style?.visibility === 'hidden') {
+      return false;
+    }
+    scrollAndFocusInAppMain(target, { block: 'start', behavior: 'instant' });
+    return this.document.activeElement === target;
+  }
+
+  /** Move focus before a server snapshot removes or disables its current control. */
+  private prepareEmbeddedResultFocus(next: QuickFeedbackResult | null): void {
+    if (!this.embeddedInSession() || this.tempoHelpOpen()) {
+      return;
+    }
+    const active = this.document.activeElement;
+    if (!(active instanceof HTMLElement) || !this.elementRef.nativeElement.contains(active)) {
+      return;
+    }
+    const previous = this.result();
+    const emptyControlDisappears = !previous && !!next && !!active.closest('[data-feedback-empty]');
+    const resultDisappears = !!previous && !next;
+    const selectedFormatDisables =
+      next?.type !== previous?.type &&
+      active.closest('[data-feedback-type]')?.getAttribute('data-feedback-type') === next?.type;
+    const roundActionDisappears =
+      !!active.closest('[data-feedback-round-transition]') &&
+      (Boolean(previous?.discussion) !== Boolean(next?.discussion) ||
+        (previous?.currentRound ?? 1) !== (next?.currentRound ?? 1) ||
+        next?.totalVotes === 0);
+    const resultControlDisappears =
+      !!active.closest('.feedback-host__results') &&
+      (previous?.type !== next?.type ||
+        Boolean(previous?.discussion) !== Boolean(next?.discussion));
+    if (
+      !emptyControlDisappears &&
+      !resultDisappears &&
+      !selectedFormatDisables &&
+      !roundActionDisappears &&
+      !resultControlDisappears
+    ) {
+      return;
+    }
+    const target =
+      !resultDisappears && this.roundSettingsContent()?.nativeElement.contains(active)
+        ? this.roundSettingsTrigger()?.nativeElement
+        : this.embeddedHeading()?.nativeElement;
+    this.focusEmbeddedTarget(target);
+  }
+
+  private beginEmbeddedRoundAction(): boolean {
+    if (!this.embeddedInSession()) {
+      return true;
+    }
+    if (this.roundActionBusy()) {
+      return false;
+    }
+    this.roundActionError.set(null);
+    this.roundActionPending.set(true);
+    return true;
+  }
+
+  private reportEmbeddedRoundActionFailure(): void {
+    if (this.embeddedInSession()) {
+      this.roundActionError.set(
+        $localize`:@@feedbackHost.roundActionFailed:Das Blitzlicht konnte nicht geändert werden. Bitte erneut versuchen.`,
+      );
+    }
+  }
 
   openProductFeedback(event: Event): void {
     const target = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
@@ -246,7 +348,8 @@ export class FeedbackHostComponent implements OnInit, OnDestroy {
       this.document.querySelector<HTMLElement>('[aria-controls="feedback-host-join-info"]');
     this.feedbackJoinFocusReturn = null;
     this.feedbackJoinPopoverOpen.set(false);
-    this.restoreFocus(focusReturn);
+    // The closing focus trap must finish before restoring the join trigger.
+    afterNextRender(() => this.restoreFocus(focusReturn), { injector: this.injector });
   }
 
   /** Wie Session-Host Kanal Blitzlicht: Beitritts-URL (hier Vote-Link) kopieren. */
@@ -436,6 +539,7 @@ export class FeedbackHostComponent implements OnInit, OnDestroy {
 
   private markFeedbackRoundMissing(code: string): void {
     this.hostResultLoad = 'missing';
+    this.prepareEmbeddedResultFocus(null);
     this.result.set(null);
     this.locked.set(false);
     if (!this.embeddedInSession()) {
@@ -527,6 +631,9 @@ export class FeedbackHostComponent implements OnInit, OnDestroy {
       return;
     }
 
+    if (!this.beginEmbeddedRoundAction()) {
+      return;
+    }
     this.liveResultsPending.set(true);
     this.result.set({ ...current, showLiveResults });
     try {
@@ -540,6 +647,7 @@ export class FeedbackHostComponent implements OnInit, OnDestroy {
       );
     } finally {
       this.liveResultsPending.set(false);
+      this.roundActionPending.set(false);
     }
   }
 
@@ -794,8 +902,10 @@ export class FeedbackHostComponent implements OnInit, OnDestroy {
 
   private restoreFocus(target: HTMLElement | null): void {
     queueMicrotask(() => {
-      if (target?.isConnected) {
+      if (target?.isConnected && !target.closest('[hidden], [inert]')) {
         target.focus({ preventScroll: true });
+      } else if (this.embeddedInSession()) {
+        this.focusEmbeddedTarget(this.embeddedHeading()?.nativeElement);
       }
     });
   }
@@ -806,10 +916,16 @@ export class FeedbackHostComponent implements OnInit, OnDestroy {
       return;
     }
 
+    if (!this.beginEmbeddedRoundAction()) {
+      return;
+    }
+
     try {
       await trpc.quickFeedback.startDiscussion.mutate({ sessionCode: code });
     } catch {
-      // best-effort
+      this.reportEmbeddedRoundActionFailure();
+    } finally {
+      this.roundActionPending.set(false);
     }
   }
 
@@ -819,10 +935,16 @@ export class FeedbackHostComponent implements OnInit, OnDestroy {
       return;
     }
 
+    if (!this.beginEmbeddedRoundAction()) {
+      return;
+    }
+
     try {
       await trpc.quickFeedback.startSecondRound.mutate({ sessionCode: code });
     } catch {
-      // best-effort
+      this.reportEmbeddedRoundActionFailure();
+    } finally {
+      this.roundActionPending.set(false);
     }
   }
 
@@ -832,13 +954,18 @@ export class FeedbackHostComponent implements OnInit, OnDestroy {
       return;
     }
 
+    if (!this.beginEmbeddedRoundAction()) {
+      return;
+    }
+
     this.resetting.set(true);
     try {
       await trpc.quickFeedback.reset.mutate({ sessionCode: code });
     } catch {
-      // best-effort
+      this.reportEmbeddedRoundActionFailure();
     } finally {
       this.resetting.set(false);
+      this.roundActionPending.set(false);
     }
   }
 
@@ -876,6 +1003,9 @@ export class FeedbackHostComponent implements OnInit, OnDestroy {
 
   async startRound(type: QuickFeedbackType): Promise<'applied' | 'blocked' | 'failed'> {
     const code = this.code();
+    if (this.embeddedInSession() && this.roundActionBusy()) {
+      return 'failed';
+    }
     if (this.shouldBlockTypeChange(type)) {
       const ref = this.snackBar.open(
         $localize`:@@feedback.compareRoundFormatHint:Formatwechsel gesperrt. Sobald Stimmen vorliegen oder die Vergleichsrunde läuft, bleibt das aktuelle Blitzlicht-Format aktiv. Für einen Wechsel setze das Blitzlicht zuerst zurück. Dabei werden alle bisherigen Stimmen gelöscht.`,
@@ -891,6 +1021,9 @@ export class FeedbackHostComponent implements OnInit, OnDestroy {
       return 'blocked';
     }
 
+    if (!this.beginEmbeddedRoundAction()) {
+      return 'failed';
+    }
     try {
       if (this.result() && code) {
         await trpc.quickFeedback.changeType.mutate({
@@ -920,7 +1053,10 @@ export class FeedbackHostComponent implements OnInit, OnDestroy {
       await this.router.navigate(localizeCommands(['feedback', res.sessionCode]));
       return 'applied';
     } catch {
+      this.reportEmbeddedRoundActionFailure();
       return 'failed';
+    } finally {
+      this.roundActionPending.set(false);
     }
   }
 
@@ -1089,10 +1225,11 @@ export class FeedbackHostComponent implements OnInit, OnDestroy {
 
   private applyHostResult(data: QuickFeedbackResult): void {
     const previousType = this.result()?.type ?? null;
+    this.prepareEmbeddedResultFocus(data);
     this.result.set(data);
     this.locked.set(data.locked);
     if (data.type === 'TEMPO' && previousType !== 'TEMPO') {
-      this.tempoViewMode.set(this.embeddedInSession() ? 'details' : 'trend');
+      this.tempoViewMode.set('trend');
     } else if (data.type !== 'TEMPO') {
       this.tempoViewMode.set('details');
     }

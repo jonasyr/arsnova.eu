@@ -15,13 +15,14 @@
  * PRIORITY_QUESTION_COUNT steuert, wie viele Demo-Fragen absichtlich ein
  * Fehlkonzept-Signal bekommen (max. Anzahl in PREFERRED_PRIORITY_ORDERS).
  * Die Assertion folgt der Produktregel (≥2 Personen und ≥10 % falsch+sicher).
+ * DEMO_QUIZ_HISTORY_SCOPE_ID kann für einen isolierten Lauf auf eine neue UUID gesetzt werden.
  *
  * Bestehende Session (Host-Token aus Browser-LocalStorage oder Backend minten):
  *   SESSION_CODE=XFNHXE HOST_TOKEN=... BASE_URL=http://localhost:4200 PARTICIPANTS=30 \
  *   npm run e2e:confidence-summary-demo -w @arsnova/frontend
  */
+import { randomUUID } from 'node:crypto';
 import { mkdir, readFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createTRPCProxyClient, httpBatchLink } from '@trpc/client';
@@ -30,7 +31,9 @@ import { kindergartenNickname } from '../../../scripts/load/lib/kindergarten-nic
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DEMO_QUIZ_JSON = join(__dirname, '../src/assets/demo/quiz-demo-showcase.de.json');
-const DEMO_QUIZ_HISTORY_SCOPE_ID = 'de500000-0000-4000-a000-000000000001';
+const DEMO_QUIZ_HISTORY_SCOPE_ID = (
+  process.env.DEMO_QUIZ_HISTORY_SCOPE_ID || 'de500000-0000-4000-a000-000000000001'
+).toLowerCase();
 const BASE_URL = String(process.env.BASE_URL || 'http://localhost:4200').replace(/\/+$/, '');
 const TRPC_URL = String(process.env.TRPC_URL || `${BASE_URL}/trpc`);
 const SESSION_CODE = String(process.env.SESSION_CODE || '')
@@ -49,7 +52,7 @@ if (
   throw new Error('PRIORITY_QUESTION_COUNT muss eine positive ganze Zahl sein.');
 }
 /** Fragen mit robustem Steuerpfad für Fehlkonzept-Hinweis (MC-Auslassung, Würfel). */
-const PREFERRED_PRIORITY_ORDERS = [9, 10];
+const PREFERRED_PRIORITY_ORDERS = [4, 5];
 /** Wie shared-types `isConfidenceDebriefRecommended`. */
 const CONFIDENCE_DEBRIEF_MIN_RESPONSES = 2;
 const CONFIDENCE_DEBRIEF_MIN_SHARE = 0.1;
@@ -60,16 +63,19 @@ const SKIP_HOST_UI = ['1', 'true', 'yes'].includes(
     .toLowerCase(),
 );
 const ARTIFACT_DIR =
-  process.env.E2E_ARTIFACT_DIR || join(tmpdir(), 'arsnova-confidence-summary-demo-e2e');
+  process.env.E2E_ARTIFACT_DIR || join('tmp', 'confidence-summary-demo-e2e', randomUUID());
 const HOST_SCREENSHOT = join(ARTIFACT_DIR, 'host-confidence-summary.png');
 const HOST_TOKEN_STORAGE_PREFIX = 'arsnova-host-token:';
 
-function createTrpcClient(hostToken) {
+function createTrpcClient(hostToken, participantCapability) {
   return createTRPCProxyClient({
     links: [
       httpBatchLink({
         url: TRPC_URL,
-        headers: hostToken ? () => ({ 'x-host-token': hostToken }) : undefined,
+        headers: () => ({
+          ...(hostToken ? { 'x-host-token': hostToken } : {}),
+          ...(participantCapability ? { 'x-participant-capability': participantCapability } : {}),
+        }),
       }),
     ],
   });
@@ -260,10 +266,10 @@ function buildVoteInput(participant, question, metadata, round, participantIndex
         } else {
           answerId = correctId;
         }
-      } else if (metadata.order === 2) {
+      } else if (metadata.order === 3) {
         // ~40 % falsch bei niedriger Sicherheit → „Grundlage erneut erklären“
         answerId = participantIndex % 5 < 2 ? wrongId : correctId;
-      } else if (metadata.order === 5) {
+      } else if (metadata.order === 6) {
         // Code-Sprache ohne Confidence: ~26 % richtig → empirisches Reteach
         answerId = participantIndex % 4 === 0 ? correctId : otherWrongId;
       } else {
@@ -322,7 +328,7 @@ function buildVoteInput(participant, question, metadata, round, participantIndex
                 : outsideBand[participantIndex % outsideBand.length],
           };
         }
-      } else if (metadata.order === 1) {
+      } else if (metadata.order === 2) {
         // π: Mehrheit exakt richtig, aber unsicher → absichern; wenige Ausreißer
         vote = {
           ...base,
@@ -400,7 +406,7 @@ function buildVoteInput(participant, question, metadata, round, participantIndex
         // Verbleibende Fehler unsicher — kein zusätzliches Fehlkonzept-Signal
         vote.confidenceValue = randomConfidenceValue(1, 2);
       }
-    } else if (metadata.order === 1) {
+    } else if (metadata.order === 2) {
       // Richtig, aber unsicher
       vote.confidenceValue = randomConfidenceValue(1, 2);
     } else {
@@ -410,10 +416,12 @@ function buildVoteInput(participant, question, metadata, round, participantIndex
   return vote;
 }
 
-async function submitVotes(publicTrpc, participants, question, metadata, round) {
+async function submitVotes(participants, question, metadata, round) {
   const settled = await Promise.allSettled(
     participants.map((participant, index) =>
-      publicTrpc.vote.submit.mutate(buildVoteInput(participant, question, metadata, round, index)),
+      createTrpcClient(undefined, participant.rejoinToken).vote.submit.mutate(
+        buildVoteInput(participant, question, metadata, round, index),
+      ),
     ),
   );
   const failures = settled.filter((result) => result.status === 'rejected');
@@ -457,10 +465,10 @@ function buildSessionFeedbackInput(participant, participantIndex, code) {
   };
 }
 
-async function submitSessionFeedback(publicTrpc, participants, code) {
+async function submitSessionFeedback(participants, code) {
   const settled = await Promise.allSettled(
     participants.map((participant, index) =>
-      publicTrpc.session.submitSessionFeedback.mutate(
+      createTrpcClient(undefined, participant.rejoinToken).session.submitSessionFeedback.mutate(
         buildSessionFeedbackInput(participant, index, code),
       ),
     ),
@@ -628,10 +636,10 @@ async function verifyHostUiAndCsv(code, hostToken, expectedResponses, expectedPr
     });
     const bodyText = await waitForBodyText(
       page,
-      /Lernstand und Selbsteinschätzung[\s\S]*Fehlkonzept-Risiko/,
+      /Lernstand und Selbsteinschätzung[\s\S]*Fehlkonzept-Hinweis/,
     );
-    if (!bodyText.includes('Session beendet')) {
-      throw new Error('Host-UI zeigt den FINISHED-Abschluss nicht an.');
+    if ((await page.locator('#session-finished-heading').innerText()).trim() !== 'Quiz beendet') {
+      throw new Error('Host-UI zeigt den Quizabschluss ohne globales Host-Ende nicht an.');
     }
     if (!bodyText.includes(`Antworten mit Selbsteinschätzung: ${expectedResponses}`)) {
       throw new Error(
@@ -674,13 +682,9 @@ async function verifyHostUiAndCsv(code, hostToken, expectedResponses, expectedPr
       .locator('.session-host__finished-confidence-question-markdown')
       .filter({ hasText: 'Welche dieser Einsätze eignen sich gut' })
       .first();
-    await renderedQuestion.locator('h3').waitFor({ state: 'visible', timeout: 10_000 });
+    await renderedQuestion.locator('h4').waitFor({ state: 'visible', timeout: 10_000 });
     const renderedQuestionText = await renderedQuestion.innerText();
-    if (
-      !renderedQuestionText.includes(
-        'Unterrichtsidee: Nutze das, um Multiple Choice mit mehreren richtigen Antworten zu zeigen.',
-      )
-    ) {
+    if (!renderedQuestionText.includes('Mehrere Antworten möglich.')) {
       throw new Error(
         'Der vollständige Markdown-Fragentext wird in der Auswertung nicht gerendert.',
       );
@@ -710,7 +714,7 @@ async function verifyHostUiAndCsv(code, hostToken, expectedResponses, expectedPr
     await page.screenshot({ path: HOST_SCREENSHOT, fullPage: true });
 
     const downloadPromise = page.waitForEvent('download', { timeout: 30_000 });
-    await page.getByRole('button', { name: 'Weitere Exportoptionen' }).click();
+    await page.getByRole('button', { name: 'Exportieren', exact: true }).click();
     await page.getByRole('menuitem', { name: /Rohdaten als CSV exportieren/i }).click();
     const download = await downloadPromise;
     const downloadPath = await download.path();
@@ -720,7 +724,7 @@ async function verifyHostUiAndCsv(code, hostToken, expectedResponses, expectedPr
     const csv = await readFile(downloadPath, 'utf8');
     for (const expected of [
       'Selbsteinschätzung n',
-      'Fehlkonzept-Risiko',
+      'Fehlkonzept-Hinweis',
       'Häufigste selbstsicher falsche Antwort',
       'Lernstand und Selbsteinschätzung',
       'Gültige Antworten;Ausgewertete Fragen',
@@ -797,12 +801,13 @@ async function run() {
         code,
         nickname: kindergartenNickname(index),
         anonymousClientId: globalThis.crypto.randomUUID(),
+        joinIdempotencyKey: globalThis.crypto.randomUUID(),
       }),
   );
 
   for (const metadata of uploadPayload.questions) {
     const question = await openQuestion(hostTrpc, publicTrpc, code);
-    await submitVotes(publicTrpc, participants, question, metadata, 1);
+    await submitVotes(participants, question, metadata, 1);
     if (metadata.numericTwoRounds === true) {
       await hostTrpc.session.startDiscussion.mutate({ code });
       await hostTrpc.session.startSecondRound.mutate({ code });
@@ -810,7 +815,7 @@ async function run() {
       const roundTwoQuestion = await publicTrpc.session.getCurrentQuestionForStudent.query({
         code,
       });
-      await submitVotes(publicTrpc, participants, roundTwoQuestion, metadata, 2);
+      await submitVotes(participants, roundTwoQuestion, metadata, 2);
     }
     await hostTrpc.session.revealResults.mutate({ code });
     await sleep(VOTE_COOLDOWN_MS);
@@ -819,7 +824,7 @@ async function run() {
   const finished = await hostTrpc.session.nextQuestion.mutate({ code });
   assertEqual(finished.status, 'FINISHED', 'Session-Status');
 
-  await submitSessionFeedback(publicTrpc, participants, code);
+  await submitSessionFeedback(participants, code);
   const feedbackSummary = await publicTrpc.session.getSessionFeedbackSummary.query({ code });
   validateFeedbackSummary(feedbackSummary);
 
@@ -883,6 +888,7 @@ async function run() {
       2,
     ),
   );
+  if (hostUiStatus.startsWith('warn:')) process.exitCode = 1;
 }
 
 run().catch((error) => {

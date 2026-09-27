@@ -304,6 +304,8 @@ async function firstQaCardContains(page, snippet) {
 
 async function seedRankedQaBoardAndAssertHostViews(page, hostTrpc, created, failures) {
   await dismissJoinOverlay(page);
+  const qaTools = page.getByTestId('qa-tools-toggle');
+  if ((await qaTools.getAttribute('aria-expanded')) !== 'true') await qaTools.click();
   const seeded = await seedRankedQaBoard(hostTrpc, created);
   await revealLatestQaQuestions(page);
   await page.getByText(RANKED_QUESTIONS.controversial, { exact: false }).first().waitFor({

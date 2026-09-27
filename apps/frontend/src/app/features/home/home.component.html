@@ -182,15 +182,56 @@
       <p class="home-section-eyebrow" i18n="@@homeHostIntro.eyebrow">
         Für Lehrende und Vortragende
       </p>
-      <h2 id="home-host-title" class="home-host-intro__title" i18n="@@homeHostIntro.title">
-        Was möchtest du tun?
+      <h2 id="home-host-title" class="home-host-intro__title" i18n="@@homeScenario.title">
+        Was hast du heute vor?
       </h2>
+    </section>
+
+    <section
+      class="home-scenario"
+      aria-labelledby="home-host-title"
+      [attr.inert]="syncLinkVisible() ? '' : null"
+    >
+      <div class="home-scenario__options">
+        <button
+          type="button"
+          matButton="outlined"
+          class="home-scenario__option"
+          [attr.aria-pressed]="hostScenario.preference() === 'CLASSROOM'"
+          (click)="selectHostScenario('CLASSROOM', $event)"
+          i18n="@@homeScenario.classroom"
+        >
+          Meinen Kurs begleiten
+        </button>
+        <button
+          type="button"
+          matButton="outlined"
+          class="home-scenario__option"
+          [attr.aria-pressed]="hostScenario.preference() === 'EVENT'"
+          (click)="selectHostScenario('EVENT', $event)"
+          i18n="@@homeScenario.event"
+        >
+          Eine Veranstaltung moderieren
+        </button>
+        <button
+          type="button"
+          matButton="outlined"
+          class="home-scenario__option"
+          [attr.aria-pressed]="hostScenario.preference() === 'QUICK'"
+          (click)="selectHostScenario('QUICK', $event)"
+          i18n="@@homeScenario.quick"
+        >
+          Schnell ein Format einsetzen
+        </button>
+      </div>
     </section>
 
     <div class="home-host-stack">
       <mat-card
         appearance="raised"
+        id="home-host-quiz"
         class="home-card home-card--create home-card--stage-side"
+        [class.home-card--scenario-selected]="hostScenario.preference() === 'CLASSROOM'"
         [class.home-card--sync-open]="syncLinkVisible()"
       >
         <mat-card-header class="home-card__header">
@@ -200,7 +241,14 @@
             </span>
             <div class="home-card__header-copy">
               <p class="home-card__eyebrow" i18n="@@homeQuizCard.eyebrow">Fragen ans Publikum</p>
-              <h3 mat-card-title class="home-card__title" i18n="@@homeHero.channelQuiz">Quiz</h3>
+              <h3
+                mat-card-title
+                class="home-card__title home-card__scenario-focus-target"
+                tabindex="-1"
+                i18n="@@homeHero.channelQuiz"
+              >
+                Quiz
+              </h3>
             </div>
           </div>
         </mat-card-header>
@@ -209,7 +257,7 @@
           <div class="home-card__cta-stack" [attr.inert]="syncLinkVisible() ? '' : null">
             @if (hasHostedQuiz()) {
               <a
-                matButton="filled"
+                [matButton]="hostScenario.preference() === 'EVENT' ? 'tonal' : 'filled'"
                 [routerLink]="localizedPath('/quiz')"
                 [queryParams]="{ startLiveQuiz: latestHostedQuizId() }"
                 class="home-cta home-choice-button home-live-last-quiz"
@@ -247,7 +295,11 @@
                 </span>
               </a>
               <a
-                matButton="outlined"
+                [matButton]="
+                  hostScenario.preference() === 'CLASSROOM' && !hasHostedQuiz()
+                    ? 'filled'
+                    : 'outlined'
+                "
                 [routerLink]="localizedPath('/quiz')"
                 class="home-cta home-cta--secondary home-choice-button home-library-button"
                 (mouseenter)="preloadQuiz()"
@@ -255,9 +307,13 @@
                 [matBadgeHidden]="quizCount() === 0"
               >
                 <span class="home-choice-button__copy">
-                  <span class="home-choice-button__label" i18n="@@homeHostCard.libraryCta"
-                    >Quiz-Sammlung öffnen</span
-                  >
+                  <span class="home-choice-button__label">
+                    @if (hostScenario.preference() === 'CLASSROOM') {
+                      <span i18n="@@homeScenario.selectQuiz">Quiz auswählen</span>
+                    } @else {
+                      <span i18n="@@homeHostCard.libraryCta">Quiz-Sammlung öffnen</span>
+                    }
+                  </span>
                   <span
                     class="home-choice-button__description"
                     i18n="@@homeHostCard.libraryCtaDescription"
@@ -368,7 +424,9 @@
 
       <mat-card
         appearance="raised"
+        id="home-host-qa"
         class="home-card home-card--live home-card--stage-side"
+        [class.home-card--scenario-selected]="hostScenario.preference() === 'EVENT'"
         [attr.inert]="syncLinkVisible() ? '' : null"
       >
         <mat-card-header class="home-card__header">
@@ -378,7 +436,14 @@
             </span>
             <div class="home-card__header-copy">
               <p class="home-card__eyebrow" i18n="@@homeQaCard.eyebrow">Fragen vom Publikum</p>
-              <h3 mat-card-title class="home-card__title" i18n="@@homeHero.channelQa">Q&amp;A</h3>
+              <h3
+                mat-card-title
+                class="home-card__title home-card__scenario-focus-target"
+                tabindex="-1"
+                i18n="@@homeHero.channelQa"
+              >
+                Q&amp;A
+              </h3>
             </div>
           </div>
         </mat-card-header>
@@ -390,7 +455,30 @@
               i18n-aria-label="@@homeLiveCard.openHostSessionsAria"
               aria-label="Deine Q&amp;A-Sessions"
             >
-              @for (item of hostSessionCtas(); track item.code) {
+              @if (hostSessionMenuCtas().length > 0) {
+                <li class="home-host-session-cta-row__item home-host-session-cta-row__menu-trigger">
+                  <button
+                    #hostSessionMenuTrigger="matMenuTrigger"
+                    matButton="outlined"
+                    type="button"
+                    class="home-cta home-choice-button home-cta--secondary home-library-button"
+                    data-testid="home-host-session-menu-trigger"
+                    [matMenuTriggerFor]="hostSessionMenu"
+                  >
+                    <span class="home-choice-button__copy">
+                      <span class="home-choice-button__label">
+                        <span class="home-host-session-cta__dot" aria-hidden="true"></span>
+                        <span i18n="@@homeLiveCard.openHostSessionsAria"
+                          >Deine Q&amp;A-Sessions</span
+                        >
+                        <span>({{ hostSessionMenuCtas().length }})</span>
+                      </span>
+                    </span>
+                    <mat-icon aria-hidden="true">expand_more</mat-icon>
+                  </button>
+                </li>
+              }
+              @for (item of directHostSessionCtas(); track item.code) {
                 <li class="home-host-session-cta-row__item">
                   <a
                     matButton="outlined"
@@ -443,24 +531,85 @@
                 </li>
               }
             </ul>
+            <mat-menu #hostSessionMenu="matMenu" class="home-host-session-menu">
+              @for (item of hostSessionMenuCtas(); track item.code) {
+                <a
+                  mat-menu-item
+                  [routerLink]="hostSessionCtaLink(item.code)"
+                  [queryParams]="{ tab: 'qa' }"
+                  class="home-host-session-menu__open"
+                  data-testid="home-host-recovery-menu"
+                  [attr.data-session-code]="item.code"
+                  [attr.aria-label]="hostSessionCtaLabel(item.code)"
+                  [attr.aria-describedby]="'home-host-session-menu-facts-' + item.code"
+                >
+                  <span class="home-host-session-menu__label">
+                    <span class="home-host-session-cta__dot" aria-hidden="true"></span>
+                    {{ hostSessionCtaLabel(item.code) }}
+                  </span>
+                  <span
+                    class="home-host-session-menu__facts"
+                    [attr.id]="'home-host-session-menu-facts-' + item.code"
+                  >
+                    <span>{{ hostSessionCtaDescription(item.deadlineLabel) }}</span>
+                    @if (hostSessionCtaOpenDescription(item); as openLabel) {
+                      <span>{{ openLabel }}</span>
+                    }
+                    @if (hostSessionCtaQuestionDescription(item); as questionLabel) {
+                      <span>{{ questionLabel }}</span>
+                    }
+                  </span>
+                </a>
+                <button
+                  mat-menu-item
+                  type="button"
+                  class="home-host-session-menu__remove"
+                  data-testid="home-host-session-menu-remove"
+                  [attr.data-session-code]="item.code"
+                  [attr.aria-label]="hostSessionCtaRemoveAria(item)"
+                  [disabled]="hostSessionCtaBusy()"
+                  (click)="removeHostSessionCta(item, $event, true)"
+                >
+                  <mat-icon aria-hidden="true">delete_outline</mat-icon>
+                  <span>{{ hostSessionCtaRemoveAria(item) }}</span>
+                </button>
+              }
+            </mat-menu>
           }
           <div class="home-live-grid">
             <button
-              matButton="tonal"
+              [matButton]="hostScenario.preference() === 'EVENT' ? 'filled' : 'tonal'"
               type="button"
               class="home-cta home-cta--secondary home-choice-button home-prepare-create"
               data-testid="home-live-qa-create"
               (click)="openHeroHostTab('qa')"
               [disabled]="!!hostSessionStarting()"
+              [disabledInteractive]="true"
               [attr.aria-busy]="hostSessionStarting() === 'qa' ? 'true' : null"
             >
               <span class="home-choice-button__copy">
-                <span class="home-choice-button__label" i18n="@@homeLiveCard.qaCreateLabel"
-                  >Neue Q&amp;A-Session</span
-                >
-                <span class="home-choice-button__description" i18n="@@homeLiveCard.qaDescription"
-                  >Fragen &amp; Wortwolke</span
-                >
+                <span class="home-choice-button__label">
+                  @if (hostScenario.preference() === 'CLASSROOM') {
+                    <span i18n="@@homeScenario.classroomQa">Fragen aus dem Kurs sammeln</span>
+                  } @else if (hostScenario.preference() === 'EVENT') {
+                    <span i18n="@@homeScenario.eventQa">Fragen sammeln</span>
+                  } @else {
+                    <span i18n="@@homeLiveCard.qaCreateLabel">Neue Q&amp;A-Session</span>
+                  }
+                </span>
+                <span class="home-choice-button__description">
+                  @if (hostScenario.preference() === 'CLASSROOM') {
+                    <span i18n="@@homeScenario.classroomQaDescription"
+                      >Gemeinsam Unklarheiten klären</span
+                    >
+                  } @else if (hostScenario.preference() === 'EVENT') {
+                    <span i18n="@@homeScenario.eventQaDescription"
+                      >Publikumsfragen für deine Veranstaltung</span
+                    >
+                  } @else {
+                    <span i18n="@@homeLiveCard.qaDescription">Fragen &amp; Wortwolke</span>
+                  }
+                </span>
               </span>
               @if (hostSessionStarting() === 'qa') {
                 <mat-icon class="home-choice-button__busy home-spin" aria-hidden="true"
@@ -468,6 +617,29 @@
                 >
               }
             </button>
+            @if (hostScenario.preference() === 'EVENT') {
+              <button
+                matButton="outlined"
+                type="button"
+                class="home-cta home-cta--secondary home-choice-button"
+                data-testid="home-event-both"
+                (click)="openHeroHostTab('qa', undefined, true)"
+                [disabled]="!!hostSessionStarting()"
+                [disabledInteractive]="true"
+                [attr.aria-busy]="hostSessionStarting() === 'qa' ? 'true' : null"
+              >
+                <span class="home-choice-button__copy">
+                  <span class="home-choice-button__label" i18n="@@homeScenario.eventBoth"
+                    >Beides</span
+                  >
+                  <span
+                    class="home-choice-button__description"
+                    i18n="@@homeScenario.eventBothDescription"
+                    >Q&amp;A und Blitzlicht vorbereiten</span
+                  >
+                </span>
+              </button>
+            }
           </div>
           @if (!showHostRecoveryCta()) {
             <p class="home-qa-session-ghost" data-testid="home-qa-session-ghost">
@@ -496,6 +668,7 @@
         appearance="raised"
         id="host-quick-feedback"
         class="home-card home-card--feedback home-card--stage-side"
+        [class.home-card--scenario-selected]="hostScenario.preference() === 'QUICK'"
         [attr.inert]="syncLinkVisible() ? '' : null"
       >
         <mat-card-header class="home-card__header">
@@ -507,7 +680,12 @@
               <p class="home-card__eyebrow" i18n="@@homeBlitzlichtCard.eyebrow">
                 Feedback vom Publikum
               </p>
-              <h3 mat-card-title class="home-card__title" i18n="@@homeHero.channelBlitzlicht">
+              <h3
+                mat-card-title
+                class="home-card__title home-card__scenario-focus-target"
+                tabindex="-1"
+                i18n="@@homeHero.channelBlitzlicht"
+              >
                 Blitzlicht
               </h3>
             </div>
@@ -515,12 +693,27 @@
         </mat-card-header>
 
         <mat-card-content class="home-card__content">
+          @if (hostScenario.preference() === 'EVENT') {
+            <button
+              matButton="outlined"
+              type="button"
+              class="home-cta home-cta--secondary home-choice-button home-scenario-feedback"
+              data-testid="home-event-feedback"
+              (click)="startSessionBoundQuickFeedback('TEMPO')"
+              [disabled]="!!hostSessionStarting()"
+              [attr.aria-busy]="hostSessionStarting() === 'quickFeedback' ? 'true' : null"
+              i18n="@@homeScenario.eventFeedback"
+            >
+              Stimmung/Tempo erfassen
+            </button>
+          }
           <div class="home-feedback-chip-grid">
             @for (chip of quickFeedbackPresetChips; track chip.type) {
               <button
                 matButton="tonal"
                 type="button"
                 class="home-feedback-chip"
+                [class.home-feedback-chip--yes-no]="chip.type === 'YESNO'"
                 (click)="startSessionBoundQuickFeedback(chip.type)"
                 [disabled]="!!hostSessionStarting()"
                 [attr.aria-busy]="sessionBoundFeedbackType() === chip.type"

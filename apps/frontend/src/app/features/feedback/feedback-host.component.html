@@ -1,3 +1,24 @@
+@if (embeddedInSession()) {
+  <h2
+    #embeddedHeading
+    class="feedback-host__title feedback-host__workspace-title app-content-focus-target"
+    tabindex="-1"
+  >
+    @if (result(); as data) {
+      {{ feedbackTitle(data.type) }}
+    } @else {
+      <span i18n="@@sessionTabs.quickFeedback">Blitzlicht</span>
+    }
+  </h2>
+  <p class="feedback-host__action-status" role="status" aria-live="polite">
+    @if (roundActionPending()) {
+      <span i18n="@@feedbackHost.roundActionPending">Blitzlicht wird aktualisiert …</span>
+    }
+  </p>
+  @if (roundActionError(); as message) {
+    <p class="feedback-host__action-error" role="alert">{{ message }}</p>
+  }
+}
 @if (!embeddedInSession()) {
   <div class="feedback-host__product-feedback-utility">
     <button mat-button type="button" (click)="openProductFeedback($event)">
@@ -10,37 +31,29 @@
   <mat-card
     appearance="outlined"
     class="session-channel-card app-live-channel-shell"
+    data-feedback-empty
     [class.session-channel-card--embedded-feedback]="embeddedInSession()"
   >
     <mat-card-content
       class="session-channel-card__content session-channel-card__content--blitz-head"
     >
-      <div class="session-channel-card__header">
-        <span class="session-channel-card__header-lead-icon" aria-hidden="true">
-          <mat-icon>bolt</mat-icon>
-        </span>
-        <div class="session-channel-card__header-main">
-          <p class="session-channel-card__eyebrow" i18n="@@sessionTabs.quickFeedback">Blitzlicht</p>
-          @if (!embeddedInSession()) {
-            <h2 class="session-channel-card__title" i18n="@@sessionTabs.quickFeedbackHostTitle">
-              Blitzlicht direkt starten
-            </h2>
-          }
-        </div>
-      </div>
       <p class="session-channel-card__text" i18n="@@sessionTabs.quickFeedbackHostPlaceholder">
         Wähle ein Format – in Sekunden siehst du die Stimmung.
       </p>
       <button
         type="button"
         class="feedback-host__tempo-spotlight"
+        data-testid="feedback-empty-tempo"
+        [attr.aria-disabled]="roundActionBusy()"
         (click)="startRound(tempoSpotlight.type)"
         [attr.aria-label]="tempoSpotlight.actionLabel"
       >
         <span class="feedback-host__tempo-spotlight-copy">
-          <span class="feedback-host__tempo-spotlight-eyebrow">{{
-            tempoHostSpotlightEyebrow
-          }}</span>
+          <span
+            class="feedback-host__tempo-spotlight-eyebrow"
+            i18n="@@feedbackHost.tempoRecommended"
+            >Empfohlen: Tempo</span
+          >
           <span class="feedback-host__tempo-spotlight-title">{{ tempoSpotlight.title }}</span>
           <span class="feedback-host__tempo-spotlight-text">{{ tempoSpotlight.description }}</span>
         </span>
@@ -54,39 +67,21 @@
           <span>{{ tempoHostSpotlightActionLabel }}</span>
         </span>
       </button>
-      <div class="feedback-host__template-switch">
+      <div
+        class="feedback-host__template-switch feedback-host__template-switch--empty"
+        data-testid="feedback-empty-formats"
+      >
         @for (chip of presetChips; track chip.type) {
           <button
             mat-button
             type="button"
             class="feedback-host__template-action"
+            [attr.aria-disabled]="roundActionBusy()"
+            [attr.data-feedback-type]="chip.type"
             (click)="startRound(chip.type)"
             [attr.aria-label]="chip.label"
           >
-            <span
-              class="feedback-host__template-icons"
-              [class.feedback-host__template-icons--rating]="chip.type === 'STARS'"
-              aria-hidden="true"
-            >
-              @for (icon of chip.icons; track icon) {
-                @if (icon.kind === 'mat') {
-                  <mat-icon
-                    class="feedback-host__template-icon"
-                    [class.feedback-host__template-icon--positive]="icon.tone === 'positive'"
-                    [class.feedback-host__template-icon--negative]="icon.tone === 'negative'"
-                    [class.feedback-host__template-icon--neutral]="icon.tone === 'neutral'"
-                    [class.feedback-host__template-icon--rating]="icon.tone === 'rating'"
-                  >
-                    {{ icon.value }}
-                  </mat-icon>
-                } @else {
-                  <span class="feedback-host__template-icon">{{ icon.value }}</span>
-                }
-              }
-            </span>
-            @if (chip.showLabel !== false) {
-              <span class="feedback-host__template-label">{{ chip.label }}</span>
-            }
+            <span class="feedback-host__template-label">{{ chip.label }}</span>
           </button>
         }
       </div>
@@ -110,6 +105,9 @@
           color="primary"
           type="button"
           class="feedback-host__next-round-cta"
+          data-feedback-round-transition
+          data-testid="feedback-second-round"
+          [attr.aria-disabled]="roundActionBusy()"
           (click)="startSecondRound()"
           i18n-aria-label="@@feedback.secondRoundStartAria"
           aria-label="Zweite Abstimmung starten"
@@ -123,6 +121,9 @@
             mat-button
             type="button"
             (click)="startDiscussion()"
+            data-feedback-round-transition
+            data-testid="feedback-compare-round"
+            [attr.aria-disabled]="roundActionBusy()"
             i18n-aria-label="@@feedback.compareRoundStartAria"
             aria-label="Vergleichsrunde starten"
           >
@@ -149,7 +150,9 @@
         mat-button
         type="button"
         (click)="resetRound()"
-        [disabled]="resetting()"
+        [disabled]="resetting() || (embeddedInSession() && roundActionBusy())"
+        [disabledInteractive]="embeddedInSession()"
+        data-testid="feedback-reset-round"
         i18n-aria-label="@@feedback.resetResultsAria"
         aria-label="Ergebnisse zurücksetzen"
       >
@@ -192,6 +195,8 @@
         class="feedback-host__tempo-spotlight feedback-host__tempo-spotlight--compact"
         [class.feedback-host__tempo-spotlight--active]="data.type === 'TEMPO'"
         [disabled]="data.type === 'TEMPO'"
+        [attr.aria-disabled]="data.type === 'TEMPO' || (embeddedInSession() && roundActionBusy())"
+        data-feedback-type="TEMPO"
         (click)="startRound(tempoSpotlight.type)"
         [attr.aria-label]="tempoSpotlight.actionLabel"
       >
@@ -218,6 +223,10 @@
           class="feedback-host__template-action"
           [class.feedback-host__template-action--active]="data.type === chip.type"
           [disabled]="data.type === chip.type"
+          [attr.aria-disabled]="
+            data.type === chip.type || (embeddedInSession() && roundActionBusy())
+          "
+          [attr.data-feedback-type]="chip.type"
           (click)="startRound(chip.type)"
           [attr.aria-label]="chip.label"
         >
@@ -251,7 +260,9 @@
     <div class="feedback-host__presentation-setting">
       <mat-slide-toggle
         [checked]="showLiveResults()"
-        [disabled]="liveResultsPending()"
+        [disabled]="liveResultsPending() || (embeddedInSession() && roundActionBusy())"
+        [disabledInteractive]="embeddedInSession()"
+        data-testid="feedback-live-results"
         (change)="setLiveResults($event.checked)"
         i18n="@@feedback.showLiveResults"
       >
@@ -278,12 +289,8 @@
     [attr.inert]="tempoHelpOpen() ? '' : null"
   >
     <div class="feedback-host__wrapper">
-      <section
-        class="feedback-host__join"
-        [class.feedback-host__join--embedded]="embeddedInSession()"
-        [class.feedback-host__join--standalone-shell]="!embeddedInSession()"
-      >
-        @if (!embeddedInSession()) {
+      @if (!embeddedInSession()) {
+        <section class="feedback-host__join feedback-host__join--standalone-shell">
           <div class="feedback-host__join-panel">
             <section class="feedback-host__standalone-live-banner">
               <div class="feedback-host__standalone-live-main">
@@ -302,11 +309,9 @@
                     <mat-icon aria-hidden="true">qr_code_2</mat-icon>
                   </button>
                   <div class="feedback-host__standalone-code-block">
-                    <p
-                      class="feedback-host__standalone-code"
-                      [attr.aria-label]="sessionCodeDisplayAria(code())"
-                    >
-                      {{ code() }}
+                    <p class="feedback-host__standalone-code">
+                      <span class="sr-only">{{ sessionCodeDisplayAria(code()) }}</span>
+                      <span aria-hidden="true">{{ code() }}</span>
                     </p>
                   </div>
                 </div>
@@ -353,9 +358,9 @@
                       </p>
                       <p
                         class="feedback-host__join-menu-origin feedback-host__join-menu-origin--code"
-                        [attr.aria-label]="sessionCodeDisplayAria(code())"
                       >
-                        <strong class="feedback-host__join-menu-origin-text">
+                        <span class="sr-only">{{ sessionCodeDisplayAria(code()) }}</span>
+                        <strong class="feedback-host__join-menu-origin-text" aria-hidden="true">
                           {{ code() }}
                         </strong>
                       </p>
@@ -390,14 +395,14 @@
             }
             <ng-container *ngTemplateOutlet="feedbackHostJoinActions" />
           </div>
-        } @else {
-          <ng-container *ngTemplateOutlet="feedbackHostJoinActions" />
-        }
-      </section>
+        </section>
+      }
 
       <section class="feedback-host__results">
         <div class="feedback-host__title-row">
-          <h2 class="feedback-host__title">{{ feedbackTitle(data.type) }}</h2>
+          @if (!embeddedInSession()) {
+            <h2 class="feedback-host__title">{{ feedbackTitle(data.type) }}</h2>
+          }
           @if (data.type === 'TEMPO' && tempoViewMode() === 'details') {
             <button
               mat-icon-button
@@ -860,6 +865,40 @@
           </div>
         }
       </section>
+      @if (embeddedInSession()) {
+        <div class="feedback-host__round-primary">
+          <ng-content select="[feedbackRoundControl]" />
+        </div>
+        <section class="feedback-host__round-settings">
+          <button
+            #roundSettingsTrigger
+            mat-button
+            type="button"
+            class="feedback-host__round-settings-trigger"
+            data-testid="feedback-round-settings-trigger"
+            id="feedback-round-settings-trigger"
+            aria-controls="feedback-round-settings"
+            [attr.aria-expanded]="roundSettingsOpen()"
+            (click)="toggleRoundSettings()"
+          >
+            <mat-icon aria-hidden="true">{{
+              roundSettingsOpen() ? 'expand_less' : 'expand_more'
+            }}</mat-icon>
+            <span i18n="@@feedbackHost.roundSettings">Rundeneinstellungen</span>
+          </button>
+          <div
+            #roundSettingsContent
+            id="feedback-round-settings"
+            data-testid="feedback-round-settings"
+            class="feedback-host__round-settings-content"
+            role="region"
+            aria-labelledby="feedback-round-settings-trigger"
+            [hidden]="!roundSettingsOpen()"
+          >
+            <ng-container *ngTemplateOutlet="feedbackHostJoinActions" />
+          </div>
+        </section>
+      }
     </div>
     @if (showStandaloneBottomActionBar()) {
       <div

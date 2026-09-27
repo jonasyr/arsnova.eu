@@ -129,6 +129,7 @@ import {
   EMOJI_REACTIONS,
   DEFAULT_TEAM_COUNT,
   DEMO_QUIZ_HISTORY_SCOPE_ID,
+  isDemoQuizHistoryScopeId,
   NicknameThemeEnum,
   SHORT_TEXT_DEFAULT_EVALUATION_MODE,
   SHORT_TEXT_DEFAULT_TOLERANCE_LEVEL,
@@ -2910,9 +2911,14 @@ async function resolveLastFinishedSessionCodeForQuiz(
   return session.code;
 }
 
-async function collectAuthorizedQuizHistoryIds(
+type AuthorizedQuizHistoryLookup = {
+  requestedQuizId: string;
+  scopedQuizIds: string[];
+};
+
+async function collectAuthorizedQuizHistoryLookups(
   entries: Array<{ quizId: string; accessProof: string }>,
-): Promise<string[]> {
+): Promise<AuthorizedQuizHistoryLookup[]> {
   if (entries.length === 0) {
     return [];
   }
@@ -2923,19 +2929,62 @@ async function collectAuthorizedQuizHistoryIds(
     select: quizHistoryAccessQuizSelect,
   });
 
-  const proofByQuizId = new Map<string, Buffer>();
+  const quizById = new Map<string, (typeof quizzes)[number]>();
   for (const quiz of quizzes) {
-    proofByQuizId.set(quiz.id, await createQuizHistoryProofBuffer(quiz));
+    quizById.set(quiz.id, quiz);
   }
 
-  return entries.flatMap((entry) => {
-    const expectedProof = proofByQuizId.get(entry.quizId);
+  const authorized: Array<{ requestedQuizId: string; historyScopeId: string | null }> = [];
+  const seenRequestedQuizIds = new Set<string>();
+  for (const entry of entries) {
+    if (seenRequestedQuizIds.has(entry.quizId)) {
+      continue;
+    }
+    const quiz = quizById.get(entry.quizId);
+    const expectedProof = quiz ? await createQuizHistoryProofBuffer(quiz) : null;
     const providedProof = normalizeQuizHistoryAccessProof(entry.accessProof);
     if (!expectedProof || !quizHistoryProofsMatch(expectedProof, providedProof)) {
-      return [];
+      continue;
     }
-    return [entry.quizId];
-  });
+    seenRequestedQuizIds.add(entry.quizId);
+    authorized.push({
+      requestedQuizId: entry.quizId,
+      historyScopeId: quiz?.historyScopeId ?? null,
+    });
+  }
+
+  const historyScopeIds = [
+    ...new Set(
+      authorized
+        .map((entry) => entry.historyScopeId)
+        .filter(
+          (scopeId): scopeId is string =>
+            typeof scopeId === 'string' && scopeId !== DEMO_QUIZ_HISTORY_SCOPE_ID,
+        ),
+    ),
+  ];
+  const scopedQuizzes =
+    historyScopeIds.length > 0
+      ? await prisma.quiz.findMany({
+          where: { historyScopeId: { in: historyScopeIds } },
+          select: { id: true, historyScopeId: true },
+        })
+      : [];
+  const quizIdsByHistoryScope = new Map<string, string[]>();
+  for (const quiz of scopedQuizzes) {
+    if (!quiz.historyScopeId) continue;
+    const known = quizIdsByHistoryScope.get(quiz.historyScopeId) ?? [];
+    known.push(quiz.id);
+    quizIdsByHistoryScope.set(quiz.historyScopeId, known);
+  }
+
+  return authorized.map((entry) => ({
+    requestedQuizId: entry.requestedQuizId,
+    scopedQuizIds:
+      entry.historyScopeId && entry.historyScopeId !== DEMO_QUIZ_HISTORY_SCOPE_ID
+        ? (quizIdsByHistoryScope.get(entry.historyScopeId) ?? [entry.requestedQuizId])
+        : [entry.requestedQuizId],
+  }));
 }
 
 function generateSessionCode(): string {
@@ -3158,7 +3207,7 @@ function canBootstrapDemoQuizTeamsOntoTeamlessSession(
   quiz: { historyScopeId?: string | null },
 ): boolean {
   return (
-    quiz.historyScopeId === DEMO_QUIZ_HISTORY_SCOPE_ID &&
+    isDemoQuizHistoryScopeId(quiz.historyScopeId) &&
     !sessionProfile.teamMode &&
     quizProfile.teamMode &&
     quizProfile.teamAssignment === 'AUTO'
@@ -9353,15 +9402,18 @@ const sessionCoreRouter = router({
       return null;
     }),
 
-  /** Quiz-IDs mit laufender Session, begrenzt auf authorisierte Quizkopien aus der Sammlung. */
+  /** Angefragte Quiz-IDs mit laufenden Sessions ihrer autorisierten Quiz-Historie. */
   getActiveQuizIds: publicProcedure
     .input(GetActiveQuizIdsInputSchema)
     .output(ActiveQuizLiveStatesDTOSchema)
     .query(async ({ input }) => {
-      const authorizedQuizIds = await collectAuthorizedQuizHistoryIds(input);
-      if (authorizedQuizIds.length === 0) {
+      const authorizedLookups = await collectAuthorizedQuizHistoryLookups(input);
+      if (authorizedLookups.length === 0) {
         return [];
       }
+      const authorizedQuizIds = [
+        ...new Set(authorizedLookups.flatMap((entry) => entry.scopedQuizIds)),
+      ];
 
       const sessions = await prisma.session.findMany({
         where: {
@@ -9384,30 +9436,27 @@ const sessionCoreRouter = router({
       });
 
       const now = new Date();
-      const countsByQuizId = new Map<string, number>();
-      const sessionCodesByQuizId = new Map<string, Array<{ code: string; createdAt: Date }>>();
-      for (const session of sessions) {
-        if (!session.quizId || isSessionEffectivelyFinished(session, now)) {
-          continue;
-        }
-        const current = countsByQuizId.get(session.quizId) ?? 0;
-        // Für die Live-Chips wird der Host explizit mitgezählt.
-        countsByQuizId.set(session.quizId, current + session._count.participants + 1);
-        const known = sessionCodesByQuizId.get(session.quizId) ?? [];
-        known.push({ code: session.code, createdAt: session.createdAt });
-        sessionCodesByQuizId.set(session.quizId, known);
-      }
-
-      return [...countsByQuizId.entries()]
-        .sort(([a], [b]) => a.localeCompare(b))
-        .flatMap(([quizId, participantCountIncludingHost]) => {
-          const sessionCodes = (sessionCodesByQuizId.get(quizId) ?? [])
+      return authorizedLookups
+        .sort((left, right) => left.requestedQuizId.localeCompare(right.requestedQuizId))
+        .flatMap(({ requestedQuizId, scopedQuizIds }) => {
+          const scope = new Set(scopedQuizIds);
+          const liveSessions = sessions.filter(
+            (session) =>
+              session.quizId &&
+              scope.has(session.quizId) &&
+              !isSessionEffectivelyFinished(session, now),
+          );
+          const participantCountIncludingHost = liveSessions.reduce(
+            (total, session) => total + session._count.participants + 1,
+            0,
+          );
+          const sessionCodes = liveSessions
             .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())
             .map((session) => session.code);
           if (sessionCodes.length === 0) {
             return [];
           }
-          return [{ quizId, participantCountIncludingHost, sessionCodes }];
+          return [{ quizId: requestedQuizId, participantCountIncludingHost, sessionCodes }];
         });
     }),
 
