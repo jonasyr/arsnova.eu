@@ -437,7 +437,29 @@
               i18n-aria-label="@@homeLiveCard.openHostSessionsAria"
               aria-label="Deine Q&amp;A-Sessions"
             >
-              @for (item of hostSessionCtas(); track item.code) {
+              @if (hostSessionMenuCtas().length > 0) {
+                <li class="home-host-session-cta-row__item home-host-session-cta-row__menu-trigger">
+                  <button
+                    matButton="outlined"
+                    type="button"
+                    class="home-cta home-choice-button home-cta--secondary home-library-button"
+                    data-testid="home-host-session-menu-trigger"
+                    [matMenuTriggerFor]="hostSessionMenu"
+                  >
+                    <span class="home-choice-button__copy">
+                      <span class="home-choice-button__label">
+                        <span class="home-host-session-cta__dot" aria-hidden="true"></span>
+                        <span i18n="@@homeLiveCard.openHostSessionsAria"
+                          >Deine Q&amp;A-Sessions</span
+                        >
+                        <span>({{ hostSessionMenuCtas().length }})</span>
+                      </span>
+                    </span>
+                    <mat-icon aria-hidden="true">expand_more</mat-icon>
+                  </button>
+                </li>
+              }
+              @for (item of directHostSessionCtas(); track item.code) {
                 <li class="home-host-session-cta-row__item">
                   <a
                     matButton="outlined"
@@ -490,6 +512,50 @@
                 </li>
               }
             </ul>
+            <mat-menu #hostSessionMenu="matMenu" class="home-host-session-menu">
+              @for (item of hostSessionMenuCtas(); track item.code) {
+                <a
+                  mat-menu-item
+                  [routerLink]="hostSessionCtaLink(item.code)"
+                  [queryParams]="{ tab: 'qa' }"
+                  class="home-host-session-menu__open"
+                  data-testid="home-host-recovery-menu"
+                  [attr.data-session-code]="item.code"
+                  [attr.aria-label]="hostSessionCtaLabel(item.code)"
+                  [attr.aria-describedby]="'home-host-session-menu-facts-' + item.code"
+                >
+                  <span class="home-host-session-menu__label">
+                    <span class="home-host-session-cta__dot" aria-hidden="true"></span>
+                    {{ hostSessionCtaLabel(item.code) }}
+                  </span>
+                  <span
+                    class="home-host-session-menu__facts"
+                    [attr.id]="'home-host-session-menu-facts-' + item.code"
+                  >
+                    <span>{{ hostSessionCtaDescription(item.deadlineLabel) }}</span>
+                    @if (hostSessionCtaOpenDescription(item); as openLabel) {
+                      <span>{{ openLabel }}</span>
+                    }
+                    @if (hostSessionCtaQuestionDescription(item); as questionLabel) {
+                      <span>{{ questionLabel }}</span>
+                    }
+                  </span>
+                </a>
+                <button
+                  mat-menu-item
+                  type="button"
+                  class="home-host-session-menu__remove"
+                  data-testid="home-host-session-menu-remove"
+                  [attr.data-session-code]="item.code"
+                  [attr.aria-label]="hostSessionCtaRemoveAria(item)"
+                  [disabled]="hostSessionCtaBusy()"
+                  (click)="removeHostSessionCta(item, $event, true)"
+                >
+                  <mat-icon aria-hidden="true">delete_outline</mat-icon>
+                  <span>{{ hostSessionCtaRemoveAria(item) }}</span>
+                </button>
+              }
+            </mat-menu>
           }
           <div class="home-live-grid">
             <button

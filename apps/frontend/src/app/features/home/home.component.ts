@@ -29,6 +29,7 @@ import {
   MatCardTitle,
 } from '@angular/material/card';
 import { MatIcon } from '@angular/material/icon';
+import { MatMenu, MatMenuItem, MatMenuTrigger } from '@angular/material/menu';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltip } from '@angular/material/tooltip';
@@ -120,6 +121,7 @@ type HostSessionCta = {
 
 const HOST_SESSION_CTA_LIMIT = 8;
 const HOST_SESSION_INFO_FETCH_LIMIT = 32;
+const HOST_SESSION_DIRECT_OPEN_LIMIT = 2;
 
 function resolveSessionServerNow(
   session: Pick<SessionInfoDTO, 'serverTime' | 'serverNow'>,
@@ -199,6 +201,9 @@ function isFinishedWithoutJoinableQa(resolution: {
     MatCardTitle,
     MatIcon,
     MatIconButton,
+    MatMenu,
+    MatMenuItem,
+    MatMenuTrigger,
     MatTooltip,
     CdkTrapFocus,
     MarkdownImageLightboxDirective,
@@ -288,6 +293,18 @@ export class HomeComponent implements OnInit, AfterViewInit, OnDestroy {
   });
   readonly hasHostedQuiz = computed(() => this.latestHostedQuizId() !== null);
   readonly hostSessionCtas = signal<HostSessionCta[]>([]);
+  readonly hostSessionMenuCtas = computed(() => {
+    const openItems = this.hostSessionCtas().filter((item) => item.qaOpen === true);
+    return openItems.length > HOST_SESSION_DIRECT_OPEN_LIMIT ? openItems : [];
+  });
+  readonly directHostSessionCtas = computed(() => {
+    const menuItems = this.hostSessionMenuCtas();
+    if (menuItems.length === 0) {
+      return this.hostSessionCtas();
+    }
+    const menuCodes = new Set(menuItems.map((item) => item.code));
+    return this.hostSessionCtas().filter((item) => !menuCodes.has(item.code));
+  });
   readonly showHostRecoveryCta = computed(() => this.hostSessionCtas().length > 0);
   readonly hostSessionCtaBusy = signal(false);
   private hostSessionCtaLoadGeneration = 0;
@@ -630,7 +647,11 @@ export class HomeComponent implements OnInit, AfterViewInit, OnDestroy {
     return $localize`:@@homeLiveCard.removeCtaAria:Q&A-Session ${item.code}:code: löschen`;
   }
 
-  async removeHostSessionCta(item: HostSessionCta, event?: Event): Promise<void> {
+  async removeHostSessionCta(
+    item: HostSessionCta,
+    event?: Event,
+    returnToMenuTrigger = false,
+  ): Promise<void> {
     event?.preventDefault();
     event?.stopPropagation();
     if (this.hostSessionCtaBusy()) {
@@ -662,7 +683,7 @@ export class HomeComponent implements OnInit, AfterViewInit, OnDestroy {
           .afterClosed(),
       );
       if ((decision !== true && decision !== 'alternate') || !isPlatformBrowser(this.platformId)) {
-        this.focusHostSessionCtaControl(item.code);
+        this.focusHostSessionCtaControl(item.code, returnToMenuTrigger);
         return;
       }
       this.hostSessionCtas.update((items) => items.filter((entry) => entry.code !== item.code));
@@ -670,7 +691,7 @@ export class HomeComponent implements OnInit, AfterViewInit, OnDestroy {
         const ended = await this.endHostedSessionFromHome(item.code);
         if (!ended) {
           await this.loadHostSessionCtas();
-          this.focusHostSessionCtaControl(item.code);
+          this.focusHostSessionCtaControl(item.code, returnToMenuTrigger);
           return;
         }
       }
@@ -678,13 +699,13 @@ export class HomeComponent implements OnInit, AfterViewInit, OnDestroy {
       forgetHostedSessionOnThisDevice(item.code);
       clearHostToken(item.code);
       await this.loadHostSessionCtas();
-      this.focusHostSessionCtaControl();
+      this.focusHostSessionCtaControl(undefined, returnToMenuTrigger);
     } finally {
       this.hostSessionCtaBusy.set(false);
     }
   }
 
-  private focusHostSessionCtaControl(preferredCode?: string): void {
+  private focusHostSessionCtaControl(preferredCode?: string, preferMenuTrigger = false): void {
     if (!isPlatformBrowser(this.platformId)) {
       return;
     }
@@ -698,10 +719,15 @@ export class HomeComponent implements OnInit, AfterViewInit, OnDestroy {
         const nextRemove = this.document.querySelector<HTMLButtonElement>(
           '[data-testid="home-host-session-remove"]',
         );
+        const menuTrigger = this.document.querySelector<HTMLButtonElement>(
+          '[data-testid="home-host-session-menu-trigger"]',
+        );
         const qaCreate = this.document.querySelector<HTMLButtonElement>(
           '[data-testid="home-live-qa-create"]',
         );
-        (preferred ?? nextRemove ?? qaCreate)?.focus({ preventScroll: true });
+        (preferred ?? (preferMenuTrigger ? menuTrigger : null) ?? nextRemove ?? qaCreate)?.focus({
+          preventScroll: true,
+        });
       },
       { injector: this.injector },
     );

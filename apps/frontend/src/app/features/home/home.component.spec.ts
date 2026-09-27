@@ -1497,6 +1497,9 @@ describe('HomeComponent', () => {
       expect(recoveryActions).toHaveLength(2);
       expect(recoveryActions[0]?.getAttribute('data-session-code')).toBe('BBB222');
       expect(recoveryActions[1]?.getAttribute('data-session-code')).toBe('AAA111');
+      expect(
+        fixture.nativeElement.querySelector('[data-testid="home-host-session-menu-trigger"]'),
+      ).toBeNull();
       expect(recoveryActions[0]?.getAttribute('href') ?? '').toContain('session/BBB222/host');
       expect(recoveryActions[0]?.getAttribute('href') ?? '').toContain('tab=qa');
       expect(
@@ -1505,6 +1508,55 @@ describe('HomeComponent', () => {
       expect(
         fixture.nativeElement.querySelector('[data-testid="home-host-recovery-link"]'),
       ).toBeNull();
+      restoreDefaultSessionGetInfo(vi.mocked(trpc.session.getInfo.query));
+    });
+
+    it('bündelt ab drei offenen Sessions die offenen CTAs im Pulldown und lässt geschlossene direkt sichtbar', async () => {
+      const { trpc } = await import('../../core/trpc.client');
+      for (const code of ['AAA111', 'BBB222', 'CCC333', 'ZZZ999']) {
+        storeHostBrowserCapability(code, `${code}-browser-capability-abcdefghijklmnopqrstuvwxyz`);
+      }
+      vi.mocked(trpc.session.getInfo.query).mockImplementation(async (input: { code: string }) =>
+        hostSessionGetInfo(input.code, input.code !== 'ZZZ999'),
+      );
+      const fixture = createHomeFixture();
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+      await vi.waitUntil(
+        () =>
+          fixture.nativeElement.querySelector('[data-testid="home-host-session-menu-trigger"]') !==
+          null,
+        { timeout: 1000, interval: 10 },
+      );
+
+      const trigger = fixture.nativeElement.querySelector<HTMLButtonElement>(
+        '[data-testid="home-host-session-menu-trigger"]',
+      )!;
+      const directCodes = Array.from(
+        fixture.nativeElement.querySelectorAll<HTMLElement>(
+          '.home-host-session-cta-row [data-testid="home-host-recovery"]',
+        ),
+      ).map((action) => action.getAttribute('data-session-code'));
+
+      expect(trigger.textContent).toContain('Deine Q&A-Sessions');
+      expect(trigger.textContent).toContain('(3)');
+      expect(trigger.getAttribute('aria-haspopup')).toBe('menu');
+      expect(directCodes).toEqual(['ZZZ999']);
+
+      trigger.click();
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      const menuCodes = Array.from(
+        document.querySelectorAll<HTMLElement>('[data-testid="home-host-recovery-menu"]'),
+      ).map((action) => action.getAttribute('data-session-code'));
+      expect(menuCodes).toEqual(['AAA111', 'BBB222', 'CCC333']);
+      expect(
+        document.querySelectorAll('[data-testid="home-host-session-menu-remove"]'),
+      ).toHaveLength(3);
+      expect(document.querySelector('.cdk-overlay-container [role="menu"]')).not.toBeNull();
+
       restoreDefaultSessionGetInfo(vi.mocked(trpc.session.getInfo.query));
     });
 

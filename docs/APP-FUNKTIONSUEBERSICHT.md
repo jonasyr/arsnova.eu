@@ -82,7 +82,7 @@ Von der Startseite aus können Hosts direkt:
 - die **Quiz-Sammlung** öffnen
 - einen **Q&A-Kanal** starten
 - ein **Blitzlicht** starten
-- gespeicherte **Host-Zugänge** wieder öffnen (Live-Karte, höchstens 8 von 32 Capabilities)
+- gespeicherte **Host-Zugänge** wieder öffnen (Live-Karte, höchstens 8 von 32 Capabilities; ab 3 offenen Sessions gebündelt im Pulldown)
 - ohne gespeicherte Capability über **Host-Zugang wiederherstellen** nach `/host-recovery`
 
 Die optionale Aufgabenwahl **Was hast du heute vor?** steht unmittelbar über den drei Host-Karten. **Meinen Kurs begleiten** priorisiert den Quizstart und das Sammeln von Kursfragen; **Eine Veranstaltung moderieren** bietet **Fragen sammeln**, **Stimmung/Tempo erfassen** und **Beides**; **Schnell ein Format einsetzen** lässt die direkten Formatstarts im Vordergrund. Alle drei Karten und bestehende Q&A-Zugänge bleiben erreichbar. Die Quiz-Sammlung priorisiert für Kurs- und Direktstarts **Starten** neben **Bearbeiten**; weitere Kartenaktionen bleiben in den bestehenden Menüs.
