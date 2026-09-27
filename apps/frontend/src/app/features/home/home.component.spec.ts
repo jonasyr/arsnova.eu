@@ -1975,6 +1975,7 @@ describe('HomeComponent', () => {
         /:host\.route-home \.l-page:first-child\s*\{[^}]*max-width:\s*40rem/,
       );
       expect(layout).toMatch(/\.home-main\s*\{[^}]*flex-direction:\s*column/);
+      expect(compactLayout).toMatch(/\.home-scenario\s*\{[^}]*margin-block-end:\s*0\.75rem/);
       expect(compactLayout).toMatch(
         /\.home-host-stack\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/,
       );
@@ -1987,6 +1988,7 @@ describe('HomeComponent', () => {
       expect(desktopLayout).toMatch(
         /\.home-hero-band\s*\{[^}]*margin-block:\s*3rem calc\(4rem - 1\.25rem\)[^}]*padding:\s*0\.75rem 1rem 0\.9rem/,
       );
+      expect(desktopLayout).toMatch(/\.home-scenario\s*\{[^}]*margin-block-end:\s*1\.25rem/);
       expect(desktopLayout).toMatch(
         /\.home-host-stack\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)[^}]*gap:\s*5rem/,
       );
