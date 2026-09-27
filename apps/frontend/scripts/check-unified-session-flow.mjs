@@ -881,7 +881,14 @@ async function endSessionAndScan(host, participant, hardFailures) {
     await joinPopoverClose.click();
   }
 
-  const leaveHomeButton = host.getByRole('button', { name: HOST_LEAVE_HOME_RE }).first();
+  const moreActions = host.getByTestId('host-more-actions');
+  const usesQuizMenu = await moreActions.isVisible().catch(() => false);
+  if (usesQuizMenu) {
+    await moreActions.click();
+    await host.getByRole('menu').waitFor({ state: 'visible' });
+  }
+  const actionRole = usesQuizMenu ? 'menuitem' : 'button';
+  const leaveHomeButton = host.getByRole(actionRole, { name: HOST_LEAVE_HOME_RE }).first();
   if (await leaveHomeButton.isVisible().catch(() => false)) {
     await leaveHomeButton.click();
     const homePathRe = /^\/(?:de|en|fr|it|es)\/?$/;
@@ -925,7 +932,7 @@ async function endSessionAndScan(host, participant, hardFailures) {
     return;
   }
 
-  const endButton = host.getByRole('button', { name: HOST_END_SESSION_RE }).first();
+  const endButton = host.getByRole(actionRole, { name: HOST_END_SESSION_RE }).first();
   if (!(await endButton.isVisible().catch(() => false))) {
     hardFailures.push('Host session leave or end action is not visible.');
     return;

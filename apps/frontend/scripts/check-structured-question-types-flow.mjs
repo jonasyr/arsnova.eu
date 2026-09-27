@@ -1490,7 +1490,8 @@ async function runCategorizationFlow(
 
 async function finishSessionAndAssertDebriefPlan(host, hostTrpc, code, hardFailures) {
   await dismissDialogIfPresent(host);
-  await clickButton(host, END_SESSION_RE);
+  await host.getByTestId('host-more-actions').click();
+  await host.getByRole('menuitem', { name: END_SESSION_RE }).click();
   const confirm = host
     .locator('mat-dialog-container')
     .getByRole('button', { name: CONFIRM_END_SESSION_RE })
@@ -1500,7 +1501,7 @@ async function finishSessionAndAssertDebriefPlan(host, hostTrpc, code, hardFailu
 
   const finishedUi = await waitForText(
     host,
-    /Lernstand und Selbsteinschätzung[\s\S]*Session beendet/i,
+    /Session beendet[\s\S]*Lernstand und Selbsteinschätzung/i,
     25_000,
   );
   if (!finishedUi) {
@@ -1509,7 +1510,7 @@ async function finishSessionAndAssertDebriefPlan(host, hostTrpc, code, hardFailu
     await host.reload({ waitUntil: 'domcontentloaded' });
     const retry = await waitForText(
       host,
-      /Lernstand und Selbsteinschätzung[\s\S]*Session beendet/i,
+      /Session beendet[\s\S]*Lernstand und Selbsteinschätzung/i,
       20_000,
     );
     if (!retry) {

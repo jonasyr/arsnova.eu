@@ -1757,6 +1757,32 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     return this.effectiveStatus() !== 'FINISHED' || this.liveChannelsRemainAfterQuiz();
   });
   readonly showHostViewControls = computed(() => this.isLiveHostSurface());
+  readonly pendingHostMoreAction = signal<'skip' | 'previous' | 'replace' | 'end' | null>(null);
+
+  /** Material restores the persistent menu trigger before emitting menuClosed. */
+  runHostMoreAction(): void {
+    const action = this.pendingHostMoreAction();
+    this.pendingHostMoreAction.set(null);
+    if (this.controlPending() || this.sessionEndPending() || this.channelNavigationBusy()) return;
+    switch (action) {
+      case 'skip':
+        void this.skipQuestion();
+        break;
+      case 'previous':
+        void this.prevQuestion();
+        break;
+      case 'replace':
+        void this.replaceQuizBeforeStart();
+        break;
+      case 'end':
+        if (this.effectiveStatus() === 'FINISHED') {
+          void this.navigateHomeFromFinishedSession();
+        } else {
+          void this.onSessionEndAnchorClick();
+        }
+        break;
+    }
+  }
   readonly pairedHostConnected = signal(false);
   readonly canManagePairedHosts = signal(getHostSessionRole(this.code) !== 'PAIRED_HOST');
   readonly isPairedHostClient = signal(getHostSessionRole(this.code) === 'PAIRED_HOST');
@@ -5665,10 +5691,15 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       return;
     }
     const toolbar = active.closest('.session-host__view-controls');
-    const scope = toolbar?.parentElement ?? active.closest('.session-host') ?? this.document.body;
+    const scope = active.closest('.session-host') ?? this.document.body;
     const preferred = Array.from(
       (toolbar ?? scope).querySelectorAll<HTMLElement>(
         '.session-host__view-toggle--fullscreen, .session-host__view-toggle--frame',
+      ),
+    );
+    const navigation = Array.from(
+      scope.querySelectorAll<HTMLElement>(
+        '[data-testid="add-channel-trigger"], .session-host__channel-visibility-action, .session-channel-tabs button',
       ),
     );
     const broader = Array.from(
@@ -5686,7 +5717,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
         ].join(', '),
       ),
     );
-    const fallback = [...preferred, ...broader].find(
+    const fallback = [...preferred, ...navigation, ...broader].find(
       (candidate) =>
         candidate !== active &&
         !candidate.closest('[data-testid="open-presenter-view"]') &&
@@ -6141,7 +6172,12 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       await this.leaveHostViewKeepingQaOpen();
       return;
     }
-    const focusReturn = event?.currentTarget instanceof HTMLElement ? event.currentTarget : null;
+    const focusReturn =
+      event?.currentTarget instanceof HTMLElement
+        ? event.currentTarget
+        : this.document.activeElement instanceof HTMLElement
+          ? this.document.activeElement
+          : null;
     this.sessionEndPending.set(true);
     let shouldShowFinishedView = false;
     try {
@@ -12688,10 +12724,6 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       this.finishedConfidenceSummary.set(summary);
     } catch {
       this.finishedConfidenceSummary.set(null);
-    }
-    if (this.effectiveStatus() === 'FINISHED') {
-      // Confidence-Block liegt über „Session beendet“ — nach Layout-Shift erneut dorthin.
-      this.scrollHostFinishedIntoView();
     }
   }
 

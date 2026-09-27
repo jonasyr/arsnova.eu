@@ -457,6 +457,7 @@ Auf dem Server übernimmt `scripts/deploy.sh` die Reihenfolge **Digest-Image pul
 | `smoke:host-pairing-security`      | Story 2.10: Host / Smartphone / Presenter, Missbrauch + Lifecycle + Widerruf               |
 | `smoke:presenter-viewports`        | Gefüllte Presenter-Lobby in vier Tablet-/Beamer-Viewports                                  |
 | `smoke:host-music`                 | Host-Musik-/Sound-Smoke                                                                    |
+| `smoke:host-phase-controls`        | Quiz-Phasen, PI, fünf Locales, mobile Labels und Menü-/Dialogfokus                         |
 | `smoke:short-text`                 | Kurzantwort-Flow inklusive axe                                                             |
 | `smoke:numeric-estimate`           | Numerische-Schätzfrage-Flow-Smoke                                                          |
 | `smoke:session-question-progress`  | Zwei-Client-Smoke für späteren Start, Vote, Skip und Nachbesprechung                       |
@@ -592,6 +593,7 @@ Diese Skripte erwarten ebenfalls eine laufende lokale App mit Backend und Fronte
 BASE_URL=http://localhost:4200 npm run smoke:short-text -w @arsnova/frontend
 BASE_URL=http://localhost:4200 npm run smoke:numeric-estimate -w @arsnova/frontend
 BASE_URL=http://localhost:4200 npm run smoke:host-music -w @arsnova/frontend
+BASE_URL=http://localhost:4200 TRPC_URL=http://localhost:3000/trpc npm run smoke:host-phase-controls -w @arsnova/frontend
 BASE_URL=http://localhost:4200/de TRPC_URL=http://localhost:3000/trpc npm run smoke:presenter-viewports -w @arsnova/frontend
 BASE_URL=http://localhost:4200/de TRPC_URL=http://localhost:3000/trpc npm run smoke:session-question-progress -w @arsnova/frontend
 BASE_URL=http://localhost:4200 npm run smoke:unified-session -w @arsnova/frontend
@@ -599,6 +601,16 @@ BASE_URL=http://localhost:4200 TRPC_URL=http://localhost:3000/trpc npm run smoke
 BASE_URL=http://localhost:4200 TRPC_URL=http://localhost:3000/trpc SMOKE_ARTIFACT_DIR=tmp/product-feedback-in-app-e2e npm run smoke:product-feedback-in-app -w @arsnova/frontend
 BASE_URL=http://localhost:4200 npm run e2e:confidence-summary-demo -w @arsnova/frontend
 ```
+
+`smoke:host-phase-controls` benötigt den lokalisierten Build und prüft sechs
+Konfigurationen nacheinander: de/en/fr/es/it, 320/600/840/1440 CSS-Pixel,
+Spielerisch/Seriös und Light/Dark bei reduzierter Bewegung. Echte Host-Buttons
+steuern LOBBY bis FINISHED einschließlich Peer Instruction und zweiter Runde.
+Der Smoke prüft Reflow, vollständige Beschriftungen, Tastaturfokus nach Menü-
+und Dialogabbruch sowie die Export-Einstiegspunkte; er erzeugt keine PDF-Dateien.
+`SMOKE_ARTIFACT_DIR` legt das Verzeichnis für Lobby-, Diskussions- und
+Abschlussbilder fest. Er ist ein gezielter lokaler Zusatzlauf, kein neuer
+Required-Check.
 
 Mit `PRESENTER_VIEWPORT_SCREENSHOTS=1` speichert der Presenter-Smoke auch bei
 erfolgreichen Prüfungen alle vier Screenshots. Das Zielverzeichnis lässt sich

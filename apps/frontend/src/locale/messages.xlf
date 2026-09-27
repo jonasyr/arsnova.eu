@@ -18230,20 +18230,6 @@
           <context context-type="linenumber">1520</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="sessionHost.exportMoreButtonAria" datatype="html">
-        <source>Weitere Exportoptionen</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.html</context>
-          <context context-type="linenumber">1537</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="sessionHost.exportMoreButton" datatype="html">
-        <source>Mehr</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.html</context>
-          <context context-type="linenumber">1540</context>
-        </context-group>
-      </trans-unit>
       <trans-unit id="7070792224026857010" datatype="html">
         <source>Zur Startseite</source>
         <context-group purpose="location">
@@ -19504,25 +19490,11 @@
           <context context-type="linenumber">4995</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="sessionHost.prevQuestionTooltip" datatype="html">
-        <source>Zeigt die vorherige Frage mit ihrem Ergebnis erneut an (ohne neue Abstimmung).</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.html</context>
-          <context context-type="linenumber">5010</context>
-        </context-group>
-      </trans-unit>
       <trans-unit id="sessionHost.prevQuestionAnchor" datatype="html">
         <source>Letztes Ergebnis erneut anzeigen</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.html</context>
           <context context-type="linenumber">5016</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="sessionHost.prevQuestionAnchorCompact" datatype="html">
-        <source>Letztes Ergebnis</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.html</context>
-          <context context-type="linenumber">5021</context>
         </context-group>
       </trans-unit>
       <trans-unit id="sessionHost.emojiReactionsTitle" datatype="html">
@@ -19583,13 +19555,6 @@
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.html</context>
           <context context-type="linenumber">5130</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="sessionHost.revealAnswerOptionsCompact" datatype="html">
-        <source>Antwortoptionen</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.html</context>
-          <context context-type="linenumber">5135</context>
         </context-group>
       </trans-unit>
       <trans-unit id="sessionHost.startDiscussionPhaseAria" datatype="html">
@@ -19657,13 +19622,6 @@
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.html</context>
           <context context-type="linenumber">5256</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="sessionHost.finishEvaluationAnchorCompact" datatype="html">
-        <source>Auswertung</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.html</context>
-          <context context-type="linenumber">5261</context>
         </context-group>
       </trans-unit>
       <trans-unit id="sessionHost.skipDiscussionNextQuestionAria" datatype="html">
@@ -28146,6 +28104,59 @@
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/home/home.component.html</context>
           <context context-type="linenumber">525</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationArea" datatype="html">
+        <source>Moderation</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.html</context>
+          <context context-type="linenumber">594</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.frameOption" datatype="html">
+        <source>App-Rahmen</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.html</context>
+          <context context-type="linenumber">4941</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.soundArea" datatype="html">
+        <source> Ton </source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.html</context>
+          <context context-type="linenumber">4951,4953</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moreActions" datatype="html">
+        <source>Weitere Aktionen</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.html</context>
+          <context context-type="linenumber">5340</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.exportActions" datatype="html">
+        <source>Exportieren</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.html</context>
+          <context context-type="linenumber">912</context>
+        </context-group>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.html</context>
+          <context context-type="linenumber">915</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.fullscreenOption" datatype="html">
+        <source>Vollbild</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.html</context>
+          <context context-type="linenumber">4928</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.showOnScreen" datatype="html">
+        <source> Auf Bildschirm zeigen </source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.html</context>
+          <context context-type="linenumber">4898,4900</context>
         </context-group>
       </trans-unit>
     </body>

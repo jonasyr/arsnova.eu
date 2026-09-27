@@ -380,7 +380,8 @@ async function main() {
     logStep('UI-Votes', '3 Antworten in getrennten Browser-Kontexten abgegeben');
 
     await closeHostJoinOverlay(hostPage, { waitForQrReopen: false });
-    await hostPage.getByRole('button', { name: /Session beenden|End session/i }).click();
+    await hostPage.getByTestId('host-more-actions').click();
+    await hostPage.getByRole('menuitem', { name: /Session beenden|End session/i }).click();
     await hostPage
       .locator('mat-dialog-container')
       .getByRole('button', { name: /gesamte session beenden|end (?:the )?session/i })

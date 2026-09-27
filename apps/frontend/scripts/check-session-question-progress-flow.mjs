@@ -342,11 +342,16 @@ async function main() {
     await waitForHostVote(host);
     logStep('Teilnehmer stimmt auf Frage 2 ab und Host sieht die Stimme');
 
-    const skipButton = host.locator('button[aria-label="Aktuelle Frage auslassen"]').first();
+    const moreActions = host.getByTestId('host-more-actions');
+    await moreActions.click();
+    const skipButton = host.getByRole('menuitem', {
+      name: 'Aktuelle Frage auslassen',
+      exact: true,
+    });
     await skipButton.waitFor({ state: 'visible', timeout: 10_000 });
     ensure(
-      (await skipButton.getAttribute('class'))?.includes('mat-tonal-button'),
-      'Die sichtbare Skip-Aktion ist nicht als zurückhaltender Tonal-Button gerendert.',
+      (await skipButton.getAttribute('role')) === 'menuitem',
+      'Die Skip-Aktion ist nicht im Menü Weitere Aktionen erreichbar.',
     );
     await skipButton.click();
     const dialog = host.locator('.cdk-overlay-container').first();
@@ -397,7 +402,8 @@ async function main() {
     ]);
     logStep('Live-Ergebnis enthält nur die durchgeführte Frage 3');
 
-    await clickButton(host, END_SESSION_RE);
+    await host.getByTestId('host-more-actions').click();
+    await host.getByRole('menuitem', { name: END_SESSION_RE }).click();
     const endDialog = host.locator('mat-dialog-container');
     await endDialog.getByRole('button', { name: CONFIRM_END_RE }).first().click();
     await host.locator('#session-finished-heading').first().waitFor({

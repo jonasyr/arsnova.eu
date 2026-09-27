@@ -19,6 +19,7 @@
     "smoke:host-pairing-security": "node scripts/check-host-pairing-security-flow.mjs",
     "smoke:presenter-viewports": "node scripts/check-presenter-viewports.mjs",
     "smoke:host-music": "node scripts/check-host-music-flow.mjs",
+    "smoke:host-phase-controls": "node scripts/check-host-phase-controls-flow.mjs",
     "smoke:short-text": "node scripts/check-short-text-flow.mjs",
     "smoke:numeric-estimate": "node scripts/check-numeric-estimate-flow.mjs",
     "smoke:structured-question-types": "node scripts/check-structured-question-types-flow.mjs",

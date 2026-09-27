@@ -218,8 +218,7 @@
           }
           @if (canStartAnotherQuiz()) {
             <button
-              mat-flat-button
-              color="primary"
+              [matButton]="activeChannel() === 'quiz' ? 'tonal' : 'filled'"
               type="button"
               class="session-host__start-another-quiz"
               data-testid="start-another-quiz"
@@ -232,7 +231,7 @@
           }
         </div>
 
-        @if (showHostViewControls()) {
+        @if (showHostViewControls() && activeChannel() !== 'quiz') {
           <div class="session-host__view-controls session-host__view-controls--inline">
             @if (showPresenterViewButton()) {
               <button
@@ -477,27 +476,29 @@
                   </p>
                 }
               </div>
-              <div class="session-host__live-actions">
-                <button
-                  mat-icon-button
-                  type="button"
-                  class="session-host__meta-sound-control session-host__live-sound-control"
-                  [class.session-host__meta-sound-control--active]="
-                    !musicMuted() && !isCurrentMusicPhaseMuted()
-                  "
-                  [matMenuTriggerFor]="hostMusicMenu"
-                  (click)="onHostMusicMenuOpening()"
-                  i18n-aria-label="@@sessionHost.musicControlAria"
-                  aria-label="Soundsteuerung öffnen"
-                >
-                  @if (musicMuted() || isCurrentMusicPhaseMuted()) {
-                    <mat-icon aria-hidden="true">volume_off</mat-icon>
-                  } @else {
-                    <app-music-equalizer-icon class="session-host__live-sound-icon" />
-                  }
-                  <span class="session-host__live-sound-label">{{ activeMusicLabel() }}</span>
-                </button>
-              </div>
+              @if (activeChannel() !== 'quiz') {
+                <div class="session-host__live-actions">
+                  <button
+                    mat-icon-button
+                    type="button"
+                    class="session-host__meta-sound-control session-host__live-sound-control"
+                    [class.session-host__meta-sound-control--active]="
+                      !musicMuted() && !isCurrentMusicPhaseMuted()
+                    "
+                    [matMenuTriggerFor]="hostMusicMenu"
+                    (click)="onHostMusicMenuOpening()"
+                    i18n-aria-label="@@sessionHost.musicControlAria"
+                    aria-label="Soundsteuerung öffnen"
+                  >
+                    @if (musicMuted() || isCurrentMusicPhaseMuted()) {
+                      <mat-icon aria-hidden="true">volume_off</mat-icon>
+                    } @else {
+                      <app-music-equalizer-icon class="session-host__live-sound-icon" />
+                    }
+                    <span class="session-host__live-sound-label">{{ activeMusicLabel() }}</span>
+                  </button>
+                </div>
+              }
             </div>
           </div>
           @if (joinInfoPopoverOpen()) {
@@ -588,6 +589,11 @@
           }
         </section>
         <div class="session-host__moderation-stack">
+          @if (activeChannel() === 'quiz') {
+            <span class="session-host__tool-label" i18n="@@sessionHost.moderationArea"
+              >Moderation</span
+            >
+          }
           @if (moderationCompassReturn()) {
             <button
               type="button"
@@ -655,7 +661,7 @@
                   </figure>
                 }
                 <div class="session-lobby__actions session-lobby__actions--hero">
-                  @if (showPresenterViewButton()) {
+                  @if (activeChannel() !== 'quiz' && showPresenterViewButton()) {
                     <button
                       matButton="filled"
                       type="button"
@@ -670,7 +676,9 @@
                     </button>
                   }
                   <button
-                    [matButton]="showPresenterViewButton() ? 'tonal' : 'filled'"
+                    [matButton]="
+                      activeChannel() !== 'quiz' && showPresenterViewButton() ? 'tonal' : 'filled'
+                    "
                     type="button"
                     data-testid="lobby-start-session"
                     [disabled]="controlPending() || quizStartQuestionPending()"
@@ -847,6 +855,148 @@
           <div class="session-host__run l-page">
             @if (effectiveStatus() === 'FINISHED') {
               <div id="host-finished-anchor" class="session-host__results" tabindex="-1">
+                <header class="session-host__finished" id="host-session-finished-card">
+                  <mat-icon class="session-host__finished-icon" aria-hidden="true"
+                    >verified</mat-icon
+                  >
+                  <h1
+                    class="session-host__finished-text"
+                    id="session-finished-heading"
+                    tabindex="-1"
+                    #sessionFinishedHeading
+                    i18n
+                  >
+                    Session beendet
+                  </h1>
+                  <p class="session-host__finished-sub" i18n>Alle Ergebnisse sind gespeichert.</p>
+                  <div class="session-host__export-actions">
+                    <div class="session-host__export-pdf">
+                      @let exportPdfPriorityCount =
+                        finishedConfidenceSummary()?.priorityQuestionCount ?? 0;
+                      <button
+                        class="session-host__export-pdf-btn"
+                        matButton="filled"
+                        type="button"
+                        (click)="exportSessionResultsPdf('visual')"
+                        [disabled]="exportExporting()"
+                        [disabledInteractive]="true"
+                        [attr.aria-busy]="exportExporting()"
+                        [attr.aria-label]="exportPdfButtonAria()"
+                      >
+                        <mat-icon class="session-host__export-pdf-btn-icon" aria-hidden="true"
+                          >psychology</mat-icon
+                        >
+                        <span i18n="@@sessionHost.exportPdfButton"
+                          >Nachbesprechungsplan ansehen</span
+                        >
+                        @if (exportPdfPriorityCount > 0) {
+                          <span class="session-host__export-pdf-badge" aria-hidden="true">{{
+                            exportPdfPriorityCount
+                          }}</span>
+                        }
+                      </button>
+
+                      @if (exportPdfPriorityCount > 0) {
+                        <p class="session-host__export-pdf-hint">
+                          {{ exportPdfPriorityHint(exportPdfPriorityCount) }}
+                        </p>
+                      }
+                    </div>
+                    <button
+                      class="session-host__export-more-btn"
+                      matButton="tonal"
+                      type="button"
+                      [matMenuTriggerFor]="sessionExportMoreMenu"
+                      [disabled]="exportExporting()"
+                      i18n-aria-label="@@sessionHost.exportActions"
+                      aria-label="Exportieren"
+                    >
+                      <mat-icon aria-hidden="true">more_vert</mat-icon>
+                      <span i18n="@@sessionHost.exportActions">Exportieren</span>
+                    </button>
+                    <button matButton type="button" (click)="navigateHomeFromFinishedSession()">
+                      <mat-icon aria-hidden="true">home</mat-icon>
+                      <span i18n>Zur Startseite</span>
+                    </button>
+                    <mat-menu #sessionExportMoreMenu="matMenu">
+                      <button
+                        mat-menu-item
+                        type="button"
+                        (click)="exportSessionResultsPdf('visual')"
+                        [disabled]="exportExporting()"
+                      >
+                        <mat-icon aria-hidden="true">bar_chart</mat-icon>
+                        <span i18n="@@sessionHost.exportPdfMenuVisual"
+                          >Standard (mit Diagrammen)</span
+                        >
+                      </button>
+                      <button
+                        mat-menu-item
+                        type="button"
+                        (click)="exportSessionResultsPdf('pdfUa')"
+                        [disabled]="exportExporting()"
+                      >
+                        <mat-icon aria-hidden="true">accessibility</mat-icon>
+                        <span i18n="@@sessionHost.exportPdfMenuPdfUa">Barrierefrei (PDF/UA-1)</span>
+                      </button>
+
+                      <button
+                        mat-menu-item
+                        type="button"
+                        (click)="exportSessionResultsCsv()"
+                        [disabled]="exportExporting()"
+                        [attr.aria-busy]="exportExporting()"
+                        i18n-matTooltip="@@sessionHost.exportCsvExcelTooltip"
+                        matTooltip="Tabellarische Rohdaten für Tabellenkalkulation – weniger Details als der Nachbesprechungsplan."
+                        matTooltipPosition="left"
+                      >
+                        <mat-icon aria-hidden="true">fact_check</mat-icon>
+                        <span i18n="@@sessionHost.exportCsvExcelMenuItem"
+                          >Rohdaten als CSV exportieren</span
+                        >
+                      </button>
+                      <button
+                        mat-menu-item
+                        type="button"
+                        (click)="exportQaQuestionsCsv()"
+                        [disabled]="exportExporting()"
+                        [attr.aria-busy]="exportExporting()"
+                      >
+                        <mat-icon aria-hidden="true">download</mat-icon>
+                        <span i18n="@@sessionQa.exportLabel">Fragen exportieren</span>
+                      </button>
+                    </mat-menu>
+                    @if (exportExporting()) {
+                      <div
+                        class="session-host__export-progress"
+                        role="status"
+                        aria-live="polite"
+                        i18n-aria-label="@@sessionHost.exportProgressAria"
+                        aria-label="Export läuft"
+                      >
+                        <p
+                          class="session-host__export-hint"
+                          i18n="@@sessionHost.exportProgressLabel"
+                        >
+                          Wird exportiert…
+                        </p>
+                        <mat-progress-bar
+                          class="session-host__export-progress-bar"
+                          mode="indeterminate"
+                        />
+                      </div>
+                    }
+                    @if (exportStatus(); as status) {
+                      <p class="session-host__export-hint" role="status">{{ status }}</p>
+                    }
+                  </div>
+                  <app-info-landing-link
+                    class="session-host__info-landing session-host__info-landing--finished"
+                    [anchor]="infoLandingConfidenceAnchor"
+                    [label]="infoLandingConfidenceLabel"
+                    [dense]="true"
+                  />
+                </header>
                 @if (finishedConfidenceSummary(); as confidenceSummary) {
                   <section
                     class="session-host__finished-confidence"
@@ -1411,152 +1561,6 @@
                     </div>
                   </section>
                 }
-
-                <header class="session-host__finished" id="host-session-finished-card">
-                  <mat-icon class="session-host__finished-icon" aria-hidden="true"
-                    >verified</mat-icon
-                  >
-                  <h1
-                    class="session-host__finished-text"
-                    id="session-finished-heading"
-                    tabindex="-1"
-                    #sessionFinishedHeading
-                    i18n
-                  >
-                    Session beendet
-                  </h1>
-                  <p class="session-host__finished-sub" i18n>Alle Ergebnisse sind gespeichert.</p>
-                  <div class="session-host__export-actions">
-                    <div class="session-host__export-pdf">
-                      @let exportPdfPriorityCount =
-                        finishedConfidenceSummary()?.priorityQuestionCount ?? 0;
-                      <button
-                        class="session-host__export-pdf-btn"
-                        matButton="filled"
-                        type="button"
-                        [matMenuTriggerFor]="sessionExportPdfMenu"
-                        [disabled]="exportExporting()"
-                        [attr.aria-busy]="exportExporting()"
-                        [attr.aria-label]="exportPdfButtonAria()"
-                        [attr.aria-haspopup]="true"
-                      >
-                        <mat-icon class="session-host__export-pdf-btn-icon" aria-hidden="true"
-                          >psychology</mat-icon
-                        >
-                        <span i18n="@@sessionHost.exportPdfButton"
-                          >Nachbesprechungsplan ansehen</span
-                        >
-                        @if (exportPdfPriorityCount > 0) {
-                          <span class="session-host__export-pdf-badge" aria-hidden="true">{{
-                            exportPdfPriorityCount
-                          }}</span>
-                        }
-                        <mat-icon aria-hidden="true">expand_more</mat-icon>
-                      </button>
-                      <mat-menu #sessionExportPdfMenu="matMenu">
-                        <button
-                          mat-menu-item
-                          type="button"
-                          (click)="exportSessionResultsPdf('visual')"
-                          [disabled]="exportExporting()"
-                        >
-                          <mat-icon aria-hidden="true">bar_chart</mat-icon>
-                          <span i18n="@@sessionHost.exportPdfMenuVisual"
-                            >Standard (mit Diagrammen)</span
-                          >
-                        </button>
-                        <button
-                          mat-menu-item
-                          type="button"
-                          (click)="exportSessionResultsPdf('pdfUa')"
-                          [disabled]="exportExporting()"
-                        >
-                          <mat-icon aria-hidden="true">accessibility</mat-icon>
-                          <span i18n="@@sessionHost.exportPdfMenuPdfUa"
-                            >Barrierefrei (PDF/UA-1)</span
-                          >
-                        </button>
-                      </mat-menu>
-                      @if (exportPdfPriorityCount > 0) {
-                        <p class="session-host__export-pdf-hint">
-                          {{ exportPdfPriorityHint(exportPdfPriorityCount) }}
-                        </p>
-                      }
-                    </div>
-                    <button
-                      class="session-host__export-more-btn"
-                      matButton="tonal"
-                      type="button"
-                      [matMenuTriggerFor]="sessionExportMoreMenu"
-                      [disabled]="exportExporting()"
-                      i18n-aria-label="@@sessionHost.exportMoreButtonAria"
-                      aria-label="Weitere Exportoptionen"
-                    >
-                      <mat-icon aria-hidden="true">more_vert</mat-icon>
-                      <span i18n="@@sessionHost.exportMoreButton">Mehr</span>
-                    </button>
-                    <button matButton type="button" (click)="navigateHomeFromFinishedSession()">
-                      <mat-icon aria-hidden="true">home</mat-icon>
-                      <span i18n>Zur Startseite</span>
-                    </button>
-                    <mat-menu #sessionExportMoreMenu="matMenu">
-                      <button
-                        mat-menu-item
-                        type="button"
-                        (click)="exportSessionResultsCsv()"
-                        [disabled]="exportExporting()"
-                        [attr.aria-busy]="exportExporting()"
-                        i18n-matTooltip="@@sessionHost.exportCsvExcelTooltip"
-                        matTooltip="Tabellarische Rohdaten für Tabellenkalkulation – weniger Details als der Nachbesprechungsplan."
-                        matTooltipPosition="left"
-                      >
-                        <mat-icon aria-hidden="true">fact_check</mat-icon>
-                        <span i18n="@@sessionHost.exportCsvExcelMenuItem"
-                          >Rohdaten als CSV exportieren</span
-                        >
-                      </button>
-                      <button
-                        mat-menu-item
-                        type="button"
-                        (click)="exportQaQuestionsCsv()"
-                        [disabled]="exportExporting()"
-                        [attr.aria-busy]="exportExporting()"
-                      >
-                        <mat-icon aria-hidden="true">download</mat-icon>
-                        <span i18n="@@sessionQa.exportLabel">Fragen exportieren</span>
-                      </button>
-                    </mat-menu>
-                    @if (exportExporting()) {
-                      <div
-                        class="session-host__export-progress"
-                        role="status"
-                        aria-live="polite"
-                        i18n-aria-label="@@sessionHost.exportProgressAria"
-                        aria-label="Export läuft"
-                      >
-                        <p
-                          class="session-host__export-hint"
-                          i18n="@@sessionHost.exportProgressLabel"
-                        >
-                          Wird exportiert…
-                        </p>
-                        <mat-progress-bar
-                          class="session-host__export-progress-bar"
-                          mode="indeterminate"
-                        />
-                      </div>
-                    }
-                    @if (exportStatus(); as status) {
-                      <p class="session-host__export-hint" role="status">{{ status }}</p>
-                    }
-                  </div>
-                  <app-info-landing-link
-                    class="session-host__info-landing session-host__info-landing--finished"
-                    [anchor]="infoLandingConfidenceAnchor"
-                    [label]="infoLandingConfidenceLabel"
-                    [dense]="true"
-                  />
-                </header>
               </div>
             } @else {
               @if (showFingerCountdown()) {
@@ -3670,47 +3674,6 @@
                 </div>
               }
 
-              <!-- Steuerungs-Buttons (primär) -->
-              <div
-                class="session-host__steering"
-                [class.session-host__steering--prestart]="isQuizAwaitingFirstQuestion()"
-              >
-                @if (isQuizAwaitingFirstQuestion()) {
-                  @if (showPresenterViewButton()) {
-                    <button
-                      matButton="filled"
-                      type="button"
-                      class="session-host__presenter-cta"
-                      data-testid="open-presenter-view"
-                      (click)="openPresenterView()"
-                      i18n-aria-label="@@presentationStart.title"
-                      aria-label="Präsentation starten"
-                    >
-                      <app-presenter-icon matButtonIcon />
-                      <span i18n="@@presentationStart.title">Präsentation starten</span>
-                    </button>
-                  }
-                  @if (canReplaceQuizBeforeStart()) {
-                    <button
-                      matButton="tonal"
-                      type="button"
-                      [disabled]="controlPending() || channelActivationPending() === 'quiz'"
-                      (click)="replaceQuizBeforeStart()"
-                    >
-                      <span i18n="@@sessionHost.replaceQuizBeforeStart">Quiz wechseln</span>
-                    </button>
-                  }
-                  <button
-                    [matButton]="showPresenterViewButton() ? 'tonal' : 'filled'"
-                    type="button"
-                    [disabled]="controlPending()"
-                    (click)="nextQuestion()"
-                  >
-                    <span i18n>Erste Frage starten</span>
-                  </button>
-                }
-              </div>
-
               @if (displayedCurrentQuestionForHost()?.type === 'FREETEXT') {
                 <details
                   id="host-freetext-word-cloud"
@@ -4925,11 +4888,155 @@
         </div>
       }
     </div>
+    @if (showHostViewControls() && activeChannel() === 'quiz') {
+      <div class="session-host__quiz-tools">
+        <section class="session-host__display-tools" aria-labelledby="host-display-heading">
+          <h2
+            id="host-display-heading"
+            class="session-host__tool-label"
+            i18n="@@sessionHost.showOnScreen"
+          >
+            Auf Bildschirm zeigen
+          </h2>
+          <div class="session-host__view-controls session-host__view-controls--labeled">
+            @if (showPresenterViewButton()) {
+              <button
+                matButton="tonal"
+                type="button"
+                class="session-host__presenter-cta"
+                data-testid="open-presenter-view"
+                (click)="openPresenterView()"
+                i18n-aria-label="@@presentationStart.title"
+                aria-label="Präsentation starten"
+              >
+                <app-presenter-icon matButtonIcon />
+                <span i18n="@@presentationStart.title">Präsentation starten</span>
+              </button>
+            }
+            <div class="session-host__display-options">
+              @if (isFullscreenSupported()) {
+                <button
+                  mat-button
+                  type="button"
+                  class="session-host__view-toggle--fullscreen"
+                  (click)="toggleFullscreen()"
+                  [attr.aria-pressed]="isFullscreenActive()"
+                >
+                  <mat-icon aria-hidden="true">{{
+                    isFullscreenActive() ? 'fullscreen_exit' : 'fullscreen'
+                  }}</mat-icon>
+                  <span i18n="@@sessionHost.fullscreenOption">Vollbild</span>
+                </button>
+              }
+              <button
+                mat-button
+                type="button"
+                class="session-host__view-toggle--frame"
+                (click)="toggleHostFrameMode()"
+                [attr.aria-pressed]="!isImmersiveMode()"
+              >
+                <mat-icon aria-hidden="true">{{
+                  isImmersiveMode() ? 'web_asset' : 'center_focus_strong'
+                }}</mat-icon>
+                <span i18n="@@sessionHost.frameOption">App-Rahmen</span>
+              </button>
+            </div>
+          </div>
+        </section>
+        <section class="session-host__sound-tools" aria-labelledby="host-sound-heading">
+          <h2
+            id="host-sound-heading"
+            class="session-host__tool-label"
+            i18n="@@sessionHost.soundArea"
+          >
+            Ton
+          </h2>
+          <button
+            mat-button
+            type="button"
+            class="session-host__live-sound-control"
+            [matMenuTriggerFor]="hostMusicMenu"
+            (click)="onHostMusicMenuOpening()"
+            i18n-aria-label="@@sessionHost.musicControlAria"
+            aria-label="Soundsteuerung öffnen"
+          >
+            <mat-icon aria-hidden="true">{{
+              musicMuted() || isCurrentMusicPhaseMuted() ? 'volume_off' : 'volume_up'
+            }}</mat-icon>
+            <span>{{ activeMusicLabel() }}</span>
+          </button>
+        </section>
+      </div>
+    }
+
+    <mat-menu #hostMoreActionsMenu="matMenu">
+      @if (
+        showQuizAnchorActions() &&
+        (effectiveStatus() === 'QUESTION_OPEN' || effectiveStatus() === 'ACTIVE') &&
+        !quizStartQuestionPending() &&
+        hasCurrentQuizQuestionForHost()
+      ) {
+        <button
+          mat-menu-item
+          type="button"
+          (click)="pendingHostMoreAction.set('skip')"
+          [disabled]="controlPending()"
+          aria-label="Aktuelle Frage auslassen"
+          i18n-aria-label="@@sessionHost.skipQuestionAria"
+        >
+          <mat-icon aria-hidden="true">skip_next</mat-icon>
+          <span i18n="@@sessionHost.skipQuestion">Frage auslassen</span>
+        </button>
+      }
+      @if (
+        showQuizAnchorActions() &&
+        (effectiveStatus() === 'RESULTS' || effectiveStatus() === 'DISCUSSION') &&
+        canShowPreviousResultAnchor()
+      ) {
+        <button
+          mat-menu-item
+          type="button"
+          (click)="pendingHostMoreAction.set('previous')"
+          [disabled]="controlPending()"
+        >
+          <mat-icon aria-hidden="true">replay</mat-icon>
+          <span i18n="@@sessionHost.prevQuestionAnchor">Letztes Ergebnis erneut anzeigen</span>
+        </button>
+      }
+      @if (canReplaceQuizBeforeStart()) {
+        <button
+          mat-menu-item
+          type="button"
+          (click)="pendingHostMoreAction.set('replace')"
+          [disabled]="controlPending() || channelNavigationBusy()"
+        >
+          <mat-icon aria-hidden="true">quiz</mat-icon>
+          <span i18n="@@sessionHost.replaceQuizBeforeStart">Quiz wechseln</span>
+        </button>
+      }
+      <button
+        mat-menu-item
+        type="button"
+        (click)="pendingHostMoreAction.set('end')"
+        [disabled]="sessionEndPending()"
+      >
+        <mat-icon aria-hidden="true">{{
+          effectiveStatus() === 'FINISHED' || keepQaOpenOnHostLeave() ? 'home' : 'logout'
+        }}</mat-icon>
+        @if (effectiveStatus() === 'FINISHED' || keepQaOpenOnHostLeave()) {
+          <span i18n="@@sessionHost.leaveQaHostAnchor">Zur Startseite</span>
+        } @else {
+          <span i18n="@@sessionHost.endGlobalSessionAnchor">Session beenden</span>
+        }
+      </button>
+    </mat-menu>
+
     @if (isLiveHostSurface()) {
       <div class="session-host__exit-clearance" aria-hidden="true"></div>
       <div
         #exitAnchor
         class="session-host__exit-anchor"
+        [class.session-host__exit-anchor--quiz]="activeChannel() === 'quiz'"
         [class.session-host__exit-anchor--fixed]="showChannelNavigation()"
         [class.session-host__exit-anchor--with-primary]="
           showQuickFeedbackAnchorAction() ||
@@ -4941,46 +5048,23 @@
         (touchend)="onExitAnchorTouchEnd()"
         (touchcancel)="onExitAnchorTouchEnd()"
       >
-        <button
-          mat-button
-          type="button"
-          class="session-host__exit-anchor-button session-host__exit-anchor-button--end"
-          [disabled]="sessionEndPending()"
-          [attr.aria-busy]="sessionEndPending()"
-          (click)="onSessionEndAnchorClick($event)"
-        >
-          <mat-icon aria-hidden="true">{{ keepQaOpenOnHostLeave() ? 'home' : 'logout' }}</mat-icon>
-          @if (keepQaOpenOnHostLeave()) {
-            <span i18n="@@sessionHost.leaveQaHostAnchor">Zur Startseite</span>
-          } @else {
-            <span i18n="@@sessionHost.endGlobalSessionAnchor">Session beenden</span>
-          }
-        </button>
-        @if (
-          showQuizAnchorActions() &&
-          (effectiveStatus() === 'RESULTS' || effectiveStatus() === 'DISCUSSION') &&
-          canShowPreviousResultAnchor()
-        ) {
+        @if (activeChannel() !== 'quiz') {
           <button
-            matButton="tonal"
+            mat-button
             type="button"
-            class="session-host__exit-anchor-button session-host__exit-anchor-button--previous"
-            [disabled]="controlPending()"
-            (click)="prevQuestion()"
-            i18n-matTooltip="@@sessionHost.prevQuestionTooltip"
-            matTooltip="Zeigt die vorherige Frage mit ihrem Ergebnis erneut an (ohne neue Abstimmung)."
-            matTooltipTouchGestures="off"
+            class="session-host__exit-anchor-button session-host__exit-anchor-button--end"
+            [disabled]="sessionEndPending()"
+            [attr.aria-busy]="sessionEndPending()"
+            (click)="onSessionEndAnchorClick($event)"
           >
-            <span
-              class="session-host__exit-anchor-label session-host__exit-anchor-label--previous-full"
-              i18n="@@sessionHost.prevQuestionAnchor"
-              >Letztes Ergebnis erneut anzeigen</span
-            >
-            <span
-              class="session-host__exit-anchor-label session-host__exit-anchor-label--previous-compact"
-              i18n="@@sessionHost.prevQuestionAnchorCompact"
-              >Letztes Ergebnis</span
-            >
+            <mat-icon aria-hidden="true">{{
+              keepQaOpenOnHostLeave() ? 'home' : 'logout'
+            }}</mat-icon>
+            @if (keepQaOpenOnHostLeave()) {
+              <span i18n="@@sessionHost.leaveQaHostAnchor">Zur Startseite</span>
+            } @else {
+              <span i18n="@@sessionHost.endGlobalSessionAnchor">Session beenden</span>
+            }
           </button>
         }
         @if (
@@ -5053,25 +5137,6 @@
         }
         @if (
           showQuizAnchorActions() &&
-          (effectiveStatus() === 'QUESTION_OPEN' || effectiveStatus() === 'ACTIVE') &&
-          !quizStartQuestionPending() &&
-          hasCurrentQuizQuestionForHost()
-        ) {
-          <button
-            matButton="tonal"
-            type="button"
-            class="session-host__exit-anchor-button session-host__exit-anchor-button--skip"
-            [disabled]="controlPending()"
-            (click)="skipQuestion()"
-            i18n-aria-label="@@sessionHost.skipQuestionAria"
-            aria-label="Aktuelle Frage auslassen"
-          >
-            <mat-icon aria-hidden="true">skip_next</mat-icon>
-            <span i18n="@@sessionHost.skipQuestion">Frage auslassen</span>
-          </button>
-        }
-        @if (
-          showQuizAnchorActions() &&
           effectiveStatus() === 'QUESTION_OPEN' &&
           !quizStartQuestionPending()
         ) {
@@ -5089,11 +5154,6 @@
               class="session-host__exit-anchor-label session-host__exit-anchor-label--reveal-options-full"
               i18n="@@sessionHost.revealAnswerOptions"
               >Antwortoptionen freigeben</span
-            >
-            <span
-              class="session-host__exit-anchor-label session-host__exit-anchor-label--reveal-options-compact"
-              i18n="@@sessionHost.revealAnswerOptionsCompact"
-              >Antwortoptionen</span
             >
           </button>
         }
@@ -5216,11 +5276,6 @@
               i18n="@@sessionHost.finishEvaluationAnchor"
               >Zur Gesamtauswertung</span
             >
-            <span
-              class="session-host__exit-anchor-label session-host__exit-anchor-label--finish-evaluation-compact"
-              i18n="@@sessionHost.finishEvaluationAnchorCompact"
-              >Auswertung</span
-            >
           </button>
         }
         @if (showQuizAnchorActions() && effectiveStatus() === 'DISCUSSION') {
@@ -5266,6 +5321,26 @@
               </button>
             }
           </div>
+        }
+        @if (activeChannel() === 'quiz') {
+          <button
+            matButton="tonal"
+            type="button"
+            class="session-host__exit-anchor-button session-host__more-actions"
+            data-testid="host-more-actions"
+            [matMenuTriggerFor]="
+              controlPending() || sessionEndPending() || channelNavigationBusy()
+                ? null
+                : hostMoreActionsMenu
+            "
+            (menuClosed)="runHostMoreAction()"
+            [disabled]="controlPending() || sessionEndPending() || channelNavigationBusy()"
+            [disabledInteractive]="true"
+            [attr.aria-busy]="sessionEndPending()"
+          >
+            <mat-icon aria-hidden="true">more_horiz</mat-icon>
+            <span i18n="@@sessionHost.moreActions">Weitere Aktionen</span>
+          </button>
         }
       </div>
     }
