@@ -2275,11 +2275,23 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     getInfoQueryMock.mockResolvedValue({
       ...defaultSession,
       status: 'ACTIVE',
+      currentQuestion: 0,
       channels: {
         quiz: { enabled: true },
         qa: { enabled: true, open: true, title: null, moderationMode: false },
         quickFeedback: { enabled: true, open: true },
       },
+    });
+    getCurrentQuestionForHostQueryMock.mockResolvedValue({
+      questionId: '11111111-1111-4111-8111-111111111111',
+      order: 0,
+      totalQuestions: 3,
+      text: 'Welche Antwort stimmt?',
+      type: 'SINGLE_CHOICE',
+      difficulty: 'MEDIUM',
+      showQuestionTypeIndicators: true,
+      timer: 30,
+      answers: [],
     });
 
     const fixture = setup();
@@ -4192,7 +4204,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
       expect(host.activeChannel()).toBe('qa');
       expect(host.channels().qa).toBe(true);
       expect(host.channels().quickFeedback).toBe(false);
-      expect(host.hostSteeringCallout()?.title).toBe('Die Fragenwand ist offen');
+      expect(host.hostSteeringCallout()?.title).toBe('Q&A ist geöffnet');
       expect(scenario.hasQuickFeedbackAfterQa('ABC123')).toBe(true);
       const retry = fixture.nativeElement.querySelector(
         '[data-testid="host-steering-retry"]',
@@ -5175,6 +5187,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     getInfoQueryMock.mockResolvedValue({
       ...defaultSession,
       status: 'ACTIVE',
+      currentQuestion: 0,
       preferredChannel: 'quiz',
       channels: {
         quiz: { enabled: true },
@@ -5219,6 +5232,38 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     fixture.destroy();
   });
 
+  it('bietet vor der ersten Quizfrage keine Pause an und sendet keine Pause-Mutation', async () => {
+    getInfoQueryMock.mockResolvedValue({
+      ...defaultSession,
+      status: 'ACTIVE',
+      currentQuestion: null,
+      preferredChannel: 'quiz',
+      channels: {
+        quiz: { enabled: true },
+        qa: { enabled: true, open: false, title: 'Fragen', moderationMode: false },
+        quickFeedback: { enabled: true, open: false },
+      },
+    });
+    getCurrentQuestionForHostQueryMock.mockResolvedValue(null);
+
+    const fixture = setup();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.isQuizAwaitingFirstQuestion()).toBe(true);
+    expect(fixture.componentInstance.activeChannelVisibilityActionLabel()).toBeNull();
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="channel-visibility-action"]'),
+    ).toBeNull();
+
+    await fixture.componentInstance.toggleActiveChannelOpen();
+
+    expect(pauseQuizMutateMock).not.toHaveBeenCalled();
+    expect(fixture.componentInstance.hostSteeringCallout()).toBeNull();
+    fixture.destroy();
+  });
+
   it('schließt den aktiven Q&A-Kanal über die Sichtbarkeitsaktion', async () => {
     getInfoQueryMock.mockResolvedValue({
       ...defaultSession,
@@ -5244,6 +5289,9 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     expect(closeQaChannelMutateMock).toHaveBeenCalledWith({ code: 'ABC123' });
     expect(fixture.componentInstance.isChannelOpen('qa')).toBe(false);
     expect(fixture.componentInstance.channelTabMetaLabel('qa')).toBe('Zu');
+    expect(fixture.nativeElement.textContent).toContain(
+      'Q&A geschlossen: Teilnehmende können keine Fragen einreichen oder bewerten',
+    );
     fixture.destroy();
   });
 
@@ -9609,7 +9657,9 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     expect(host.querySelector('[data-testid="qa-tools-toggle"]')?.textContent).toContain(
       'Auswertung & Werkzeuge',
     );
-    expect(host.textContent).toContain('Fragenwand offen');
+    expect(host.textContent).toContain(
+      'Q&A geöffnet: Teilnehmende können Fragen einreichen und bewerten',
+    );
     expect(host.querySelector('[data-testid="qa-review-pending"]')).toBeNull();
     expect(fixture.componentInstance.qaSortMode()).toBe('BEST');
     expect(tools.contains(host.querySelector('[data-testid="host-moderation-compass"]'))).toBe(

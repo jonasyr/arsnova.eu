@@ -46,6 +46,7 @@ const SESSION_ID = '6a8edced-5f8f-4cfa-9176-454fac9570ad';
 const QUESTION_ID = '7ed3cc25-3179-4a91-9dc3-acc00971fb46';
 const ACTIVE_QUIZ_ID = '11111111-1111-4111-8111-111111111111';
 const INACTIVE_QUIZ_ID = '22222222-2222-4222-8222-222222222222';
+const HISTORY_SCOPE_ID = '33333333-3333-4333-8333-333333333333';
 const QUIZ_INPUT = {
   name: 'Chemie',
   description: undefined,
@@ -292,6 +293,61 @@ describe('session.getActiveQuizIds', () => {
       });
     },
   );
+
+  it('ordnet eine laufende Session nach Löschen und erneutem Anlegen der Quizkarte dem aktuellen Quiz zu', async () => {
+    const scopedQuizInput = { ...QUIZ_INPUT, historyScopeId: HISTORY_SCOPE_ID };
+    const accessProof = await createQuizHistoryAccessProof(scopedQuizInput);
+    prismaMock.quiz.findMany
+      .mockResolvedValueOnce([
+        {
+          id: ACTIVE_QUIZ_ID,
+          ...scopedQuizInput,
+          description: null,
+          teamCount: null,
+          backgroundMusic: null,
+          questions: QUIZ_INPUT.questions.map((question) => ({
+            ...question,
+            ratingMin: null,
+            ratingMax: null,
+            ratingLabelMin: null,
+            ratingLabelMax: null,
+          })),
+        },
+      ])
+      .mockResolvedValueOnce([
+        { id: ACTIVE_QUIZ_ID, historyScopeId: HISTORY_SCOPE_ID },
+        { id: INACTIVE_QUIZ_ID, historyScopeId: HISTORY_SCOPE_ID },
+      ]);
+    prismaMock.session.findMany.mockResolvedValue([
+      {
+        quizId: INACTIVE_QUIZ_ID,
+        code: 'LIVE01',
+        createdAt: new Date('2026-09-27T12:00:00.000Z'),
+        status: 'ACTIVE',
+        endedAt: null,
+        expiresAt: new Date('2026-09-28T12:00:00.000Z'),
+        _count: { participants: 4 },
+      },
+    ]);
+
+    await expect(
+      caller.getActiveQuizIds([{ quizId: ACTIVE_QUIZ_ID, accessProof }]),
+    ).resolves.toEqual([
+      {
+        quizId: ACTIVE_QUIZ_ID,
+        participantCountIncludingHost: 5,
+        sessionCodes: ['LIVE01'],
+      },
+    ]);
+    expect(prismaMock.session.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          status: { not: 'FINISHED' },
+          quizId: { in: [ACTIVE_QUIZ_ID, INACTIVE_QUIZ_ID] },
+        },
+      }),
+    );
+  });
 });
 
 describe('session.getFreetextSessionExport', () => {

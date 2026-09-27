@@ -31634,7 +31634,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="homeScenario.title" datatype="html">
-        <source> Was hast du heute vor? </source>
+        <source> Was hast du heute vor?</source>
         <target>¿Qué quieres hacer hoy?</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/home/home.component.html</context>
@@ -31642,7 +31642,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="homeScenario.classroom" datatype="html">
-        <source> Meinen Kurs begleiten </source>
+        <source> Meinen Kurs begleiten</source>
         <target>Dinamizar mi curso</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/home/home.component.html</context>
@@ -31650,7 +31650,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="homeScenario.event" datatype="html">
-        <source> Eine Veranstaltung moderieren </source>
+        <source> Eine Veranstaltung moderieren</source>
         <target>Moderar un evento</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/home/home.component.html</context>
@@ -31658,7 +31658,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="homeScenario.quick" datatype="html">
-        <source> Schnell ein Format einsetzen </source>
+        <source> Schnell ein Format einsetzen</source>
         <target>Usar un formato al momento</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/home/home.component.html</context>
@@ -31706,7 +31706,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="homeScenario.eventFeedback" datatype="html">
-        <source> Stimmung/Tempo erfassen </source>
+        <source> Stimmung/Tempo erfassen</source>
         <target>Consultar el ánimo o el ritmo</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/home/home.component.html</context>
@@ -31714,8 +31714,8 @@
         </context-group>
       </trans-unit>
       <trans-unit id="sessionHost.qaQuickFeedbackPartialTitle" datatype="html">
-        <source>Die Fragenwand ist offen</source>
-        <target>El muro de preguntas está abierto</target>
+        <source>Q&amp;A ist geöffnet</source>
+        <target>Q&amp;A está abierto</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.ts</context>
           <context context-type="linenumber">4537</context>
@@ -31770,7 +31770,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="sessionHost.soundArea" datatype="html">
-        <source> Ton </source>
+        <source> Ton</source>
         <target>Sonido</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.html</context>
@@ -31806,7 +31806,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="sessionHost.showOnScreen" datatype="html">
-        <source> Auf Bildschirm zeigen </source>
+        <source> Auf Bildschirm zeigen</source>
         <target>Mostrar en pantalla</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.html</context>
@@ -31814,11 +31814,19 @@
         </context-group>
       </trans-unit>
       <trans-unit id="sessionQa.wallOpen" datatype="html">
-        <source> Fragenwand offen </source>
-        <target>Muro de preguntas abierto</target>
+        <source> Q&amp;A geöffnet: Teilnehmende können Fragen einreichen und bewerten</source>
+        <target>Q&amp;A abierto: los participantes pueden enviar y valorar preguntas</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.html</context>
           <context context-type="linenumber">4038,4040</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionQa.wallClosed" datatype="html">
+        <source> Q&amp;A geschlossen: Teilnehmende können keine Fragen einreichen oder bewerten</source>
+        <target>Q&amp;A cerrado: los participantes no pueden enviar ni valorar preguntas</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.html</context>
+          <context context-type="linenumber">4042,4044</context>
         </context-group>
       </trans-unit>
       <trans-unit id="sessionQa.reviewPending" datatype="html">

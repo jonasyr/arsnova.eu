@@ -67,6 +67,15 @@ async function expectFocus(page, selector) {
   }, selector);
 }
 
+async function expectCardBelowToolbar(page, selector) {
+  await page.waitForFunction((target) => {
+    const toolbar = document.querySelector('app-top-toolbar .top-toolbar');
+    const card = document.querySelector(target);
+    if (!(toolbar instanceof HTMLElement) || !(card instanceof HTMLElement)) return false;
+    return card.getBoundingClientRect().top >= toolbar.getBoundingClientRect().bottom + 8;
+  }, selector);
+}
+
 async function dismissJoin(page) {
   const close = page.locator('.session-host__join-viewport-overlay__close');
   if (
@@ -239,24 +248,37 @@ async function quickStarts(browser) {
 async function chooseEvent(page) {
   const eventChoice = page.locator('.home-scenario__option').nth(1);
   if (page.viewportSize().width === 320) {
+    const classroomChoice = page.locator('.home-scenario__option').first();
     const quickChoice = page.locator('.home-scenario__option').nth(2);
+
+    // iPad-Mini-Breite: Die Zielkarte muss vollständig unter der fixierten Appbar beginnen.
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await classroomChoice.click();
+    await expectCardBelowToolbar(page, '#home-host-quiz');
+    await page.setViewportSize({ width: 320, height: 1000 });
+    await eventChoice.scrollIntoViewIfNeeded();
+
     await eventChoice.focus();
     await eventChoice.press('Enter');
     await expectFocus(page, '#home-host-qa .home-card__scenario-focus-target');
+    await expectCardBelowToolbar(page, '#home-host-qa');
     await page.keyboard.press('Tab');
     await expectFocus(page, '[data-testid="home-live-qa-create"]');
 
     await quickChoice.focus();
     await quickChoice.press('Space');
     await expectFocus(page, '#host-quick-feedback .home-card__scenario-focus-target');
+    await expectCardBelowToolbar(page, '#host-quick-feedback');
     await page.keyboard.press('Tab');
     await expectFocus(page, '#host-quick-feedback .home-feedback-chip');
 
     await eventChoice.focus();
     await eventChoice.press('Enter');
     await expectFocus(page, '#home-host-qa .home-card__scenario-focus-target');
+    await expectCardBelowToolbar(page, '#home-host-qa');
   } else {
     await eventChoice.click();
+    await expectCardBelowToolbar(page, '#home-host-qa');
   }
   await page.getByTestId('home-event-both').waitFor();
   if (page.viewportSize().width >= 1200) {
@@ -465,10 +487,7 @@ async function eventStarts(browser) {
       await acceptQa(page);
       if (failure) {
         await page.getByTestId('host-steering-retry').waitFor();
-        assert.match(
-          await page.locator('#host-steering-callout').innerText(),
-          /Fragenwand ist offen/,
-        );
+        assert.match(await page.locator('#host-steering-callout').innerText(), /Q&A ist geöffnet/);
         const partial = await hostApi.session.getInfo.query({ code });
         assert.equal(partial.channels.qa.open, true);
         assert.equal(partial.channels.quickFeedback.enabled, false);

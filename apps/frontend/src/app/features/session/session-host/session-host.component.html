@@ -4039,7 +4039,11 @@
 
                 @if (isChannelOpen('qa') && !qaDeadlineExpired()) {
                   <p class="session-channel-card__info" role="status" i18n="@@sessionQa.wallOpen">
-                    Fragenwand offen
+                    Q&amp;A geöffnet: Teilnehmende können Fragen einreichen und bewerten
+                  </p>
+                } @else if (!isChannelOpen('qa')) {
+                  <p class="session-channel-card__info" role="status" i18n="@@sessionQa.wallClosed">
+                    Q&amp;A geschlossen: Teilnehmende können keine Fragen einreichen oder bewerten
                   </p>
                 }
                 @if (session()?.channels?.qa?.moderationMode) {

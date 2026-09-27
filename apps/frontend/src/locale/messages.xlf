@@ -28058,7 +28058,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="sessionHost.qaQuickFeedbackPartialTitle" datatype="html">
-        <source>Die Fragenwand ist offen</source>
+        <source>Q&amp;A ist geöffnet</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.ts</context>
           <context context-type="linenumber">4537</context>
@@ -28146,10 +28146,17 @@
         </context-group>
       </trans-unit>
       <trans-unit id="sessionQa.wallOpen" datatype="html">
-        <source> Fragenwand offen </source>
+        <source> Q&amp;A geöffnet: Teilnehmende können Fragen einreichen und bewerten </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.html</context>
           <context context-type="linenumber">4038,4040</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionQa.wallClosed" datatype="html">
+        <source> Q&amp;A geschlossen: Teilnehmende können keine Fragen einreichen oder bewerten </source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.html</context>
+          <context context-type="linenumber">4042,4044</context>
         </context-group>
       </trans-unit>
       <trans-unit id="sessionQa.reviewPending" datatype="html">

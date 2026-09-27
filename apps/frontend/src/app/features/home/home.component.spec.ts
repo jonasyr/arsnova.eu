@@ -2000,6 +2000,12 @@ describe('HomeComponent', () => {
       expect(compactLayout).toMatch(
         /\.home-host-stack\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/,
       );
+      expect(compactLayout).toMatch(
+        /\.home-host-stack > \.home-card\s*\{[^}]*scroll-margin-top:\s*calc\([^)]*6\.5rem/,
+      );
+      expect(layout).toMatch(
+        /@media \(min-width:\s*840px\)[\s\S]*?\.home-host-stack > \.home-card\s*\{[^}]*scroll-margin-top:\s*calc\([^)]*8rem/,
+      );
       expect(desktopLayout).toMatch(
         /:host\.route-home \.l-page:first-child\s*\{[^}]*max-width:\s*var\(--app-toolbar-max-width\)[^}]*padding-inline:\s*0/,
       );
@@ -2329,6 +2335,12 @@ describe('HomeComponent', () => {
     );
     expect(scss).toMatch(
       /\.home-host-stack > \.home-card--scenario-selected\s*\{[^}]*outline:\s*3px solid var\(--mat-sys-primary\)/,
+    );
+    expect(scss).toMatch(
+      /\.home-card__scenario-focus-target\s*\{[^}]*display:\s*inline-block[^}]*width:\s*fit-content[^}]*max-width:\s*100%/,
+    );
+    expect(scss).toMatch(
+      /\.home-card__scenario-focus-target:focus-visible\s*\{[^}]*outline:\s*3px solid var\(--mat-sys-primary\)/,
     );
   });
 

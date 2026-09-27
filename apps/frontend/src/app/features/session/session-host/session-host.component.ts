@@ -4610,7 +4610,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
           callout
             ? {
                 ...callout,
-                title: $localize`:@@sessionHost.qaQuickFeedbackPartialTitle:Die Fragenwand ist offen`,
+                title: $localize`:@@sessionHost.qaQuickFeedbackPartialTitle:Q&A ist geöffnet`,
                 body: $localize`:@@sessionHost.qaQuickFeedbackPartialBody:Q&A ist bereit. Blitzlicht konnte noch nicht vollständig hinzugefügt werden. Du kannst es hier unter demselben Sessioncode erneut versuchen.`,
                 retryLabel: $localize`:@@sessionHost.qaQuickFeedbackRetry:Blitzlicht hinzufügen`,
               }
@@ -10592,7 +10592,10 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       if (this.isQuizPausedByHost()) {
         return $localize`:@@sessionHost.resumeQuiz:Quiz fortsetzen`;
       }
-      if (status === 'QUESTION_OPEN' || status === 'ACTIVE') {
+      if (
+        (status === 'QUESTION_OPEN' || status === 'ACTIVE') &&
+        this.hasCurrentQuizQuestionForHost()
+      ) {
         return $localize`:@@sessionHost.pauseQuiz:Quiz pausieren`;
       }
       return null;
@@ -10672,7 +10675,8 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       this.channelVisibilityPending() ||
       !this.isChannelEnabled('quiz') ||
       !this.code ||
-      (status !== 'QUESTION_OPEN' && status !== 'ACTIVE' && !this.isQuizPausedByHost())
+      (status !== 'QUESTION_OPEN' && status !== 'ACTIVE' && !this.isQuizPausedByHost()) ||
+      ((status === 'QUESTION_OPEN' || status === 'ACTIVE') && !this.hasCurrentQuizQuestionForHost())
     ) {
       return;
     }

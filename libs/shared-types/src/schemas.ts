@@ -4367,6 +4367,7 @@ export type GetQaWordCloudProjectionOutput = z.infer<typeof GetQaWordCloudProjec
 
 /** DTO: Live-Zustand authorisierter Quiz-Kopien (Story 1.10). */
 export const ActiveQuizLiveStateDTOSchema = z.object({
+  /** Angefragte aktuelle Quizkopie; Live-Zustände umfassen ihre autorisierte Historie. */
   quizId: z.uuid(),
   /** Aktuell verbundene Personen inkl. Host/Dozent:in. */
   participantCountIncludingHost: z.number().int().min(1),

@@ -763,7 +763,28 @@
 }
 
 .home-host-stack > .home-card {
-  scroll-margin-top: 6rem;
+  scroll-margin-top: calc(
+    6.5rem + var(--app-offline-banner-height, 0px) + var(--app-service-status-banner-height, 0px) +
+      var(--app-service-status-banner-gap, 0px)
+  );
+}
+
+@media (min-width: 600px) {
+  .home-host-stack > .home-card {
+    scroll-margin-top: calc(
+      7rem + var(--app-offline-banner-height, 0px) + var(--app-service-status-banner-height, 0px) +
+        var(--app-service-status-banner-gap, 0px)
+    );
+  }
+}
+
+@media (min-width: 840px) {
+  .home-host-stack > .home-card {
+    scroll-margin-top: calc(
+      8rem + var(--app-offline-banner-height, 0px) + var(--app-service-status-banner-height, 0px) +
+        var(--app-service-status-banner-gap, 0px)
+    );
+  }
 }
 
 .home-host-stack > .home-card--scenario-selected {
@@ -772,6 +793,12 @@
   box-shadow:
     var(--mat-sys-level3),
     0 0 0 0.5rem color-mix(in srgb, var(--mat-sys-primary) 14%, transparent);
+}
+
+.home-card__scenario-focus-target {
+  display: inline-block;
+  width: fit-content;
+  max-width: 100%;
 }
 
 .home-card__scenario-focus-target:focus-visible {

@@ -153,7 +153,7 @@ Die Sammlung unterstützt:
 - Quiz duplizieren
 - Quiz löschen
 - Sortierung nach Aktualität
-- Erkennung, ob ein Quiz gerade live verwendet wird
+- Erkennung, ob ein Quiz gerade live verwendet wird; auch nach Löschen und erneutem Anlegen der lokalen Quizkarte führt **Starten** mit vorhandenem Hostzugang zurück in die laufende Session derselben Quiz-Historie
 - Zugriff auf vergangene Bonuscodes und letztes Session-Feedback pro Quiz-Historie
 
 ### 3.3 Quiz-Metadaten
