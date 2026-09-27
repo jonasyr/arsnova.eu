@@ -27,6 +27,7 @@ import { PresentationStartDialogComponent } from '../host-pairing/presentation-s
 import { WordCloudComponent } from '../session-present/word-cloud.component';
 import { SessionTokenStorageService } from '../session-present/session-token-storage.service';
 import { ThemePresetService } from '../../../core/theme-preset.service';
+import { HostScenarioService } from '../../../core/host-scenario.service';
 import { QuizStoreService, DEMO_QUIZ_ID } from '../../quiz/data/quiz-store.service';
 import { getSkewAdjustedNow, resetServerClockSkew } from '../session-server-clock';
 
@@ -474,6 +475,9 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     sessionStorage.removeItem('session-expiration-warning:ABC123:2:30');
     sessionStorage.removeItem('session-expiration-warning:ABC123:2:5');
     sessionStorage.removeItem('arsnova-host-recovery-card-ABC123');
+    sessionStorage.removeItem('arsnova-host-scenario-session:v1:ABC123');
+    sessionStorage.removeItem('arsnova-host-scenario-quick-feedback:v1:ABC123');
+    localStorage.removeItem('arsnova-host-scenario:v1');
     localStorage.removeItem('arsnova-host-phase-tracks');
     vi.clearAllMocks();
     resetServerClockSkew();
@@ -3384,6 +3388,8 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     const router = TestBed.inject(Router);
     const navigateByUrlSpy = vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
 
+    const scenario = TestBed.inject(HostScenarioService);
+    scenario.requestQuickFeedbackAfterQa('ABC123');
     await fixture.componentInstance.ngOnInit();
 
     expect(dialogOpenMock).toHaveBeenCalledWith(
@@ -3410,6 +3416,8 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
       expect.anything(),
     );
     expect(navigateByUrlSpy).toHaveBeenCalledWith('/', { replaceUrl: true });
+    expect(enableQuickFeedbackChannelMutateMock).not.toHaveBeenCalled();
+    expect(scenario.hasQuickFeedbackAfterQa('ABC123')).toBe(false);
     fixture.destroy();
   });
 
@@ -3622,6 +3630,219 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
       expect.anything(),
     );
     fixture.destroy();
+  });
+
+  describe('EVENT: Fragenwand und Blitzlicht unter einem Code', () => {
+    const qaSession = {
+      ...defaultSession,
+      ...configuredQaChannelResult,
+      channels: {
+        ...configuredQaChannelResult.channels,
+        quiz: { enabled: false },
+      },
+    };
+    const combinedChannels = {
+      ...qaSession.channels,
+      quickFeedback: { enabled: true, open: true },
+    };
+
+    function prepareEventStart(options: { recoveryCard?: boolean; active?: boolean } = {}) {
+      getInfoQueryMock.mockResolvedValue({
+        ...qaSession,
+        status: options.active ? 'ACTIVE' : 'LOBBY',
+      });
+      enableQuickFeedbackChannelMutateMock.mockResolvedValue(combinedChannels);
+      if (options.recoveryCard) {
+        persistInitialHostRecovery({
+          code: 'ABC123',
+          recoveryCard: {
+            supportId: 'ARS-ABCD-2345',
+            recoveryCode: 'recovery-capability-abcdefghijklmnopqrstuvwxyz',
+          },
+        });
+      }
+      const fixture = setup();
+      const scenario = TestBed.inject(HostScenarioService);
+      scenario.assignToSession('ABC123', 'EVENT');
+      scenario.requestQuickFeedbackAfterQa('ABC123');
+      return { fixture, scenario };
+    }
+
+    it('aktiviert Blitzlicht erst nach bestätigter Zugangskarte und erfolgreichem Q&A-Start', async () => {
+      const { fixture, scenario } = prepareEventStart({ recoveryCard: true });
+      const confirmation = new Subject<boolean>();
+      dialogOpenMock.mockReturnValue({ afterClosed: () => confirmation });
+      const started = fixture.componentInstance.ngOnInit();
+      await vi.waitFor(() =>
+        expect(dialogOpenMock).toHaveBeenCalledWith(
+          HostRecoveryCardDialogComponent,
+          expect.anything(),
+        ),
+      );
+      expect(startQaMutateMock).not.toHaveBeenCalled();
+      expect(enableQuickFeedbackChannelMutateMock).not.toHaveBeenCalled();
+      confirmation.next(true);
+      confirmation.complete();
+      await started;
+      expect(startQaMutateMock).toHaveBeenCalledOnce();
+      expect(enableQuickFeedbackChannelMutateMock).toHaveBeenCalledExactlyOnceWith({
+        code: 'ABC123',
+      });
+      expect(startQaMutateMock.mock.invocationCallOrder[0]).toBeLessThan(
+        enableQuickFeedbackChannelMutateMock.mock.invocationCallOrder[0],
+      );
+      expect(fixture.componentInstance.channels()).toEqual({
+        quiz: false,
+        qa: true,
+        quickFeedback: true,
+      });
+      expect(fixture.componentInstance.activeChannel()).toBe('qa');
+      expect(fixture.componentInstance.session()?.preferredChannel).toBe('qa');
+      expect(scenario.hasQuickFeedbackAfterQa('ABC123')).toBe(false);
+      fixture.destroy();
+    });
+
+    it('behält die Anschlussaktion bei abgebrochener Zugangskarte ohne Blitzlicht-Aktivierung', async () => {
+      const { fixture, scenario } = prepareEventStart({ recoveryCard: true });
+      dialogOpenMock.mockReturnValue({ afterClosed: () => of(false) });
+      await fixture.componentInstance.ngOnInit();
+      expect(startQaMutateMock).not.toHaveBeenCalled();
+      expect(enableQuickFeedbackChannelMutateMock).not.toHaveBeenCalled();
+      expect(scenario.hasQuickFeedbackAfterQa('ABC123')).toBe(true);
+      fixture.destroy();
+    });
+
+    it('führt nach fehlgeschlagenem Q&A-Start erst beim erfolgreichen Retry fort', async () => {
+      const { fixture, scenario } = prepareEventStart({ recoveryCard: true });
+      startQaMutateMock.mockRejectedValueOnce(new Error('offline'));
+      await fixture.componentInstance.ngOnInit();
+      expect(enableQuickFeedbackChannelMutateMock).not.toHaveBeenCalled();
+      expect(scenario.hasQuickFeedbackAfterQa('ABC123')).toBe(true);
+      fixture.componentInstance.hostSteeringCallout()?.retry();
+      await vi.waitFor(() => expect(scenario.hasQuickFeedbackAfterQa('ABC123')).toBe(false));
+      expect(startQaMutateMock).toHaveBeenCalledTimes(2);
+      expect(enableQuickFeedbackChannelMutateMock).toHaveBeenCalledOnce();
+      fixture.destroy();
+    });
+
+    it('führt Beides auch nach geschlossenem Fehlerhinweis über den normalen Lobby-Start fort', async () => {
+      const { fixture, scenario } = prepareEventStart({ recoveryCard: true });
+      startQaMutateMock.mockRejectedValueOnce(new Error('offline'));
+      fixture.detectChanges();
+      await vi.waitFor(() =>
+        expect(fixture.componentInstance.hostSteeringCallout()).not.toBeNull(),
+      );
+      fixture.detectChanges();
+      expect(fixture.componentInstance.activeChannel()).toBe('qa');
+      fixture.componentInstance.dismissHostSteeringCallout();
+      await fixture.componentInstance.startSessionFlow();
+      expect(startQaMutateMock).toHaveBeenCalledTimes(2);
+      expect(enableQuickFeedbackChannelMutateMock).toHaveBeenCalledExactlyOnceWith({
+        code: 'ABC123',
+      });
+      expect(scenario.hasQuickFeedbackAfterQa('ABC123')).toBe(false);
+      expect(fixture.componentInstance.activeChannel()).toBe('qa');
+      fixture.destroy();
+    });
+
+    it('benennt den Q&A-Teilerfolg und ergänzt Blitzlicht beim Retry ohne erneuten Start', async () => {
+      const { fixture, scenario } = prepareEventStart({ active: true });
+      enableQuickFeedbackChannelMutateMock.mockRejectedValueOnce(new Error('offline'));
+      fixture.detectChanges();
+      await vi.waitFor(() =>
+        expect(fixture.componentInstance.hostSteeringCallout()?.retryLabel).toBe(
+          'Blitzlicht hinzufügen',
+        ),
+      );
+      await fixture.whenStable();
+      fixture.detectChanges();
+      await flushMacroTask();
+      const host = fixture.componentInstance;
+      expect(host.activeChannel()).toBe('qa');
+      expect(host.channels().qa).toBe(true);
+      expect(host.channels().quickFeedback).toBe(false);
+      expect(host.hostSteeringCallout()?.title).toBe('Die Fragenwand ist offen');
+      expect(scenario.hasQuickFeedbackAfterQa('ABC123')).toBe(true);
+      const retry = fixture.nativeElement.querySelector(
+        '[data-testid="host-steering-retry"]',
+      ) as HTMLButtonElement;
+      expect(retry.textContent).toContain('Blitzlicht hinzufügen');
+      expect(document.activeElement).toBe(retry);
+      let finishActivation!: (channels: typeof combinedChannels) => void;
+      enableQuickFeedbackChannelMutateMock.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishActivation = resolve;
+          }),
+      );
+      retry.click();
+      fixture.detectChanges();
+      expect(retry.getAttribute('aria-disabled')).toBe('true');
+      expect(
+        fixture.nativeElement.querySelector('#host-steering-callout').getAttribute('aria-busy'),
+      ).toBe('true');
+      retry.click();
+      expect(enableQuickFeedbackChannelMutateMock).toHaveBeenCalledTimes(2);
+      expect(document.activeElement).toBe(retry);
+      finishActivation(combinedChannels);
+      await vi.waitFor(() => expect(scenario.hasQuickFeedbackAfterQa('ABC123')).toBe(false));
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+      expect(host.hostSteeringCallout()).toBeNull();
+      expect(document.activeElement).toBe(
+        fixture.nativeElement.querySelector('[data-testid="qa-channel-heading"]'),
+      );
+      expect(startQaMutateMock).not.toHaveBeenCalled();
+      expect(dialogOpenMock).not.toHaveBeenCalledWith(
+        QaChannelConfigurationDialogComponent,
+        expect.anything(),
+      );
+      expect(endMutateMock).not.toHaveBeenCalled();
+      fixture.destroy();
+    });
+
+    it('setzt nach während der Aktivierung geschlossener Fragenwand keinen falschen Erfolg', async () => {
+      const { fixture, scenario } = prepareEventStart({ active: true });
+      enableQuickFeedbackChannelMutateMock.mockResolvedValue({
+        ...combinedChannels,
+        qa: { ...combinedChannels.qa, open: false, state: 'CLOSED' },
+      });
+      await fixture.componentInstance.ngOnInit();
+      expect(scenario.hasQuickFeedbackAfterQa('ABC123')).toBe(true);
+      expect(fixture.componentInstance.hostSteeringCallout()).toBeNull();
+      expect(reopenQaChannelMutateMock).not.toHaveBeenCalled();
+      fixture.destroy();
+    });
+
+    it('rekonstruiert nach Reload die Priorität aus bestätigten Kanälen ohne doppelte Aktivierung', async () => {
+      const { fixture, scenario } = prepareEventStart({ active: true });
+      getInfoQueryMock.mockResolvedValue({
+        ...qaSession,
+        status: 'ACTIVE',
+        channels: combinedChannels,
+        preferredChannel: 'quickFeedback',
+      });
+      await fixture.componentInstance.ngOnInit();
+      expect(enableQuickFeedbackChannelMutateMock).not.toHaveBeenCalled();
+      expect(startQaMutateMock).not.toHaveBeenCalled();
+      expect(setPreferredLiveChannelMutateMock).toHaveBeenCalledWith(
+        expect.objectContaining({ code: 'ABC123', channel: 'qa' }),
+      );
+      expect(fixture.componentInstance.activeChannel()).toBe('qa');
+      expect(scenario.hasQuickFeedbackAfterQa('ABC123')).toBe(false);
+      fixture.destroy();
+    });
+
+    it('aktiviert aus einer globalen Fallpräferenz allein keinen zusätzlichen Kanal', async () => {
+      const { fixture, scenario } = prepareEventStart({ active: true });
+      scenario.clearQuickFeedbackAfterQa('ABC123');
+      scenario.selectScenario('EVENT');
+      await fixture.componentInstance.ngOnInit();
+      expect(enableQuickFeedbackChannelMutateMock).not.toHaveBeenCalled();
+      expect(startQaMutateMock).not.toHaveBeenCalled();
+      fixture.destroy();
+    });
   });
 
   it('projiziert einen geöffneten Q&A-Kanal auch ohne sichtbare Fragen', async () => {

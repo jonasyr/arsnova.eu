@@ -46,6 +46,7 @@ import {
 import { ConfirmLeaveDialogComponent } from '../../shared/confirm-leave-dialog/confirm-leave-dialog.component';
 import { createDefaultLiveSessionOnboardingProfile } from '../../core/home-preset-storage';
 import { ThemePresetService } from '../../core/theme-preset.service';
+import { HostScenarioService, type HostScenario } from '../../core/host-scenario.service';
 import { PresetSnackbarFocusService } from '../../core/preset-snackbar-focus.service';
 import {
   localizeKnownServerError,
@@ -245,6 +246,7 @@ export class HomeComponent implements OnInit, AfterViewInit, OnDestroy {
   sessionBoundFeedbackType = signal<QuickFeedbackType | null>(null);
 
   readonly themePreset = inject(ThemePresetService);
+  readonly hostScenario = inject(HostScenarioService);
   private readonly quizStore = inject(QuizStoreService);
   readonly librarySharingMode = this.quizStore.librarySharingMode;
   readonly syncOriginDeviceLabel = this.quizStore.originDeviceLabel;
@@ -1001,8 +1003,10 @@ export class HomeComponent implements OnInit, AfterViewInit, OnDestroy {
   async openHeroHostTab(
     tab: 'quiz' | 'qa' | 'quickFeedback',
     feedbackType?: QuickFeedbackType,
+    quickFeedbackAfterQa = false,
   ): Promise<void> {
     if (this.hostSessionStarting()) return;
+    const scenario = this.hostScenario.scenarioForAction();
 
     this.joinError.set(null);
     this.joinErrorSessionFinished.set(false);
@@ -1014,13 +1018,13 @@ export class HomeComponent implements OnInit, AfterViewInit, OnDestroy {
 
     try {
       if (tab === 'qa') {
-        await this.startHeroHostSession(tab, feedbackType);
+        await this.startHeroHostSession(tab, feedbackType, scenario, quickFeedbackAfterQa);
         return;
       }
 
       const code = this.resolveHeroHostCode();
       if (!code) {
-        await this.startHeroHostSession(tab, feedbackType);
+        await this.startHeroHostSession(tab, feedbackType, scenario);
         return;
       }
 
@@ -1030,11 +1034,11 @@ export class HomeComponent implements OnInit, AfterViewInit, OnDestroy {
           anonymousClientId: getAnonymousClientId(),
         });
         if (tab === 'quickFeedback' && session.status === 'FINISHED') {
-          await this.startHeroHostSession(tab, feedbackType);
+          await this.startHeroHostSession(tab, feedbackType, scenario);
           return;
         }
         if (tab === 'quiz' && session.status === 'FINISHED' && !isQaChannelJoinable(session)) {
-          await this.startHeroHostSession(tab, feedbackType);
+          await this.startHeroHostSession(tab, feedbackType, scenario);
           return;
         }
         if (
@@ -1042,7 +1046,7 @@ export class HomeComponent implements OnInit, AfterViewInit, OnDestroy {
           feedbackType &&
           !this.isHeroTabAvailableForSession(session, tab)
         ) {
-          await this.startHeroHostSession(tab, feedbackType);
+          await this.startHeroHostSession(tab, feedbackType, scenario);
           return;
         }
         const queryParams =
@@ -1065,7 +1069,9 @@ export class HomeComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private async startHeroHostSession(
     tab: 'quiz' | 'qa' | 'quickFeedback',
-    feedbackType?: QuickFeedbackType,
+    feedbackType: QuickFeedbackType | undefined,
+    scenario: HostScenario,
+    quickFeedbackAfterQa = false,
   ): Promise<void> {
     try {
       const onboardingProfile = createDefaultLiveSessionOnboardingProfile(
@@ -1116,6 +1122,10 @@ export class HomeComponent implements OnInit, AfterViewInit, OnDestroy {
         browserCapability: result.hostBrowserCapability,
         recoveryCard: result.hostRecoveryCard,
       });
+      this.hostScenario.assignToSession(result.code, scenario);
+      if (tab === 'qa' && quickFeedbackAfterQa) {
+        this.hostScenario.requestQuickFeedbackAfterQa(result.code);
+      }
       if (tab === 'quickFeedback') {
         this.snackBar.open(
           $localize`:@@homeLiveCard.quickFeedbackCreatedSnack:Neue Blitzlicht-Session gestartet.`,

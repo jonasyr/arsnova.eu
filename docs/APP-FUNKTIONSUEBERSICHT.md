@@ -85,9 +85,15 @@ Von der Startseite aus können Hosts direkt:
 - gespeicherte **Host-Zugänge** wieder öffnen (Live-Karte, höchstens 8 von 32 Capabilities)
 - ohne gespeicherte Capability über **Host-Zugang wiederherstellen** nach `/host-recovery`
 
+Die optionale Aufgabenwahl **Was hast du heute vor?** steht unmittelbar über den drei Host-Karten. **Meinen Kurs begleiten** priorisiert den Quizstart und das Sammeln von Kursfragen; **Eine Veranstaltung moderieren** bietet **Fragen sammeln**, **Stimmung/Tempo erfassen** und **Beides**; **Schnell ein Format einsetzen** lässt die direkten Formatstarts im Vordergrund. Alle drei Karten und bestehende Q&A-Zugänge bleiben erreichbar. Die Quiz-Sammlung priorisiert für Kurs- und Direktstarts **Starten** neben **Bearbeiten**; weitere Kartenaktionen bleiben in den bestehenden Menüs.
+
+**Beides** führt durch die vorhandene Q&A-Ersteinrichtung und die Bestätigung der Host-Zugangskarte. Erst nach erfolgreichem Öffnen von Q&A wird Blitzlicht unter demselben Sessioncode hinzugefügt; die Fragenwand bleibt der priorisierte Einstieg. Schlägt nur das Hinzufügen von Blitzlicht fehl, bleibt Q&A offen und **Blitzlicht hinzufügen** wiederholt den fehlenden Schritt in derselben Session.
+
+Die App merkt sich nur eine ausdrücklich gewählte Aufgabe als lokale Präferenz. Für neu gestartete Sessions wird die Aufgabe pro Code im aktuellen Tab gespeichert; ohne vorherige Wahl gilt der direkte Kartenstart als Schnellstart. Ein direkter Host-Link oder eine Wiederherstellung ohne diesen Eintrag übernimmt keine globale Präferenz und erhält keine zusätzlichen Rechte. Die weitere Reduktion der Live-Ansichten gehört zu den Folgeslices von [#470](https://github.com/kqc-real/arsnova.eu/issues/470); Slice 1 verändert deren Kanalnavigation nicht.
+
 Wichtig ist: Q&A und Blitzlicht können nicht nur als Zusatzkanäle einer bestehenden Session laufen, sondern auch sehr schnell aus dem Home-Bereich heraus initialisiert werden. Ein noch offenes Q&A-Forum überlebt ein beendetes Quiz (Epic #405).
 
-### 2.3 Standalone-Blitzlicht von der Startseite
+### 2.3 Sessiongebundenes Blitzlicht von der Startseite
 
 Die Startseite bietet vordefinierte Blitzlicht-Typen als Sofortstart:
 
@@ -99,7 +105,7 @@ Die Startseite bietet vordefinierte Blitzlicht-Typen als Sofortstart:
 - ABCD
 - Tempo-Feedback mit `🙂 Ich folge`, `🐇 Schneller`, `🐢 Langsamer`, `🙈 Verloren`
 
-Ein Klick erzeugt eine neue Runde, Host-Token und Beitrittslink. Danach wechselt die App direkt in die Host-Ansicht des Blitzlichts.
+Ein Klick erzeugt eine Session mit aktiviertem Blitzlicht-Kanal, Host-Token und Beitrittslink und startet die gewählte Runde ohne zusätzlichen Auswahldialog. Danach wechselt die App direkt in den Blitzlicht-Kanal der Session-Host-Ansicht. Die noch vorhandenen Standalone-Routen sind Legacy und werden über die Startseite nicht angelegt.
 
 ### 2.4 Sync-Link für die Quiz-Sammlung
 

@@ -95,6 +95,7 @@ import { AnswerOptionBadgeComponent } from '../../../shared/answer-option-badge/
 import { InfoLandingLinkComponent } from '../../../shared/info-landing-link/info-landing-link.component';
 import { INFO_LANDING_ANCHORS } from '../../../core/info-landing-url';
 import { ThemePresetService } from '../../../core/theme-preset.service';
+import { HostScenarioService } from '../../../core/host-scenario.service';
 import { SoundService } from '../../../core/sound.service';
 import { HostDisplayModeService } from '../../../core/host-display-mode.service';
 import {
@@ -625,6 +626,7 @@ type HostSteeringCalloutState = {
   title: string;
   body: string;
   retry: () => void;
+  retryLabel?: string;
   errorRequestId: string;
   suggestedArea: ProductFeedbackInAppArea;
 };
@@ -745,6 +747,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   readonly skipCurrentResultQuestionOnNext = signal(false);
   /** Auffälliger Hinweis bei fehlgeschlagenen Host-Steuer-Mutationen (Netz/Server). */
   readonly hostSteeringCallout = signal<HostSteeringCalloutState | null>(null);
+  readonly qaQuickFeedbackPending = signal(false);
   readonly activeChannel = signal<SessionChannelTab>('quiz');
   readonly qaQuestions = signal<QaQuestionDTO[]>([]);
   readonly qaListTotalCount = signal(0);
@@ -864,6 +867,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   private readonly quizStore = inject(QuizStoreService);
   private readonly wordCloudTermExtractor = inject(WordCloudTermExtractorService);
   private readonly sessionTokenStorage = inject(SessionTokenStorageService);
+  private readonly hostScenario = inject(HostScenarioService);
   readonly contextualFeedbackOffer = inject(ContextualFeedbackOfferService);
   private presenterWindowOpenInFlight = false;
   private auxPollTimer: ReturnType<typeof setInterval> | null = null;
@@ -4490,21 +4494,95 @@ export class SessionHostComponent implements OnInit, OnDestroy {
 
   /** Nach Einrichtung/Zugangskarte nicht in der leeren Lobby hängen bleiben; Button bleibt für Reload. */
   private async startQaAfterCreateSetup(): Promise<void> {
-    if (!this.channels().qa) {
+    if (
+      !this.channels().qa ||
+      this.qaChannelNeedsConfiguration() ||
+      getStagedHostRecoveryCard(this.code)
+    ) {
       return;
     }
-    if (this.effectiveStatus() !== 'LOBBY') {
+    if (this.effectiveStatus() === 'LOBBY' && !(await this.startQa())) {
+      this.hostSteeringCallout.update((callout) =>
+        callout ? { ...callout, retry: () => void this.startQaAfterCreateSetup() } : callout,
+      );
       return;
     }
-    await this.startQa();
-    afterNextRender(() => this.focusQaWallAfterCreateSetup(), { injector: this.injector });
+    await this.completeQaQuickFeedbackStart();
+    if (!this.hostSteeringCallout()) {
+      afterNextRender(() => this.focusQaWallAfterCreateSetup(), { injector: this.injector });
+    }
+  }
+
+  /** A one-shot local launch intent; server-confirmed channels remain authoritative. */
+  private async completeQaQuickFeedbackStart(): Promise<void> {
+    if (
+      !this.hostScenario.hasQuickFeedbackAfterQa(this.code) ||
+      this.destroyRef.destroyed ||
+      this.qaQuickFeedbackPending() ||
+      this.channelActivationPending() ||
+      this.effectiveStatus() !== 'ACTIVE' ||
+      !this.isChannelOpen('qa') ||
+      this.qaChannelNeedsConfiguration() ||
+      getStagedHostRecoveryCard(this.code) ||
+      this.hostAccessRevoked() ||
+      this.sessionUnavailable()
+    ) {
+      return;
+    }
+    this.qaQuickFeedbackPending.set(true);
+    try {
+      if (!this.channels().quickFeedback) {
+        await this.enableChannel('quickFeedback');
+      }
+      if (
+        this.destroyRef.destroyed ||
+        this.hostAccessRevoked() ||
+        this.sessionUnavailable() ||
+        this.effectiveStatus() !== 'ACTIVE' ||
+        !this.isChannelOpen('qa')
+      ) {
+        return;
+      }
+      await this.selectChannel('qa');
+      if (!this.channels().quickFeedback || this.session()?.preferredChannel !== 'qa') {
+        this.openHostSteeringCalloutForSteeringFailure(
+          () => void this.completeQaQuickFeedbackStart(),
+        );
+        this.hostSteeringCallout.update((callout) =>
+          callout
+            ? {
+                ...callout,
+                title: $localize`:@@sessionHost.qaQuickFeedbackPartialTitle:Die Fragenwand ist offen`,
+                body: $localize`:@@sessionHost.qaQuickFeedbackPartialBody:Q&A ist bereit. Blitzlicht konnte noch nicht vollständig hinzugefügt werden. Du kannst es hier unter demselben Sessioncode erneut versuchen.`,
+                retryLabel: $localize`:@@sessionHost.qaQuickFeedbackRetry:Blitzlicht hinzufügen`,
+              }
+            : callout,
+        );
+        return;
+      }
+      this.hostScenario.clearQuickFeedbackAfterQa(this.code);
+      // Keep the retry control until the visible questions-wall heading can receive focus.
+      afterNextRender(
+        () => {
+          this.focusQaWallAfterCreateSetup();
+          this.hostSteeringCallout.set(null);
+        },
+        { injector: this.injector },
+      );
+    } finally {
+      this.qaQuickFeedbackPending.set(false);
+    }
   }
 
   private focusQaWallAfterCreateSetup(): void {
     if (this.effectiveStatus() !== 'ACTIVE') {
       return;
     }
-    this.qaChannelHeadingRef?.nativeElement.focus({ preventScroll: true });
+    const heading = this.qaChannelHeadingRef?.nativeElement;
+    if (heading && this.isElementVisibleForFocus(heading)) {
+      heading.scrollIntoView?.({ block: 'center' });
+      heading.focus({ preventScroll: true });
+    }
   }
 
   async ngOnInit(): Promise<void> {
@@ -4530,11 +4608,14 @@ export class SessionHostComponent implements OnInit, OnDestroy {
         abortUnconfiguredSessionOnCancel: true,
       });
     } else {
-      await this.showStagedRecoveryCard(
+      const recoveryResult = await this.showStagedRecoveryCard(
         this.requestedQaCreateSetup && !this.qaCreateSetupCompleted
           ? { setupStep: 2, setupStepCount: 2 }
           : undefined,
       );
+      if (recoveryResult === undefined && this.hostScenario.hasQuickFeedbackAfterQa(this.code)) {
+        await this.startQaAfterCreateSetup();
+      }
     }
     void this.refreshPairedHostStatus();
     try {
@@ -5789,6 +5870,10 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   }
 
   dismissHostSteeringCallout(): void {
+    if (this.qaQuickFeedbackPending()) return;
+    if (this.hostSteeringCallout()?.retryLabel) {
+      this.focusQaWallAfterCreateSetup();
+    }
     this.hostSteeringCallout.set(null);
   }
 
@@ -6247,6 +6332,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       return;
     }
     this.qaCreateAbortInFlight = true;
+    this.hostScenario.clearQuickFeedbackAfterQa(this.code);
     this.dialog.closeAll();
     clearStagedHostRecoveryCard(this.code);
     clearHostBrowserCapability(this.code);
@@ -10665,7 +10751,11 @@ export class SessionHostComponent implements OnInit, OnDestroy {
 
   async startSessionFlow(): Promise<void> {
     if (this.activeChannel() === 'qa' && this.channels().qa) {
-      await this.startQa();
+      if (this.hostScenario.hasQuickFeedbackAfterQa(this.code)) {
+        await this.startQaAfterCreateSetup();
+      } else {
+        await this.startQa();
+      }
       return;
     }
 
@@ -10887,8 +10977,8 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     }
   }
 
-  async startQa(): Promise<void> {
-    if (this.controlPending() || !this.code) return;
+  async startQa(): Promise<boolean> {
+    if (this.controlPending() || !this.code) return false;
     this.controlPending.set(true);
     try {
       const result = await trpc.session.startQa.mutate({ code: this.code.toUpperCase() });
@@ -10896,8 +10986,10 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       this.statusUpdate.set(result);
       this.syncCurrentQuestionForHost(null);
       this.dismissHostSteeringCallout();
+      return true;
     } catch {
       this.openHostSteeringCalloutForSteeringFailure(() => void this.startQa());
+      return false;
     } finally {
       this.controlPending.set(false);
     }

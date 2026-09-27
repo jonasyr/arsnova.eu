@@ -83,6 +83,7 @@ import { localizeKnownServerError } from '../../../core/localize-known-server-me
 import { tryAutoRequestDocumentFullscreen } from '../../../core/document-fullscreen.util';
 import { buildQuizExportJsonFilename } from '../../../core/export-filename.util';
 import { SessionResultsExportService } from '../../../core/session-results-export.service';
+import { HostScenarioService, type HostScenario } from '../../../core/host-scenario.service';
 
 const QUIZ_HISTORY_SCOPE_ID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -129,6 +130,8 @@ export class QuizListComponent implements OnInit {
   private readonly snackBar = inject(MatSnackBar);
   private readonly sessionResultsExport = inject(SessionResultsExportService);
   private readonly sanitizer = inject(DomSanitizer);
+  private readonly hostScenario = inject(HostScenarioService);
+  readonly emphasizeQuizStart = computed(() => this.hostScenario.scenarioForAction() !== 'EVENT');
   readonly quizzes = this.quizStore.quizzes;
   readonly sortedQuizzes = computed(() =>
     [...this.quizzes()].sort(
@@ -911,8 +914,9 @@ export class QuizListComponent implements OnInit {
       return;
     }
 
+    const scenario = this.hostScenario.scenarioForAction();
     await this.clearLiveStartShortcut();
-    await this.startLiveSession({ quizId });
+    await this.startLiveSession({ quizId, scenario });
   }
 
   async openBonusCodesDialog(quiz: QuizSummary): Promise<void> {
@@ -1249,7 +1253,10 @@ export class QuizListComponent implements OnInit {
    * Quiz live schalten (Story 2.1a): Upload + Session erstellen, dann zur Host-Ansicht.
    * Übernimmt das aktuell gewählte Home-Preset (z. B. Altersgruppe Kita) in den Upload-Payload.
    */
-  private async startLiveSession(options: { quizId: string }): Promise<void> {
+  private async startLiveSession(options: {
+    quizId: string;
+    scenario: HostScenario;
+  }): Promise<void> {
     this.actionError.set(null);
     this.actionInfo.set(null);
     this.actionInfoWarnings.set([]);
@@ -1323,6 +1330,7 @@ export class QuizListComponent implements OnInit {
       });
 
       setHostToken(result.code, result.hostToken);
+      this.hostScenario.assignToSession(result.code, options.scenario);
       persistInitialHostRecovery({
         code: result.code,
         browserCapability: result.hostBrowserCapability,

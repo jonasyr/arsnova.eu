@@ -31746,6 +31746,126 @@
           <context context-type="linenumber">208</context>
         </context-group>
       </trans-unit>
+      <trans-unit id="homeScenario.title" datatype="html">
+        <source> Was hast du heute vor? </source>
+        <target>What would you like to do today?</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/home/home.component.html</context>
+          <context context-type="linenumber">191,193</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="homeScenario.classroom" datatype="html">
+        <source> Meinen Kurs begleiten </source>
+        <target>Support my course</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/home/home.component.html</context>
+          <context context-type="linenumber">202,204</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="homeScenario.event" datatype="html">
+        <source> Eine Veranstaltung moderieren </source>
+        <target>Moderate an event</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/home/home.component.html</context>
+          <context context-type="linenumber">212,214</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="homeScenario.quick" datatype="html">
+        <source> Schnell ein Format einsetzen </source>
+        <target>Start a format quickly</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/home/home.component.html</context>
+          <context context-type="linenumber">222,224</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="homeScenario.selectQuiz" datatype="html">
+        <source>Quiz auswählen</source>
+        <target>Choose quiz</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/home/home.component.html</context>
+          <context context-type="linenumber">298</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="homeScenario.classroomQa" datatype="html">
+        <source>Fragen aus dem Kurs sammeln</source>
+        <target>Collect course questions</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/home/home.component.html</context>
+          <context context-type="linenumber">503</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="homeScenario.eventQa" datatype="html">
+        <source>Fragen sammeln</source>
+        <target>Collect questions</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/home/home.component.html</context>
+          <context context-type="linenumber">505</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="homeScenario.eventBoth" datatype="html">
+        <source>Beides</source>
+        <target>Both</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/home/home.component.html</context>
+          <context context-type="linenumber">532</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="homeScenario.eventBothDescription" datatype="html">
+        <source>Q&amp;A und Blitzlicht vorbereiten</source>
+        <target>Set up Q&amp;A and Pulse Check</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/home/home.component.html</context>
+          <context context-type="linenumber">537</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="homeScenario.eventFeedback" datatype="html">
+        <source> Stimmung/Tempo erfassen </source>
+        <target>Check mood or pace</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/home/home.component.html</context>
+          <context context-type="linenumber">599,601</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.qaQuickFeedbackPartialTitle" datatype="html">
+        <source>Die Fragenwand ist offen</source>
+        <target>The question wall is open</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.ts</context>
+          <context context-type="linenumber">4537</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.qaQuickFeedbackPartialBody" datatype="html">
+        <source>Q&amp;A ist bereit. Blitzlicht konnte noch nicht vollständig hinzugefügt werden. Du kannst es hier unter demselben Sessioncode erneut versuchen.</source>
+        <target>Q&amp;A is ready. Couldn&apos;t finish adding Pulse Check. You can try again here with the same session code.</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.ts</context>
+          <context context-type="linenumber">4538</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.qaQuickFeedbackRetry" datatype="html">
+        <source>Blitzlicht hinzufügen</source>
+        <target>Add Pulse Check</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.ts</context>
+          <context context-type="linenumber">4539</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="homeScenario.classroomQaDescription" datatype="html">
+        <source>Gemeinsam Unklarheiten klären</source>
+        <target>Clear up confusion together</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/home/home.component.html</context>
+          <context context-type="linenumber">521</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="homeScenario.eventQaDescription" datatype="html">
+        <source>Publikumsfragen für deine Veranstaltung</source>
+        <target>Audience questions for your event</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/home/home.component.html</context>
+          <context context-type="linenumber">525</context>
+        </context-group>
+      </trans-unit>
     </body>
   </file>
 </xliff>
