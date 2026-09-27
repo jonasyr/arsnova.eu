@@ -688,6 +688,7 @@
                 matButton="tonal"
                 type="button"
                 class="home-feedback-chip"
+                [class.home-feedback-chip--yes-no]="chip.type === 'YESNO'"
                 (click)="startSessionBoundQuickFeedback(chip.type)"
                 [disabled]="!!hostSessionStarting()"
                 [attr.aria-busy]="sessionBoundFeedbackType() === chip.type"

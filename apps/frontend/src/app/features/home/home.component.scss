@@ -1029,6 +1029,20 @@
   color: inherit;
 }
 
+/* Die lange Ja/Nein/Vielleicht-Karte behält ihre große Touchfläche; der sichtbare
+   Fokusindikator umfasst nur den eigentlichen Karteninhalt. */
+.home-feedback-chip--yes-no:focus-visible {
+  --mat-focus-indicator-display: none;
+}
+
+.home-feedback-chip--yes-no:focus-visible .home-feedback-chip__body {
+  width: fit-content;
+  max-width: 100%;
+  outline: 2px solid var(--mat-sys-primary);
+  outline-offset: 0.35rem;
+  border-radius: var(--mat-sys-corner-small);
+}
+
 .home-feedback-chip__icons {
   display: flex;
   align-items: center;
@@ -1132,7 +1146,7 @@
 }
 
 @media (hover: hover) {
-  .home-prepare-create:hover:not(:disabled) {
+  .home-prepare-create.mat-tonal-button:hover:not(:disabled) {
     --mdc-protected-button-container-color: var(--mat-sys-surface-container-high);
     --mat-button-tonal-container-color: var(--mat-sys-surface-container-high);
     background-color: var(--mat-sys-surface-container-high);

@@ -2045,6 +2045,10 @@ describe('HomeComponent', () => {
       );
       expect(compactMaybeLabel?.textContent?.trim()).toBe('Ja · Nein · ?');
       expect(compactMaybeLabel?.getAttribute('aria-hidden')).toBe('true');
+      const yesNoMaybeButton = quickFeedbackButtons.find(
+        (button) => button.getAttribute('aria-label') === 'Ja · Nein · Vielleicht',
+      );
+      expect(yesNoMaybeButton?.classList.contains('home-feedback-chip--yes-no')).toBe(true);
 
       const prepareButtons = Array.from(
         fixture.nativeElement.querySelectorAll<HTMLElement>(
@@ -2148,8 +2152,9 @@ describe('HomeComponent', () => {
         /\.home-cta--join\.home-cta--armed\s*\{[^}]*--mat-button-filled-container-color:\s*var\(--mat-sys-tertiary\)/,
       );
       expect(scss).toMatch(
-        /\.home-prepare-create:hover:not\(:disabled\)\s*\{[^}]*surface-container-high/,
+        /\.home-prepare-create\.mat-tonal-button:hover:not\(:disabled\)\s*\{[^}]*surface-container-high/,
       );
+      expect(scss).not.toMatch(/\.home-prepare-create:hover:not\(:disabled\)/);
       expect(scss).toMatch(
         /@media \(prefers-reduced-motion:\s*no-preference\)[\s\S]*\.home-cta--ready\s*\{[^}]*home-cta-arm/,
       );
@@ -2198,6 +2203,21 @@ describe('HomeComponent', () => {
       expect(sharedSegmentRule).toMatch(/border:\s*2px solid var\(--mat-sys-outline\)/);
       expect(playful).not.toMatch(/\.home-code-segment\s*\{[^}]*border-color:\s*color-mix/);
     });
+  });
+
+  it('begrenzt den Fokusindikator von Ja/Nein/Vielleicht auf den sichtbaren Inhalt', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { dirname, join } = await import('node:path');
+    const { fileURLToPath } = await import('node:url');
+    const scssPath = join(dirname(fileURLToPath(import.meta.url)), 'home.component.scss');
+    const scss = readFileSync(scssPath, 'utf8');
+
+    expect(scss).toMatch(
+      /\.home-feedback-chip--yes-no:focus-visible\s*\{[^}]*--mat-focus-indicator-display:\s*none/,
+    );
+    expect(scss).toMatch(
+      /\.home-feedback-chip--yes-no:focus-visible \.home-feedback-chip__body\s*\{[^}]*width:\s*fit-content[^}]*outline:\s*2px solid var\(--mat-sys-primary\)/,
+    );
   });
 
   describe('isValidSessionCode', () => {
