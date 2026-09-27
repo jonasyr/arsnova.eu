@@ -444,11 +444,9 @@
                 <mat-icon aria-hidden="true">qr_code_2</mat-icon>
               </button>
               <div class="session-host__live-code-block">
-                <p
-                  class="session-host__live-code"
-                  [attr.aria-label]="sessionCodeDisplayAria(s.code)"
-                >
-                  {{ s.code }}
+                <p class="session-host__live-code">
+                  <span class="sr-only">{{ sessionCodeDisplayAria(s.code) }}</span>
+                  <span aria-hidden="true">{{ s.code }}</span>
                 </p>
                 <p class="session-host__live-participants">
                   <span class="session-host__live-status-dot" aria-hidden="true"></span>
@@ -540,11 +538,9 @@
                         {{ joinOriginForMenu() }}
                       </strong>
                     </p>
-                    <p
-                      class="session-host__join-menu-origin session-host__join-menu-origin--code"
-                      [attr.aria-label]="sessionCodeDisplayAria(s.code)"
-                    >
-                      <strong class="session-host__join-menu-origin-text">
+                    <p class="session-host__join-menu-origin session-host__join-menu-origin--code">
+                      <span class="sr-only">{{ sessionCodeDisplayAria(s.code) }}</span>
+                      <strong class="session-host__join-menu-origin-text" aria-hidden="true">
                         {{ s.code }}
                       </strong>
                     </p>
@@ -864,9 +860,14 @@
                     id="session-finished-heading"
                     tabindex="-1"
                     #sessionFinishedHeading
-                    i18n
                   >
-                    Session beendet
+                    @if (liveChannelsRemainAfterQuiz()) {
+                      <ng-container i18n="@@sessionHost.quizFinishedTitle"
+                        >Quiz beendet</ng-container
+                      >
+                    } @else {
+                      <ng-container i18n> Session beendet </ng-container>
+                    }
                   </h1>
                   <p class="session-host__finished-sub" i18n>Alle Ergebnisse sind gespeichert.</p>
                   <div class="session-host__export-actions">
@@ -906,8 +907,10 @@
                       class="session-host__export-more-btn"
                       matButton="tonal"
                       type="button"
-                      [matMenuTriggerFor]="sessionExportMoreMenu"
+                      [matMenuTriggerFor]="exportExporting() ? null : sessionExportMoreMenu"
                       [disabled]="exportExporting()"
+                      [disabledInteractive]="true"
+                      [attr.aria-busy]="exportExporting()"
                       i18n-aria-label="@@sessionHost.exportActions"
                       aria-label="Exportieren"
                     >

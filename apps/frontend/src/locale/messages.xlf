@@ -21823,10 +21823,10 @@
         </context-group>
       </trans-unit>
       <trans-unit id="sessionTabs.questionsBadgeReview" datatype="html">
-        <source><x id="count" equiv-text="formatLocaleCount(this.qaPendingCount(), this.localeId)"/> zu prüfen</source>
+        <source><x id="count" equiv-text="formatLocaleCount(this.qaSessionPendingCount(), this.localeId)"/> zu prüfen</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.ts</context>
-          <context context-type="linenumber">8735</context>
+          <context context-type="linenumber">8923</context>
         </context-group>
       </trans-unit>
       <trans-unit id="sessionTabs.questionsBadgeNew" datatype="html">
@@ -28227,6 +28227,13 @@
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/feedback/feedback-host.component.ts</context>
           <context context-type="linenumber">205</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.quizFinishedTitle" datatype="html">
+        <source>Quiz beendet</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.html</context>
+          <context context-type="linenumber">869,871</context>
         </context-group>
       </trans-unit>
     </body>

@@ -20537,7 +20537,7 @@
       </trans-unit>
       <trans-unit id="sessionHost.exportProgressLabel" datatype="html">
         <source> Wird exportiert…</source>
-        <target>Verrà esportato...</target>
+        <target>Esportazione in corso…</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.html</context>
           <context context-type="linenumber">1584,1586</context>
@@ -24612,11 +24612,11 @@
         </context-group>
       </trans-unit>
       <trans-unit id="sessionTabs.questionsBadgeReview" datatype="html">
-        <source><x id="count" equiv-text="formatLocaleCount(this.qaPendingCount(), this.localeId)"/> zu prüfen</source>
-        <target><x id="count" equiv-text="formatLocaleCount(this.qaPendingCount(), this.localeId)"/> da rivedere</target>
+        <source><x id="count" equiv-text="formatLocaleCount(this.qaSessionPendingCount(), this.localeId)"/> zu prüfen</source>
+        <target><x id="count" equiv-text="formatLocaleCount(this.qaSessionPendingCount(), this.localeId)"/> da rivedere</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.ts</context>
-          <context context-type="linenumber">8735</context>
+          <context context-type="linenumber">8923</context>
         </context-group>
       </trans-unit>
       <trans-unit id="sessionTabs.questionsBadgeNew" datatype="html">
@@ -31895,7 +31895,7 @@
       </trans-unit>
       <trans-unit id="feedbackHost.roundActionPending" datatype="html">
         <source>Blitzlicht wird aktualisiert …</source>
-        <target>Aggiornamento del feedback rapido…</target>
+        <target>Aggiornamento del sondaggio rapido…</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/feedback/feedback-host.component.html</context>
           <context context-type="linenumber">11</context>
@@ -31903,10 +31903,18 @@
       </trans-unit>
       <trans-unit id="feedbackHost.roundActionFailed" datatype="html">
         <source>Das Blitzlicht konnte nicht geändert werden. Bitte erneut versuchen.</source>
-        <target>Non è stato possibile modificare il feedback rapido. Riprova.</target>
+        <target>Non è stato possibile modificare il sondaggio rapido. Riprova.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/feedback/feedback-host.component.ts</context>
           <context context-type="linenumber">205</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.quizFinishedTitle" datatype="html">
+        <source>Quiz beendet</source>
+        <target>Quiz terminato</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.html</context>
+          <context context-type="linenumber">869,871</context>
         </context-group>
       </trans-unit>
     </body>

@@ -24668,11 +24668,11 @@
         </context-group>
       </trans-unit>
       <trans-unit id="sessionTabs.questionsBadgeReview" datatype="html">
-        <source><x id="count" equiv-text="formatLocaleCount(this.qaPendingCount(), this.localeId)"/> zu prüfen</source>
-        <target><x id="count" equiv-text="formatLocaleCount(this.qaPendingCount(), this.localeId)"/> to review</target>
+        <source><x id="count" equiv-text="formatLocaleCount(this.qaSessionPendingCount(), this.localeId)"/> zu prüfen</source>
+        <target><x id="count" equiv-text="formatLocaleCount(this.qaSessionPendingCount(), this.localeId)"/> to review</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.ts</context>
-          <context context-type="linenumber">8735</context>
+          <context context-type="linenumber">8923</context>
         </context-group>
       </trans-unit>
       <trans-unit id="sessionTabs.questionsBadgeNew" datatype="html">
@@ -31952,7 +31952,7 @@
       </trans-unit>
       <trans-unit id="feedbackHost.roundActionPending" datatype="html">
         <source>Blitzlicht wird aktualisiert …</source>
-        <target>Updating quick feedback…</target>
+        <target>Updating Pulse Check…</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/feedback/feedback-host.component.html</context>
           <context context-type="linenumber">11</context>
@@ -31960,10 +31960,18 @@
       </trans-unit>
       <trans-unit id="feedbackHost.roundActionFailed" datatype="html">
         <source>Das Blitzlicht konnte nicht geändert werden. Bitte erneut versuchen.</source>
-        <target>Quick feedback could not be updated. Please try again.</target>
+        <target>Couldn&apos;t update Pulse Check. Try again.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/feedback/feedback-host.component.ts</context>
           <context context-type="linenumber">205</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.quizFinishedTitle" datatype="html">
+        <source>Quiz beendet</source>
+        <target>Quiz ended</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.html</context>
+          <context context-type="linenumber">869,871</context>
         </context-group>
       </trans-unit>
     </body>

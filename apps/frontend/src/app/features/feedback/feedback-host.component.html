@@ -305,11 +305,9 @@
                     <mat-icon aria-hidden="true">qr_code_2</mat-icon>
                   </button>
                   <div class="feedback-host__standalone-code-block">
-                    <p
-                      class="feedback-host__standalone-code"
-                      [attr.aria-label]="sessionCodeDisplayAria(code())"
-                    >
-                      {{ code() }}
+                    <p class="feedback-host__standalone-code">
+                      <span class="sr-only">{{ sessionCodeDisplayAria(code()) }}</span>
+                      <span aria-hidden="true">{{ code() }}</span>
                     </p>
                   </div>
                 </div>
@@ -356,9 +354,9 @@
                       </p>
                       <p
                         class="feedback-host__join-menu-origin feedback-host__join-menu-origin--code"
-                        [attr.aria-label]="sessionCodeDisplayAria(code())"
                       >
-                        <strong class="feedback-host__join-menu-origin-text">
+                        <span class="sr-only">{{ sessionCodeDisplayAria(code()) }}</span>
+                        <strong class="feedback-host__join-menu-origin-text" aria-hidden="true">
                           {{ code() }}
                         </strong>
                       </p>

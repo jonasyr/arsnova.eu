@@ -4407,14 +4407,18 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       this.document.querySelector<HTMLElement>('[aria-controls="session-host-join-info"]');
     this.joinInfoFocusReturn = null;
     this.joinInfoPopoverOpen.set(false);
-    queueMicrotask(() => {
-      if (focusReturn?.isConnected) {
-        scrollIntoAppMain(focusReturn, { block: 'nearest' });
-        focusReturn.focus({ preventScroll: true });
-      } else if (this.effectiveStatus() === 'LOBBY') {
-        this.scrollHostLiveContentIntoView();
-      }
-    });
+    // Restore after the overlay's focus trap has restored its captured element.
+    afterNextRender(
+      () => {
+        if (focusReturn?.isConnected) {
+          scrollIntoAppMain(focusReturn, { block: 'nearest' });
+          focusReturn.focus({ preventScroll: true });
+        } else if (this.effectiveStatus() === 'LOBBY') {
+          this.scrollHostLiveContentIntoView();
+        }
+      },
+      { injector: this.injector },
+    );
   }
 
   @HostListener('document:keydown', ['$event'])

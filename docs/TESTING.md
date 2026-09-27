@@ -458,6 +458,7 @@ Auf dem Server übernimmt `scripts/deploy.sh` die Reihenfolge **Digest-Image pul
 | `smoke:presenter-viewports`        | Gefüllte Presenter-Lobby in vier Tablet-/Beamer-Viewports                                  |
 | `smoke:host-music`                 | Host-Musik-/Sound-Smoke                                                                    |
 | `smoke:host-qa-feedback-tools`     | Q&A-/Blitzlicht-Werkzeuge, Filter, Fokus, Fristen, Runden und fünf Locales                 |
+| `smoke:host-home-entry`            | Echte Home-Chips, EVENT-Beides/Abbruch/Retry und CLASSROOM bis Gesamtende                  |
 | `smoke:host-phase-controls`        | Quiz-Phasen, PI, fünf Locales, mobile Labels und Menü-/Dialogfokus                         |
 | `smoke:short-text`                 | Kurzantwort-Flow inklusive axe                                                             |
 | `smoke:numeric-estimate`           | Numerische-Schätzfrage-Flow-Smoke                                                          |
@@ -619,6 +620,14 @@ Required-Check.
 BASE_URL=http://localhost:4173/de TRPC_URL=http://localhost:3000/trpc SMOKE_ARTIFACT_DIR=/private/tmp/host-qa-feedback-tools npm run smoke:host-qa-feedback-tools -w @arsnova/frontend
 ```
 
+`smoke:host-home-entry` ergänzt die API-basierten Startzustände um echte Startseitenabläufe für #470. Alle vier sichtbaren Blitzlicht-Chips werden in sechs isolierten Sprach-/Preset-/Viewportkontexten angeklickt. Der Test zählt `session.create`-Requests, prüft den aktiven Kanal und Rundentyp serverseitig und verlangt bei `quickFeedback.create` die Bindung an genau die UI-erzeugte Session. Hinzu kommen EVENT-Beides über Teilnahmeprofil und Zugangskarte (serverseitige INITIAL-Defaults, kein zusätzlicher Q&A-Konfigurationsdialog), Aktivierungsfehler mit Q&A-Teilerfolg und Retry, Abbruch in beiden Schritten, Reload/neuer Tab sowie CLASSROOM über Quizimport, Auswahl, eigenes letztes Quiz und zwei Fragen bis zum Gesamtende. Sessionstarts erfolgen ausschließlich durch die UI; API-Teilnahmen dienen als Identitätsregression beim Formatwechsel und ermöglichen die Quiz-Gesamtauswertung. Screenshots enthalten keine Zugangskarten. Der lokale Zusatzlauf benötigt denselben lokalisierten Build und dieselben Dienste wie die anderen Host-Smokes; kein neuer Required-Check.
+
+```bash
+BASE_URL=http://localhost:4200/de TRPC_URL=http://localhost:3000/trpc SMOKE_ARTIFACT_DIR=/private/tmp/host-home-entry npm run smoke:host-home-entry -w @arsnova/frontend
+```
+
+Die vollständige Zuordnung von Anforderungen, Implementierung und Prüfpfaden steht in [Host-Führung](ui/HOST-FUEHRUNG.md); aktuelle Ergebnisse und verbleibende manuelle Aufgaben im [Slice-5-Protokoll](implementation/HOST-SCENARIO-470-SLICE-5.md). Ein Browserlauf nach API-Setup, ein Komponententest, eine visuelle Sichtprüfung und eine Screenreader-Abnahme sind unterschiedliche Nachweisarten. 320-CSS-Pixel-Reflow ersetzt keinen tatsächlichen 400%-Browserzoom.
+
 Mit `PRESENTER_VIEWPORT_SCREENSHOTS=1` speichert der Presenter-Smoke auch bei
 erfolgreichen Prüfungen alle vier Screenshots. Das Zielverzeichnis lässt sich
 über `PRESENTER_VIEWPORT_ARTIFACT_DIR` festlegen. Standardmäßig nutzt der Smoke
@@ -639,6 +648,11 @@ mit reproduzierbar zufälligen Sicherheitsgraden abstimmen und prüft anschließ
 Session-Summary, Quiz-Historienzugriff, Host-Abschlussansicht und CSV-Export. Der Seed ist
 über `CONFIDENCE_SEED` anpassbar; der Host-Screenshot wird standardmäßig im temporären
 Verzeichnis `arsnova-confidence-summary-demo-e2e` abgelegt.
+Bei einer bereits laufenden Demo-Session kann `DEMO_QUIZ_HISTORY_SCOPE_ID` auf eine
+neue UUID gesetzt werden. So erhält der Prüflauf ein eigenes Quiz, ohne die
+vorhandene Session zu beenden; der feste Standardwert bleibt für bewusste
+Wiederverwendung erhalten. Fehler der Host-UI-/CSV-Prüfung führen zu einem
+Fehlercode, auch wenn die erzeugte Session weiterhin für die Fehlersuche verfügbar ist.
 
 Für Performance-/Lastarbeit ist [PERFORMANCE-TESTING.md](PERFORMANCE-TESTING.md) das aktuelle Inventar. Die Classroom-Szenario-Smokes (`load:smoke:*-classroom-30`, inkl. WebSocket Vote-Progress, Reconnect-Welle, Q&A-/Blitzlicht-Fan-out sowie Host-Pairing Security/Cap) laufen in CI im Job `classroom-smokes`; schwere Last-Smokes (200–600 TN), Yjs, Soak und k6-Produktion bleiben manuell/Schedule. Der mit PR [#165](https://github.com/kqc-real/arsnova.eu/pull/165) bereitgestellte Demo-Classroom-Dauerlauf ist davon getrennt: **lokal validiert**, ausschließlich manuell lokal und kein PR-Gate. Praktikums-Einstieg: [`docs/praktikum/HANDOUT-LAST-UND-PERFORMANCE-TESTS.md`](praktikum/HANDOUT-LAST-UND-PERFORMANCE-TESTS.md).
 

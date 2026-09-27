@@ -1519,8 +1519,13 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
         suppressJoinMenuAutopen: boolean;
       }
     ).suppressJoinMenuAutopen = true;
+    fixture.componentInstance.joinInfoPopoverOpen.set(false);
+    fixture.detectChanges();
+    fixture.nativeElement.setAttribute('tabindex', '-1');
+    fixture.nativeElement.focus();
     fixture.componentInstance.joinInfoPopoverOpen.set(true);
     fixture.detectChanges();
+    await fixture.whenStable();
 
     const overlay = fixture.nativeElement.querySelector(
       '.session-host__join-viewport-overlay',
@@ -1536,8 +1541,14 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     expect(text).not.toContain('Live-Ansicht:');
     expect(closeButton).toBeDefined();
     expect(fixture.nativeElement.querySelectorAll('.cdk-focus-trap-anchor')).toHaveLength(2);
+    const overlayCode = overlay?.querySelector('.session-host__join-menu-origin--code');
+    expect(overlayCode).not.toBeNull();
+    expect(overlayCode?.hasAttribute('aria-label')).toBe(false);
+    expect(overlayCode?.querySelector('.sr-only')?.textContent?.trim()).toBe('Session-Code ABC123');
+    expect(overlayCode?.querySelector('[aria-hidden="true"]')?.textContent?.trim()).toBe('ABC123');
 
     closeButton?.click();
+    await Promise.resolve();
     fixture.detectChanges();
     await Promise.resolve();
 
@@ -1560,6 +1571,11 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     expect(joinControl?.getAttribute('aria-label')).toBe('Beitrittsinformationen öffnen');
     expect(joinControl?.querySelector('mat-icon')?.textContent?.trim()).toBe('qr_code_2');
     expect(joinControl?.textContent?.replace(/\s+/g, ' ').trim()).toBe('qr_code_2');
+    const liveCode = fixture.nativeElement.querySelector('.session-host__live-code') as HTMLElement;
+    expect(liveCode).not.toBeNull();
+    expect(liveCode.hasAttribute('aria-label')).toBe(false);
+    expect(liveCode.querySelector('.sr-only')?.textContent?.trim()).toBe('Session-Code ABC123');
+    expect(liveCode.querySelector('[aria-hidden="true"]')?.textContent?.trim()).toBe('ABC123');
     fixture.destroy();
   });
 
@@ -1690,7 +1706,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     const icons = Array.from(
       fixture.nativeElement.querySelectorAll('.session-lobby__nick-emoji--host-lobby'),
     ) as HTMLElement[];
-    const srOnlyLabels = Array.from(fixture.nativeElement.querySelectorAll('.sr-only'), (el) =>
+    const srOnlyLabels = Array.from(list?.querySelectorAll('.sr-only') ?? [], (el) =>
       (el.textContent ?? '').trim(),
     );
 
@@ -2860,6 +2876,75 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     ).not.toBeNull();
     fixture.destroy();
   });
+
+  it.each([
+    { label: 'offenem Q&A', qaOpen: true, feedbackOpen: false, title: 'Quiz beendet' },
+    { label: 'offenem Blitzlicht', qaOpen: false, feedbackOpen: true, title: 'Quiz beendet' },
+    { label: 'beiden offenen Formaten', qaOpen: true, feedbackOpen: true, title: 'Quiz beendet' },
+    {
+      label: 'geschlossenen Formaten',
+      qaOpen: false,
+      feedbackOpen: false,
+      title: 'Session beendet',
+    },
+  ])(
+    'unterscheidet den Quizabschluss bei $label vom Host-Ende und erhält den Überschriftenfokus',
+    async ({ qaOpen, feedbackOpen, title }) => {
+      getInfoQueryMock.mockResolvedValue({
+        ...defaultSession,
+        status: 'FINISHED',
+        hostEnded: false,
+        qaClosesAt: '2027-09-22T06:00:00.000Z',
+        channels: {
+          quiz: { enabled: true },
+          qa: {
+            enabled: true,
+            open: qaOpen,
+            title: 'Fragen',
+            moderationMode: true,
+            state: qaOpen ? 'OPEN' : 'CLOSED',
+            closesAt: '2027-09-22T06:00:00.000Z',
+          },
+          quickFeedback: { enabled: true, open: feedbackOpen },
+        },
+      });
+      onStatusChangedSubscribeMock.mockImplementation(
+        (_input: unknown, opts: { onData: (data: unknown) => void }) => {
+          opts.onData({ status: 'FINISHED', currentQuestion: null });
+          return { unsubscribe: unsubscribeMock };
+        },
+      );
+      const initialize = vi.spyOn(SessionHostComponent.prototype, 'ngOnInit');
+      const fixture = setup();
+      const inst = fixture.componentInstance;
+      try {
+        fixture.detectChanges();
+        expect(initialize).toHaveBeenCalledOnce();
+        await initialize.mock.results[0]!.value;
+      } finally {
+        initialize.mockRestore();
+      }
+      await inst.selectChannel('quiz');
+      fixture.detectChanges();
+
+      const host = fixture.nativeElement as HTMLElement;
+      const heading = host.querySelector<HTMLHeadingElement>('h1#session-finished-heading');
+      expect(heading).not.toBeNull();
+      expect(heading?.textContent?.trim()).toBe(title);
+      expect(heading?.tabIndex).toBe(-1);
+      heading!.focus();
+      expect(document.activeElement).toBe(heading);
+
+      // The authoritative host end wins even if an older channel snapshot still reports open.
+      inst.session.update((session) => ({ ...session!, hostEnded: true }));
+      fixture.detectChanges();
+
+      expect(host.querySelector('h1#session-finished-heading')).toBe(heading);
+      expect(heading?.textContent?.trim()).toBe('Session beendet');
+      expect(document.activeElement).toBe(heading);
+      fixture.destroy();
+    },
+  );
 
   it('blendet den Kanalwahlschalter nach Session-Ende aus', () => {
     const fixture = setup();
@@ -9496,9 +9581,21 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
       },
     });
     qaListQueryMock.mockResolvedValue([]);
+    const initialize = vi.spyOn(SessionHostComponent.prototype, 'ngOnInit');
     const fixture = setup();
-    fixture.detectChanges();
-    await flushComponentAfterStable(fixture, 50);
+    try {
+      fixture.detectChanges();
+      expect(initialize).toHaveBeenCalledOnce();
+      // Angular stability does not await an async lifecycle hook's returned promise.
+      // Finish initial reads before filter tests replace mocks or destroy the fixture.
+      await initialize.mock.results[0]!.value;
+    } finally {
+      initialize.mockRestore();
+    }
+    expect(fixture.componentInstance.session()).toMatchObject({
+      status: 'ACTIVE',
+      channels: { qa: { enabled: true, open: true, moderationMode } },
+    });
     fixture.componentInstance.activeChannel.set('qa');
     fixture.detectChanges();
     return fixture;
@@ -9625,15 +9722,34 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     ) as HTMLButtonElement;
     expect(review.textContent).toContain('Fragen prüfen (12)');
     qaListQueryMock.mockClear();
+    const pendingQuestions = Array.from({ length: 12 }, (_, index) => ({
+      id: `44444444-4444-4444-8444-${String(index).padStart(12, '0')}`,
+      text: `Offene Frage ${index + 1}`,
+      upvoteCount: 0,
+      status: 'PENDING' as const,
+      createdAt: '2026-03-24T12:00:00.000Z',
+      myVote: null,
+      isOwn: false,
+      hasUpvoted: false,
+    }));
+    qaListQueryMock.mockResolvedValue(pendingQuestions);
+    const reviewAction = vi.spyOn(component, 'reviewPendingQaQuestions');
     review.focus();
     review.click();
-    await flushComponentAfterStable(fixture, 50);
+    expect(reviewAction).toHaveBeenCalledOnce();
+    await reviewAction.mock.results[0]!.value;
+    fixture.detectChanges();
     expect(qaListQueryMock).toHaveBeenLastCalledWith(
       expect.objectContaining({ statuses: ['PENDING'] }),
     );
     expect(qaListQueryMock.mock.lastCall?.[0]).not.toHaveProperty('authorNickname');
     expect(component.qaShowPinnedOnly()).toBe(false);
     expect(component.qaShowPendingOnly()).toBe(true);
+    expect(component.qaSearch()).toBe('');
+    expect(component.qaSearchDraft()).toBe('');
+    expect(component.qaSelectedAuthorNickname()).toBeNull();
+    expect(component.qaQuestions()).toEqual(pendingQuestions);
+    expect(review.textContent).toContain('Fragen prüfen (12)');
     expect(component.qaToolsOpen()).toBe(false);
     expect(document.activeElement).toBe(review);
     fixture.destroy();
@@ -19166,6 +19282,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     expect(fixture.componentInstance.exportStatus()).toBe('Ergebnis-PDF heruntergeladen.');
     const exportTrigger = host.querySelector<HTMLButtonElement>('.session-host__export-more-btn');
     expect(exportTrigger?.textContent).toContain('Exportieren');
+    exportTrigger!.focus();
     exportTrigger!.click();
     fixture.detectChanges();
     await fixture.whenStable();
@@ -19173,6 +19290,42 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     expect(exportMenu?.textContent).toContain('Standard (mit Diagrammen)');
     expect(exportMenu?.textContent).toContain('Barrierefrei (PDF/UA-1)');
     expect(exportMenu?.textContent).toContain('Rohdaten als CSV exportieren');
+    let resolveMenuExport!: (result: 'pdf-download') => void;
+    exportPlan.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveMenuExport = resolve;
+        }),
+    );
+    const accessiblePdf = Array.from(exportMenu!.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('PDF/UA-1'),
+    );
+    accessiblePdf!.click();
+    fixture.detectChanges();
+    expect(exportPlan).toHaveBeenLastCalledWith(
+      'ABC123',
+      expect.objectContaining({ profile: 'pdfUa' }),
+    );
+    expect(exportTrigger!.disabled).toBe(false);
+    expect(exportTrigger!.getAttribute('aria-disabled')).toBe('true');
+    expect(exportTrigger!.getAttribute('aria-busy')).toBe('true');
+    expect(document.activeElement).toBe(exportTrigger);
+    const exportMenuTrigger = fixture.debugElement
+      .query(By.css('.session-host__export-more-btn'))
+      .injector.get(MatMenuTrigger);
+    exportTrigger!.click();
+    planButton.click();
+    fixture.detectChanges();
+    expect(exportMenuTrigger.menuOpen).toBe(false);
+    expect(exportPlan).toHaveBeenCalledTimes(2);
+    resolveMenuExport('pdf-download');
+    await vi.waitUntil(() => !fixture.componentInstance.exportExporting(), {
+      timeout: 1000,
+      interval: 10,
+    });
+    fixture.detectChanges();
+    expect(document.activeElement).toBe(exportTrigger);
+    expect(exportTrigger!.getAttribute('aria-disabled')).not.toBe('true');
     expect(text).toContain('Welche Aussage stimmt?');
     expect(
       fixture.nativeElement.querySelector('.session-host__finished-confidence-question-markdown h4')

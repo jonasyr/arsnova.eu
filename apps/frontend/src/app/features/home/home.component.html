@@ -502,6 +502,7 @@
               data-testid="home-live-qa-create"
               (click)="openHeroHostTab('qa')"
               [disabled]="!!hostSessionStarting()"
+              [disabledInteractive]="true"
               [attr.aria-busy]="hostSessionStarting() === 'qa' ? 'true' : null"
             >
               <span class="home-choice-button__copy">
@@ -542,6 +543,7 @@
                 data-testid="home-event-both"
                 (click)="openHeroHostTab('qa', undefined, true)"
                 [disabled]="!!hostSessionStarting()"
+                [disabledInteractive]="true"
                 [attr.aria-busy]="hostSessionStarting() === 'qa' ? 'true' : null"
               >
                 <span class="home-choice-button__copy">

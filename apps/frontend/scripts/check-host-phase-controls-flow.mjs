@@ -427,6 +427,7 @@ async function runCase(browser, publicApi, quizId, sample) {
       .locator('.session-host__exit-anchor-button--reveal-options')
       .waitFor({ state: 'hidden' });
     await checkLayout(page, `${name} ACTIVE`);
+    await page.screenshot({ path: join(ARTIFACT_DIR, `${name}-active.png`), fullPage: true });
     await page.locator(PRIMARY).click();
     await waitForStatus(hostApi, code, 'RESULTS');
     await expectLabel(page.locator(PRIMARY), LABELS[sample.locale][1]);

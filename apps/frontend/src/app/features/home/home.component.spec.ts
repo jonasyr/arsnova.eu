@@ -7,7 +7,7 @@ import { ActivatedRoute, convertToParamMap, provideRouter, Router } from '@angul
 import { provideHttpClient } from '@angular/common/http';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { of } from 'rxjs';
+import { of, Subject } from 'rxjs';
 import { HomeComponent } from './home.component';
 import { QUICK_FEEDBACK_HOME_CHIPS } from '../feedback/feedback.config';
 import { QuizStoreService } from '../quiz/data/quiz-store.service';
@@ -525,6 +525,46 @@ describe('HomeComponent', () => {
       expect(fixture.componentInstance.hostScenario.hasQuickFeedbackAfterQa('HERO01')).toBe(true);
       expect(matDialogMock.open).toHaveBeenCalledTimes(1);
     });
+
+    it.each(['home-live-qa-create', 'home-event-both'])(
+      'erhält %s als Fokusziel während des Profildialogs und sperrt doppelte Starts',
+      async (testId) => {
+        const { trpc } = await import('../../core/trpc.client');
+        const closed = new Subject<undefined>();
+        matDialogMock.open.mockImplementationOnce(() => ({ afterClosed: () => closed }));
+        const fixture = createHomeFixture();
+        const component = fixture.componentInstance;
+        component.hostScenario.selectScenario('EVENT');
+        fixture.detectChanges();
+        const start = vi.spyOn(component, 'openHeroHostTab');
+        const button = fixture.nativeElement.querySelector(
+          `[data-testid="${testId}"]`,
+        ) as HTMLButtonElement;
+        button.focus();
+        button.click();
+        fixture.detectChanges();
+
+        expect(button.disabled).toBe(false);
+        expect(button.getAttribute('aria-disabled')).toBe('true');
+        expect(button.getAttribute('aria-busy')).toBe('true');
+        button.focus();
+        expect(document.activeElement).toBe(button);
+        button.click();
+        expect(matDialogMock.open).toHaveBeenCalledTimes(1);
+        expect(trpc.session.create.mutate).not.toHaveBeenCalled();
+
+        closed.next(undefined);
+        closed.complete();
+        await start.mock.results[0]!.value;
+        fixture.detectChanges();
+        expect(button.getAttribute('aria-disabled')).not.toBe('true');
+        expect(button.getAttribute('aria-busy')).toBeNull();
+        expect(document.activeElement).toBe(button);
+        expect(component.hostSessionStarting()).toBeNull();
+        expect(trpc.session.create.mutate).not.toHaveBeenCalled();
+        fixture.destroy();
+      },
+    );
 
     it('hinterlässt nach Abbruch von Beides keine Sessionzuordnung oder Folgeaktion', async () => {
       const { trpc } = await import('../../core/trpc.client');

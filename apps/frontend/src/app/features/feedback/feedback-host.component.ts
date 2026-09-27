@@ -348,7 +348,8 @@ export class FeedbackHostComponent implements OnInit, OnDestroy {
       this.document.querySelector<HTMLElement>('[aria-controls="feedback-host-join-info"]');
     this.feedbackJoinFocusReturn = null;
     this.feedbackJoinPopoverOpen.set(false);
-    this.restoreFocus(focusReturn);
+    // The closing focus trap must finish before restoring the join trigger.
+    afterNextRender(() => this.restoreFocus(focusReturn), { injector: this.injector });
   }
 
   /** Wie Session-Host Kanal Blitzlicht: Beitritts-URL (hier Vote-Link) kopieren. */

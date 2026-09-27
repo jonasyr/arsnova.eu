@@ -128,6 +128,19 @@ async function collapseFromFocusedChild(page, toggle, content, child) {
 
 async function checkLayout(page, label, axe = false) {
   await page.evaluate(() => document.fonts.ready);
+  // Scan the settled state, not Material's disabled-to-enabled render/transition.
+  await page.waitForFunction(
+    () => !document.querySelector('.session-host__channel-nav[aria-busy="true"]'),
+  );
+  await page.evaluate(async () => {
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    await Promise.all(
+      document
+        .getAnimations()
+        .filter((animation) => Number.isFinite(animation.effect?.getComputedTiming().endTime))
+        .map((animation) => animation.finished.catch(() => {})),
+    );
+  });
   const problems = await page.evaluate(() => {
     const problems = [];
     const tolerance = 2;
@@ -278,6 +291,7 @@ async function checkQa(page, session, hostApi, publicApi, sample, name) {
   await cards(page, 3);
   if (sample.moderation) {
     assert.match(await page.getByTestId('qa-review-pending').innerText(), /3/);
+    await page.screenshot({ path: join(ARTIFACT_DIR, `${name}-qa-pending.png`), fullPage: true });
     await page.getByTestId('qa-review-pending').click();
     await cards(page, 3);
     for (const text of QUESTIONS.slice(0, 2)) {

@@ -803,10 +803,17 @@ describe('FeedbackHostComponent', () => {
     expect(joinControl?.getAttribute('aria-label')).toBe('Beitrittsinformationen öffnen');
     expect(joinControl?.querySelector('mat-icon')?.textContent?.trim()).toBe('qr_code_2');
     expect(joinControl?.textContent?.replace(/\s+/g, ' ').trim()).toBe('qr_code_2');
+    const liveCode = fixture.nativeElement.querySelector(
+      '.feedback-host__standalone-code',
+    ) as HTMLElement;
+    expect(liveCode).not.toBeNull();
+    expect(liveCode.hasAttribute('aria-label')).toBe(false);
+    expect(liveCode.querySelector('.sr-only')?.textContent?.trim()).toBe('Session-Code ABC123');
+    expect(liveCode.querySelector('[aria-hidden="true"]')?.textContent?.trim()).toBe('ABC123');
     fixture.destroy();
   });
 
-  it('zeigt im Beitritts-Overlay Host und Code im Kopf sowie Link kopieren', () => {
+  it('zeigt im Beitritts-Overlay Host und Code und stellt nach Abbau der Fokusfalle den Trigger wieder her', async () => {
     const fixture = TestBed.createComponent(FeedbackHostComponent);
     fixture.componentRef.setInput('embeddedInSession', false);
     fixture.componentInstance.result.set({
@@ -815,18 +822,32 @@ describe('FeedbackHostComponent', () => {
       totalVotes: 0,
       distribution: { POSITIVE: 0, NEUTRAL: 0, NEGATIVE: 0 },
     });
+    fixture.detectChanges();
+    fixture.nativeElement.setAttribute('tabindex', '-1');
+    fixture.nativeElement.focus();
     fixture.componentInstance.feedbackJoinPopoverOpen.set(true);
     fixture.detectChanges();
+    await fixture.whenStable();
 
     const overlay = fixture.nativeElement.querySelector(
       '.feedback-host__join-viewport-overlay',
     ) as HTMLElement | null;
     expect(overlay).not.toBeNull();
-    expect(overlay?.querySelector('.feedback-host__join-menu-origin--code')?.textContent).toContain(
-      'ABC123',
-    );
+    const overlayCode = overlay?.querySelector('.feedback-host__join-menu-origin--code');
+    expect(overlayCode).not.toBeNull();
+    expect(overlayCode?.hasAttribute('aria-label')).toBe(false);
+    expect(overlayCode?.querySelector('.sr-only')?.textContent?.trim()).toBe('Session-Code ABC123');
+    expect(overlayCode?.querySelector('[aria-hidden="true"]')?.textContent?.trim()).toBe('ABC123');
     expect(overlay?.textContent).toContain('Link kopieren');
     expect(overlay?.textContent).not.toContain('Session-Link kopieren');
+    fixture.componentInstance.closeFeedbackJoinPopover();
+    await Promise.resolve();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('.feedback-host__join-viewport-overlay')).toBeNull();
+    expect(document.activeElement).toBe(
+      fixture.nativeElement.querySelector('[aria-controls="feedback-host-join-info"]'),
+    );
     fixture.destroy();
   });
 
