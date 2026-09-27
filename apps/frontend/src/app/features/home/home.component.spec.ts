@@ -275,10 +275,11 @@ describe('HomeComponent', () => {
       const cards = Array.from(root.querySelectorAll('.home-host-stack > mat-card'));
       const choices = Array.from(chooser.querySelectorAll('button'));
 
-      expect(chooser.querySelector('#home-scenario-title')?.textContent).toContain(
+      expect(root.querySelector('#home-host-title')?.textContent).toContain(
         'Was hast du heute vor?',
       );
-      expect(chooser.getAttribute('aria-labelledby')).toBe('home-scenario-title');
+      expect(chooser.querySelector('#home-scenario-title')).toBeNull();
+      expect(chooser.getAttribute('aria-labelledby')).toBe('home-host-title');
       expect(chooser.nextElementSibling?.classList.contains('home-host-stack')).toBe(true);
       expect(cards).toHaveLength(3);
       expect(choices).toHaveLength(3);
@@ -805,7 +806,7 @@ describe('HomeComponent', () => {
       expect(hero.textContent).toMatch(/Quiz/);
       expect(hero.querySelector('.home-hero-divider')).not.toBeNull();
       expect(levelTwoTitles).toEqual(
-        expect.arrayContaining(['Session beitreten', 'Was möchtest du tun?']),
+        expect.arrayContaining(['Session beitreten', 'Was hast du heute vor?']),
       );
       expect(taskTitles).toEqual(['Quiz', 'Q&A', 'Blitzlicht']);
       expect(

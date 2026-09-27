@@ -182,19 +182,16 @@
       <p class="home-section-eyebrow" i18n="@@homeHostIntro.eyebrow">
         Für Lehrende und Vortragende
       </p>
-      <h2 id="home-host-title" class="home-host-intro__title" i18n="@@homeHostIntro.title">
-        Was möchtest du tun?
+      <h2 id="home-host-title" class="home-host-intro__title" i18n="@@homeScenario.title">
+        Was hast du heute vor?
       </h2>
     </section>
 
     <section
       class="home-scenario"
-      aria-labelledby="home-scenario-title"
+      aria-labelledby="home-host-title"
       [attr.inert]="syncLinkVisible() ? '' : null"
     >
-      <h3 id="home-scenario-title" class="home-scenario__title" i18n="@@homeScenario.title">
-        Was hast du heute vor?
-      </h3>
       <div class="home-scenario__options">
         <button
           type="button"

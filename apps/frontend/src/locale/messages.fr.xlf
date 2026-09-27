@@ -9471,14 +9471,6 @@
           <context context-type="linenumber">182,184</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="homeHostIntro.title" datatype="html">
-        <source> Was möchtest du tun?</source>
-        <target>Que veux-tu faire ?</target>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/home/home.component.html</context>
-          <context context-type="linenumber">185,187</context>
-        </context-group>
-      </trans-unit>
       <trans-unit id="homeQuizCard.eyebrow" datatype="html">
         <source>Fragen ans Publikum</source>
         <target>Questions au public</target>
@@ -31646,7 +31638,7 @@
         <target>Que souhaites-tu faire aujourd’hui ?</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/home/home.component.html</context>
-          <context context-type="linenumber">191,193</context>
+          <context context-type="linenumber">185,187</context>
         </context-group>
       </trans-unit>
       <trans-unit id="homeScenario.classroom" datatype="html">
