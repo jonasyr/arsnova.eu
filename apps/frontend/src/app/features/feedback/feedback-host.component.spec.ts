@@ -3,6 +3,7 @@ import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angul
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { FeedbackHostComponent } from './feedback-host.component';
+import type { QuickFeedbackResult } from '@arsnova/shared-types';
 
 const { clearFeedbackHostTokenMock, setFeedbackHostTokenMock } = vi.hoisted(() => ({
   clearFeedbackHostTokenMock: vi.fn(),
@@ -94,6 +95,303 @@ describe('FeedbackHostComponent', () => {
     const fixture = TestBed.createComponent(FeedbackHostComponent);
     return fixture.componentInstance;
   }
+
+  function createEmbeddedFixture(initial?: QuickFeedbackResult) {
+    const fixture = TestBed.createComponent(FeedbackHostComponent);
+    fixture.componentRef.setInput('embeddedInSession', true);
+    fixture.componentRef.setInput('sessionCode', 'ABC123');
+    const comp = fixture.componentInstance;
+    vi.spyOn(comp, 'ngOnInit').mockResolvedValue(undefined);
+    const applyResult = (data: QuickFeedbackResult) => {
+      (comp as unknown as { applyHostResult(data: QuickFeedbackResult): void }).applyHostResult(
+        data,
+      );
+    };
+    if (initial) {
+      applyResult(initial);
+    }
+    fixture.detectChanges();
+    return { fixture, comp, applyResult };
+  }
+
+  const moodRound: QuickFeedbackResult = {
+    type: 'MOOD',
+    locked: false,
+    totalVotes: 3,
+    distribution: { POSITIVE: 2, NEUTRAL: 1, NEGATIVE: 0 },
+  };
+
+  it('bietet leer Tempo empfohlen und kompakte benannte Formate ohne weiteren Dialog', async () => {
+    const { trpc } = await import('../../core/trpc.client');
+    const { fixture, comp } = createEmbeddedFixture();
+    const button = fixture.nativeElement.querySelector(
+      '[data-testid="feedback-empty-tempo"]',
+    ) as HTMLButtonElement;
+    expect(button.textContent).toContain('Empfohlen: Tempo');
+    const formats = fixture.nativeElement.querySelector('[data-testid="feedback-empty-formats"]');
+    expect(formats.querySelectorAll('button').length).toBe(comp.presetChips.length);
+    for (const chip of comp.presetChips) {
+      expect(formats.textContent).toContain(chip.label);
+    }
+    let finish!: (value: { feedbackId: string; sessionCode: string }) => void;
+    vi.mocked(trpc.quickFeedback.create.mutate).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    vi.mocked(trpc.quickFeedback.hostResults.query).mockResolvedValueOnce({
+      type: 'TEMPO',
+      locked: false,
+      totalVotes: 0,
+      distribution: { SPEED_UP: 0, FOLLOWING: 0, SLOW_DOWN: 0, LOST: 0 },
+    });
+    button.focus();
+    const first = comp.startRound('TEMPO');
+    await comp.startRound('TEMPO');
+    fixture.detectChanges();
+    expect(trpc.quickFeedback.create.mutate).toHaveBeenCalledTimes(1);
+    expect(document.activeElement).toBe(button);
+    expect(button.getAttribute('aria-disabled')).toBe('true');
+    finish({ feedbackId: 'qf:ABC123', sessionCode: 'ABC123' });
+    await first;
+    fixture.detectChanges();
+    expect(comp.tempoViewMode()).toBe('trend');
+    expect(document.activeElement).toBe(
+      fixture.nativeElement.querySelector('.feedback-host__workspace-title'),
+    );
+    expect(fixture.nativeElement.querySelector('[data-testid="feedback-empty-tempo"]')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.feedback-host__tempo-trend')).not.toBeNull();
+    fixture.destroy();
+  });
+
+  it('hält Rundeneinstellungen geschlossen und erhält ihre Werte und Fokus beim Einklappen', () => {
+    const { fixture, comp } = createEmbeddedFixture(moodRound);
+    const trigger = fixture.nativeElement.querySelector(
+      '[data-testid="feedback-round-settings-trigger"]',
+    ) as HTMLButtonElement;
+    const settings = fixture.nativeElement.querySelector(
+      '[data-testid="feedback-round-settings"]',
+    ) as HTMLElement;
+    expect(trigger.getAttribute('aria-expanded')).toBe('false');
+    expect(settings.hidden).toBe(true);
+    expect(settings.querySelector('[data-testid="feedback-compare-round"]')).not.toBeNull();
+    expect(settings.querySelector('[data-testid="feedback-reset-round"]')).not.toBeNull();
+    expect(settings.querySelector('[data-testid="feedback-live-results"]')).not.toBeNull();
+    expect(
+      fixture.nativeElement
+        .querySelector('.feedback-host__results')
+        .compareDocumentPosition(settings) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    trigger.click();
+    fixture.detectChanges();
+    expect(settings.hidden).toBe(false);
+    const reset = settings.querySelector(
+      '[data-testid="feedback-reset-round"]',
+    ) as HTMLButtonElement;
+    reset.focus();
+    comp.toggleRoundSettings();
+    expect(document.activeElement).toBe(trigger);
+    fixture.detectChanges();
+    expect(settings.hidden).toBe(true);
+    comp.toggleRoundSettings();
+    fixture.detectChanges();
+    expect(comp.result()).toEqual(moodRound);
+    expect(comp.showLiveResults()).toBe(true);
+    fixture.destroy();
+  });
+
+  it('führt Fokus vor Vergleichsphasen, Formatwechsel und fehlender Runde an vorhandene Ziele', () => {
+    const { fixture, comp, applyResult } = createEmbeddedFixture(moodRound);
+    comp.toggleRoundSettings();
+    fixture.detectChanges();
+    const trigger = fixture.nativeElement.querySelector(
+      '[data-testid="feedback-round-settings-trigger"]',
+    );
+    const compare = fixture.nativeElement.querySelector(
+      '[data-testid="feedback-compare-round"]',
+    ) as HTMLButtonElement;
+    compare.focus();
+    applyResult({
+      ...moodRound,
+      discussion: true,
+      locked: true,
+      round1Total: 3,
+      round1Distribution: moodRound.distribution,
+    });
+    expect(document.activeElement).toBe(trigger);
+    fixture.detectChanges();
+    const second = fixture.nativeElement.querySelector(
+      '[data-testid="feedback-second-round"]',
+    ) as HTMLButtonElement;
+    second.focus();
+    applyResult({ ...moodRound, discussion: false, currentRound: 2, totalVotes: 0 });
+    expect(document.activeElement).toBe(trigger);
+    fixture.detectChanges();
+    const stars = fixture.nativeElement.querySelector(
+      '[data-feedback-type="STARS"]',
+    ) as HTMLButtonElement;
+    stars.focus();
+    applyResult({
+      type: 'STARS',
+      locked: false,
+      totalVotes: 0,
+      distribution: { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 },
+    });
+    expect(document.activeElement).toBe(trigger);
+    fixture.detectChanges();
+    const reset = fixture.nativeElement.querySelector(
+      '[data-testid="feedback-reset-round"]',
+    ) as HTMLButtonElement;
+    reset.focus();
+    (comp as unknown as { markFeedbackRoundMissing(code: string): void }).markFeedbackRoundMissing(
+      'ABC123',
+    );
+    expect(document.activeElement).toBe(
+      fixture.nativeElement.querySelector('.feedback-host__workspace-title'),
+    );
+    fixture.detectChanges();
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="feedback-empty-tempo"]'),
+    ).not.toBeNull();
+    fixture.destroy();
+  });
+
+  it('erhält Fokus bei fachlich identischen Snapshots mit expliziten Rundendefaults', () => {
+    const { fixture, comp, applyResult } = createEmbeddedFixture(moodRound);
+    comp.toggleRoundSettings();
+    fixture.detectChanges();
+    const compare = fixture.nativeElement.querySelector(
+      '[data-testid="feedback-compare-round"]',
+    ) as HTMLButtonElement;
+    compare.focus();
+    applyResult({ ...moodRound, discussion: false, currentRound: 1 });
+    fixture.detectChanges();
+    expect(document.activeElement).toBe(compare);
+    applyResult(moodRound);
+    fixture.detectChanges();
+    expect(document.activeElement).toBe(compare);
+    fixture.destroy();
+  });
+
+  it('stiehlt bei neuen Stimmen und entfernten Vergleichsaktionen keinen fremden Fokus', () => {
+    const { fixture, comp, applyResult } = createEmbeddedFixture(moodRound);
+    comp.toggleRoundSettings();
+    fixture.detectChanges();
+    const reset = fixture.nativeElement.querySelector(
+      '[data-testid="feedback-reset-round"]',
+    ) as HTMLButtonElement;
+    reset.focus();
+    applyResult({ ...moodRound, totalVotes: 4 });
+    fixture.detectChanges();
+    expect(document.activeElement).toBe(reset);
+    applyResult({ ...moodRound, discussion: true, locked: true });
+    fixture.detectChanges();
+    expect(document.activeElement).toBe(reset);
+    fixture.destroy();
+  });
+
+  it('erhält nach abgelehntem Start den Auslöser und erlaubt denselben Start als Retry', async () => {
+    const { trpc } = await import('../../core/trpc.client');
+    const { fixture, comp } = createEmbeddedFixture();
+    vi.mocked(trpc.quickFeedback.create.mutate).mockRejectedValueOnce(new Error('offline'));
+    const button = fixture.nativeElement.querySelector(
+      '[data-testid="feedback-empty-tempo"]',
+    ) as HTMLButtonElement;
+    button.focus();
+    expect(await comp.startRound('TEMPO')).toBe('failed');
+    fixture.detectChanges();
+    expect(document.activeElement).toBe(button);
+    expect(comp.roundActionBusy()).toBe(false);
+    expect(fixture.nativeElement.querySelector('[role="alert"]').textContent).toContain(
+      'Bitte erneut versuchen.',
+    );
+    vi.mocked(trpc.quickFeedback.hostResults.query).mockResolvedValueOnce({
+      type: 'TEMPO',
+      locked: false,
+      totalVotes: 0,
+      distribution: { SPEED_UP: 0, FOLLOWING: 0, SLOW_DOWN: 0, LOST: 0 },
+    });
+    expect(await comp.startRound('TEMPO')).toBe('applied');
+    expect(comp.roundActionError()).toBeNull();
+    expect(trpc.quickFeedback.create.mutate).toHaveBeenCalledTimes(2);
+    fixture.destroy();
+  });
+
+  it('bewahrt Reset-Fokus bei Pending und Ablehnung, sperrt Doppelklick und ermöglicht Retry', async () => {
+    const { trpc } = await import('../../core/trpc.client');
+    const { fixture, comp } = createEmbeddedFixture(moodRound);
+    comp.toggleRoundSettings();
+    fixture.detectChanges();
+    const reset = fixture.nativeElement.querySelector(
+      '[data-testid="feedback-reset-round"]',
+    ) as HTMLButtonElement;
+    let reject!: (error: Error) => void;
+    vi.mocked(trpc.quickFeedback.reset.mutate).mockImplementationOnce(
+      () =>
+        new Promise((_resolve, rejectPromise) => {
+          reject = rejectPromise;
+        }),
+    );
+    reset.focus();
+    const pending = comp.resetRound();
+    await comp.resetRound();
+    fixture.detectChanges();
+    expect(trpc.quickFeedback.reset.mutate).toHaveBeenCalledTimes(1);
+    expect(document.activeElement).toBe(reset);
+    expect(reset.disabled).toBe(false);
+    expect(reset.getAttribute('aria-disabled')).toBe('true');
+    reject(new Error('offline'));
+    await pending;
+    fixture.detectChanges();
+    expect(document.activeElement).toBe(reset);
+    expect(comp.roundActionBusy()).toBe(false);
+    expect(comp.roundActionError()).not.toBeNull();
+    await comp.resetRound();
+    expect(trpc.quickFeedback.reset.mutate).toHaveBeenCalledTimes(2);
+    expect(comp.roundActionError()).toBeNull();
+    fixture.destroy();
+  });
+
+  it('sperrt alle Rundeneinstellungen während einer übergeordneten Hostaktion', async () => {
+    const { trpc } = await import('../../core/trpc.client');
+    const { fixture, comp } = createEmbeddedFixture(moodRound);
+    fixture.componentRef.setInput('roundControlPending', true);
+    fixture.detectChanges();
+    await comp.startRound('TEMPO');
+    await comp.startDiscussion();
+    await comp.startSecondRound();
+    await comp.resetRound();
+    await comp.setLiveResults(false);
+    expect(trpc.quickFeedback.changeType.mutate).not.toHaveBeenCalled();
+    expect(trpc.quickFeedback.startDiscussion.mutate).not.toHaveBeenCalled();
+    expect(trpc.quickFeedback.startSecondRound.mutate).not.toHaveBeenCalled();
+    expect(trpc.quickFeedback.reset.mutate).not.toHaveBeenCalled();
+    expect(trpc.quickFeedback.setLiveResults.mutate).not.toHaveBeenCalled();
+    fixture.destroy();
+  });
+
+  it('bewahrt Fokus und Ergebnisfreigabe beim fehlgeschlagenen Live-Schalter und dessen Retry', async () => {
+    const { trpc } = await import('../../core/trpc.client');
+    const { fixture, comp } = createEmbeddedFixture({ ...moodRound, showLiveResults: true });
+    comp.toggleRoundSettings();
+    fixture.detectChanges();
+    const toggle = fixture.nativeElement.querySelector(
+      '[data-testid="feedback-live-results"] button',
+    ) as HTMLButtonElement;
+    toggle.focus();
+    vi.mocked(trpc.quickFeedback.setLiveResults.mutate).mockRejectedValueOnce(new Error('offline'));
+    await comp.setLiveResults(false);
+    fixture.detectChanges();
+    expect(document.activeElement).toBe(toggle);
+    expect(comp.showLiveResults()).toBe(true);
+    expect(comp.roundActionBusy()).toBe(false);
+    await comp.setLiveResults(false);
+    fixture.detectChanges();
+    expect(comp.showLiveResults()).toBe(false);
+    expect(document.activeElement).toBe(toggle);
+    fixture.destroy();
+  });
 
   it('wechselt bei bestehendem Blitzlicht nur den Typ und behält den Code', async () => {
     const { trpc } = await import('../../core/trpc.client');
@@ -263,7 +561,7 @@ describe('FeedbackHostComponent', () => {
       '.feedback-host__tempo-spotlight',
     ) as HTMLElement | null;
 
-    expect(spotlight?.textContent).toContain('Live-Rückmeldung');
+    expect(spotlight?.textContent).toContain('Empfohlen: Tempo');
     expect(spotlight?.textContent).toContain('Starten');
     fixture.destroy();
   });

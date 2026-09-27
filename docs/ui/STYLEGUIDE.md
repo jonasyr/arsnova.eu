@@ -123,7 +123,7 @@ Regeln:
 
 #### Eingebettet im Session-Host (Tab Blitzlicht)
 
-- **Gleiche Prioritaet wie Standalone:** Im Modifier `feedback-host--embedded` steht der **Ergebnisbereich** (Balken, Titel, Stimmen) per Flexbox-`order` **vor** Format-Chips und Steueraktionen; QR/Beitritt folgen im Anschluss (kein zusaetzlicher Ergebnisblock in der Teilnehmer-Ansicht).
+- **Sessiongebundene Arbeitsfläche:** Titel, **Ergebnisbereich** (Tempo-Trend bzw. Ergebnis und Beteiligung), **Stopp/Fortsetzen** und **Rundeneinstellungen** folgen derselben DOM- und visuellen Reihenfolge. Formatwechsel, Vergleichsrunde, Zurücksetzen, Tempo-Details und Live-Ergebnis-Anzeige liegen im beschrifteten Werkzeugbereich. Ohne Runde stehen empfohlenes Tempo und kompakte Formatwahl im Vordergrund. QR/Beitritt bleiben in der gemeinsamen Session-Shell.
 - **Referenz:** `feedback-host.component.scss` (Suche nach `feedback-host--embedded`).
 
 ### Leere Zustaende und Listen-Einstieg
@@ -272,7 +272,14 @@ Gilt fuer `.session-host__live-shell-row` und analoge Join-Trigger (Standalone-B
 - Unter dem Quizinhalt stehen **Auf Bildschirm zeigen** mit dem vorhandenen Presenter-/Pairing-Dialog und den Anzeigeoptionen **Vollbild** und **App-Rahmen**, daneben **Ton** mit dem bisherigen Musikmenü. Der Presenter behält seine bestehende Geräteverfügbarkeit. Keine zusätzliche Pflichtabfrage beim Start. Die Zusatzbereiche folgen der gemeinsamen Shell-Breite und verwenden Material-Buttons sowie Systemtokens.
 - Der **Moderation** zugeordnete Kompass behält seinen stabilen Platz rechts an der Live-Zeile; relevante Signale behalten ihre Hervorhebung. Ein neuer Befund ersetzt keinen fokussierten Auslöser.
 - Die Abschlusskarte steht vor den Detailauswertungen. **Nachbesprechungsplan ansehen** öffnet den bestehenden Standard-PDF-Export direkt; **Exportieren** enthält die PDF-Varianten sowie die bestehenden CSV-Exporte. **Nächstes Quiz in diesem Raum** bleibt als sekundäre Aktion erreichbar, soweit nach bestehendem Kanalzustand zulässig. Offene Nebenkanäle und ihre Fristen werden dadurch nicht verändert.
-- Q&A- und Blitzlicht-Werkzeuge bleiben Slice 4 vorbehalten. `showChannelNavigation`, `#host-live-content` und die bestätigte Kanalnavigation aus Slice 2 bleiben erhalten.
+- `showChannelNavigation`, `#host-live-content` und die bestätigte Kanalnavigation aus Slice 2 bleiben erhalten.
+
+### Q&A- und Blitzlicht-Werkzeuge (#470, Slice 4)
+
+- Q&A zeigt Frist, offenen/geschlossenen Zustand, Moderation, Zähler und Fragenkarten außerhalb von **Auswertung & Werkzeuge**. Bei Vormoderation steht **Fragen prüfen** mit der sitzungsweiten Zahl wartender Fragen davor. Die Aktion löst vorhandene Such-, Teilnahme- und Pin-Filter und zeigt die ganze Warteschlange. `BEST` bleibt die Standardsortierung.
+- Der Werkzeugbereich enthält Suche, alle vier Sortierungen, Pinned-/Pending-Filter, Teilnahmeverzeichnis, CSV und Wortwolke. Einklappen verwirft keine Auswahl. Aktive Filter sowie Quellenmarkierung sind auch geschlossen sichtbar und mit einem Klick lösbar. Kompass und Rückkehrhinweis behalten ihren stabilen Platz außerhalb der Werkzeuge.
+- Die Disclosure-Auslöser sind beschriftete Material-Buttons mit `aria-expanded` und `aria-controls`; ausgeblendete Inhalte sind weder sichtbar noch in der Tastaturfolge. Vor Einklappen oder Entfernen eines fokussierten Filters wird ein vorhandener sichtbarer Auslöser fokussiert. Spätere Listenantworten setzen keinen zweiten Fokus. Beim Q&A-Wechsel zwischen Desktop-Sortierung und mobilem Menü übernimmt derselbe stabile Werkzeugauslöser den Fokus.
+- Im sessiongebundenen Blitzlicht bleibt die bisherige Stopp-/Fortsetzen-Aktion einschließlich Musik- und Fehlerpfad erhalten und wird beim Ergebnis angezeigt. **Rundeneinstellungen** enthalten die bisherigen fachlichen Aktionen mit ihren Format- und Runden-Sperren. Der Legacy-Standalone-Einstieg wird nicht erweitert. Q&A-Setup, Profil-Sperre, Fristen und Verlängerungsbestätigung bleiben unverändert.
 
 ### Bewusste Ausnahmen (nicht „fixen“)
 

@@ -4034,6 +4034,28 @@
                   </p>
                 }
 
+                @if (isChannelOpen('qa') && !qaDeadlineExpired()) {
+                  <p class="session-channel-card__info" role="status" i18n="@@sessionQa.wallOpen">
+                    Fragenwand offen
+                  </p>
+                }
+                @if (session()?.channels?.qa?.moderationMode) {
+                  <button
+                    #qaReviewPending
+                    mat-flat-button
+                    type="button"
+                    class="session-qa-review-pending"
+                    data-testid="qa-review-pending"
+                    [attr.aria-pressed]="qaShowPendingOnly()"
+                    (click)="reviewPendingQaQuestions()"
+                  >
+                    <mat-icon aria-hidden="true">fact_check</mat-icon>
+                    <span i18n="@@sessionQa.reviewPending"
+                      >Fragen prüfen ({{ formatCount(qaSessionPendingCount()) }})</span
+                    >
+                  </button>
+                }
+
                 @if (qaHostWritesAllowed()) {
                   <div class="session-qa-moderation-toggle">
                     <div class="session-qa-moderation-toggle__controls">
@@ -4074,7 +4096,7 @@
                           >Gesamt: {{ formatCount(qaForumQuestionCount()) }}</span
                         >
                       </span>
-                      @if (qaPendingCount() > 0) {
+                      @if (qaPendingCount() > 0 && !session()?.channels?.qa?.moderationMode) {
                         <button
                           #qaPendingSummary
                           type="button"
@@ -4130,205 +4152,304 @@
                       }
                     </div>
                   }
-                  <div class="session-qa-summary__actions">
-                    @if (showParticipantDirectory()) {
-                      <section
-                        class="session-participant-directory session-participant-directory--toolbar"
-                      >
-                        <button
-                          mat-stroked-button
-                          type="button"
-                          aria-controls="session-participant-directory-content"
-                          [attr.aria-expanded]="participantDirectoryOpen()"
-                          (click)="toggleParticipantDirectory()"
-                        >
-                          <mat-icon aria-hidden="true">manage_search</mat-icon>
-                          <span i18n="@@sessionHost.participantDirectoryToggle"
-                            >Teilnahmen durchsuchen</span
-                          >
-                        </button>
-                      </section>
-                    }
-                    <mat-form-field
-                      class="session-qa-search"
-                      appearance="outline"
-                      subscriptSizing="dynamic"
-                    >
-                      <mat-label i18n="@@sessionQa.searchLabel">Fragen durchsuchen</mat-label>
-                      <input
-                        matInput
-                        type="search"
-                        maxlength="100"
-                        [value]="qaSearchDraft()"
-                        (input)="onQaSearchInput($any($event.target).value)"
-                        i18n-aria-label="@@sessionQa.searchAria"
-                        aria-label="Q&A-Fragen durchsuchen"
-                      />
-                    </mat-form-field>
-                    @if (qaSearchDraft()) {
-                      <button
-                        mat-icon-button
-                        type="button"
-                        (click)="clearQaSearch()"
-                        i18n-aria-label="@@sessionQa.searchClearAria"
-                        aria-label="Q&A-Suche leeren"
-                      >
-                        <mat-icon>close</mat-icon>
-                      </button>
-                    }
-                    @if (qaSelectedAuthorNickname(); as authorNickname) {
-                      <button
-                        type="button"
-                        class="session-qa-filter-btn session-qa-filter-btn--active"
-                        [attr.title]="authorNickname"
-                        (click)="clearQaAuthorFilter()"
-                        i18n-aria-label="@@sessionQa.authorFilterClearAria"
-                        aria-label="Teilnahme-Filter aufheben"
-                      >
-                        <mat-icon aria-hidden="true">person_search</mat-icon>
-                        <span
-                          class="session-qa-filter-btn__label"
-                          i18n="@@sessionQa.authorFilterLabel"
-                          >Fragen von {{ authorNickname }}</span
-                        >
-                      </button>
-                    }
-                    @if (!qaCompactToolbar()) {
-                      <mat-button-toggle-group
-                        #qaDesktopSort
-                        class="session-qa-sort-toggle"
-                        [value]="qaSortMode()"
-                        (valueChange)="setQaSortMode($any($event))"
-                        aria-label="Q&A-Sortierung"
-                        i18n-aria-label="@@sessionQa.sortAria"
-                      >
-                        <mat-button-toggle value="TOP" i18n="@@sessionQa.sortTop"
-                          >Meist unterstützt</mat-button-toggle
-                        >
-                        <mat-button-toggle value="BEST" i18n="@@sessionQa.sortBest"
-                          >Beste Fragen</mat-button-toggle
-                        >
-                        <mat-button-toggle
-                          value="CONTROVERSIAL"
-                          i18n="@@sessionQa.sortControversial"
-                          >Umstritten</mat-button-toggle
-                        >
-                        <mat-button-toggle value="TIME" i18n="@@sessionQa.sortTime"
-                          >Zeit</mat-button-toggle
-                        >
-                      </mat-button-toggle-group>
-                    }
+                </div>
+                <div
+                  class="session-qa-active-filters"
+                  data-testid="qa-active-filters"
+                  role="group"
+                  i18n-aria-label="@@sessionQa.activeFilters"
+                  aria-label="Aktive Filter"
+                >
+                  @if (qaSearchDraft()) {
                     <button
-                      #qaPinnedFilter
+                      mat-stroked-button
                       type="button"
-                      class="session-qa-filter-btn"
-                      [class.session-qa-filter-btn--active]="qaShowPinnedOnly()"
-                      data-testid="qa-filter-pinned"
-                      [attr.aria-pressed]="qaShowPinnedOnly()"
-                      [attr.aria-label]="qaPinnedFilterAriaLabel()"
-                      (click)="setQaPinnedFilter(!qaShowPinnedOnly())"
+                      data-testid="qa-clear-search"
+                      (click)="clearQaSearch()"
                     >
-                      @if (qaShowPinnedOnly()) {
-                        <mat-icon aria-hidden="true">visibility</mat-icon>
-                        <span i18n="@@sessionQa.filterShowAllLabel">Alle anzeigen</span>
-                      } @else {
-                        <mat-icon aria-hidden="true">push_pin</mat-icon>
-                        <span i18n="@@sessionQa.filterPinnedLabel">Nur hervorgehobene</span>
-                      }
+                      <mat-icon aria-hidden="true">close</mat-icon>
+                      <span i18n="@@sessionQa.clearSearchFilter"
+                        >Suche löschen: {{ qaSearchDraft() }}</span
+                      >
                     </button>
-                    @if (
-                      session()?.channels?.qa?.moderationMode ||
-                      qaPendingCount() > 0 ||
-                      qaShowPendingOnly()
-                    ) {
+                  }
+                  @if (qaShowPinnedOnly()) {
+                    <button
+                      mat-stroked-button
+                      type="button"
+                      data-testid="qa-clear-pinned"
+                      (click)="setQaPinnedFilter(false)"
+                    >
+                      <mat-icon aria-hidden="true">close</mat-icon>
+                      <span i18n="@@sessionQa.clearPinnedFilter">Hervorgehoben: Filter lösen</span>
+                    </button>
+                  }
+                  @if (qaShowPendingOnly()) {
+                    <button
+                      mat-stroked-button
+                      type="button"
+                      data-testid="qa-clear-pending"
+                      (click)="setQaPendingFilter(false)"
+                    >
+                      <mat-icon aria-hidden="true">close</mat-icon>
+                      <span i18n="@@sessionQa.clearPendingFilter">In Moderation: Filter lösen</span>
+                    </button>
+                  }
+                  @if (qaSelectedAuthorNickname(); as authorNickname) {
+                    <button
+                      type="button"
+                      class="session-qa-filter-btn session-qa-filter-btn--active"
+                      data-testid="qa-clear-author"
+                      [attr.title]="authorNickname"
+                      (click)="clearQaAuthorFilter()"
+                      i18n-aria-label="@@sessionQa.authorFilterClearAria"
+                      aria-label="Teilnahme-Filter aufheben"
+                    >
+                      <mat-icon aria-hidden="true">person_search</mat-icon>
+                      <span
+                        class="session-qa-filter-btn__label"
+                        i18n="@@sessionQa.authorFilterLabel"
+                        >Fragen von {{ authorNickname }}</span
+                      >
+                    </button>
+                  }
+                </div>
+                @if (hasQaListFocus()) {
+                  <div class="session-qa-focus-bar">
+                    <p class="session-qa-focus-bar__hint" i18n="@@sessionQa.focusHint">
+                      Zugehörige Beiträge stehen oben und folgen der Sortierung.
+                    </p>
+                    <button
+                      type="button"
+                      class="session-qa-focus-bar__clear"
+                      (click)="clearQaListFocus()"
+                      i18n-aria-label="@@sessionQa.clearFocusAria"
+                      aria-label="Markierung lösen"
+                    >
+                      <span i18n="@@sessionQa.clearFocusLabel">Markierung lösen</span>
+                    </button>
+                  </div>
+                }
+                <section class="session-qa-tools" aria-labelledby="qa-tools-toggle">
+                  <button
+                    #qaToolsToggle
+                    mat-stroked-button
+                    type="button"
+                    id="qa-tools-toggle"
+                    data-testid="qa-tools-toggle"
+                    class="session-qa-tools__toggle"
+                    aria-controls="qa-tools-content"
+                    [attr.aria-expanded]="qaToolsOpen()"
+                    (click)="toggleQaTools()"
+                  >
+                    <mat-icon aria-hidden="true">{{
+                      qaToolsOpen() ? 'expand_less' : 'expand_more'
+                    }}</mat-icon>
+                    <span i18n="@@sessionQa.tools">Auswertung &amp; Werkzeuge</span>
+                  </button>
+                  <div
+                    id="qa-tools-content"
+                    class="session-qa-tools__content"
+                    [hidden]="!qaToolsOpen()"
+                  >
+                    <div class="session-qa-summary__actions">
+                      @if (showParticipantDirectory()) {
+                        <section
+                          class="session-participant-directory session-participant-directory--toolbar"
+                        >
+                          <button
+                            mat-stroked-button
+                            type="button"
+                            data-testid="qa-directory-toggle"
+                            aria-controls="session-participant-directory-content"
+                            [attr.aria-expanded]="participantDirectoryOpen()"
+                            (click)="toggleParticipantDirectory()"
+                          >
+                            <mat-icon aria-hidden="true">manage_search</mat-icon>
+                            <span i18n="@@sessionHost.participantDirectoryToggle"
+                              >Teilnahmen durchsuchen</span
+                            >
+                          </button>
+                        </section>
+                      }
+                      <mat-form-field
+                        class="session-qa-search"
+                        appearance="outline"
+                        subscriptSizing="dynamic"
+                      >
+                        <mat-label i18n="@@sessionQa.searchLabel">Fragen durchsuchen</mat-label>
+                        <input
+                          matInput
+                          type="search"
+                          maxlength="100"
+                          [value]="qaSearchDraft()"
+                          (input)="onQaSearchInput($any($event.target).value)"
+                          i18n-aria-label="@@sessionQa.searchAria"
+                          aria-label="Q&A-Fragen durchsuchen"
+                        />
+                      </mat-form-field>
+                      @if (qaSearchDraft()) {
+                        <button
+                          mat-icon-button
+                          type="button"
+                          (click)="clearQaSearch()"
+                          data-testid="qa-tools-clear-search"
+                          i18n-aria-label="@@sessionQa.searchClearAria"
+                          aria-label="Q&A-Suche leeren"
+                        >
+                          <mat-icon>close</mat-icon>
+                        </button>
+                      }
+                      @if (!qaCompactToolbar()) {
+                        <mat-button-toggle-group
+                          #qaDesktopSort
+                          class="session-qa-sort-toggle"
+                          [value]="qaSortMode()"
+                          (valueChange)="setQaSortMode($any($event))"
+                          aria-label="Q&A-Sortierung"
+                          i18n-aria-label="@@sessionQa.sortAria"
+                        >
+                          <mat-button-toggle value="TOP" i18n="@@sessionQa.sortTop"
+                            >Meist unterstützt</mat-button-toggle
+                          >
+                          <mat-button-toggle value="BEST" i18n="@@sessionQa.sortBest"
+                            >Beste Fragen</mat-button-toggle
+                          >
+                          <mat-button-toggle
+                            value="CONTROVERSIAL"
+                            i18n="@@sessionQa.sortControversial"
+                            >Umstritten</mat-button-toggle
+                          >
+                          <mat-button-toggle value="TIME" i18n="@@sessionQa.sortTime"
+                            >Zeit</mat-button-toggle
+                          >
+                        </mat-button-toggle-group>
+                      }
                       <button
-                        #qaPendingFilter
                         type="button"
                         class="session-qa-filter-btn"
-                        [class.session-qa-filter-btn--active]="qaShowPendingOnly()"
-                        data-testid="qa-filter-pending"
-                        [attr.aria-pressed]="qaShowPendingOnly()"
-                        [attr.aria-label]="qaPendingFilterAriaLabel()"
-                        (click)="setQaPendingFilter(!qaShowPendingOnly())"
+                        [class.session-qa-filter-btn--active]="qaShowPinnedOnly()"
+                        data-testid="qa-filter-pinned"
+                        [attr.aria-pressed]="qaShowPinnedOnly()"
+                        [attr.aria-label]="qaPinnedFilterAriaLabel()"
+                        (click)="setQaPinnedFilter(!qaShowPinnedOnly())"
                       >
-                        @if (qaShowPendingOnly()) {
+                        @if (qaShowPinnedOnly()) {
                           <mat-icon aria-hidden="true">visibility</mat-icon>
                           <span i18n="@@sessionQa.filterShowAllLabel">Alle anzeigen</span>
                         } @else {
-                          <mat-icon aria-hidden="true">hourglass_top</mat-icon>
-                          <span i18n="@@sessionQa.filterPendingLabel">Nur in Moderation</span>
+                          <mat-icon aria-hidden="true">push_pin</mat-icon>
+                          <span i18n="@@sessionQa.filterPinnedLabel">Nur hervorgehobene</span>
                         }
                       </button>
-                    }
-                    @if (qaCompactToolbar()) {
-                      <button
-                        #qaMobileMore
-                        #qaMobileMoreTrigger="matMenuTrigger"
-                        type="button"
-                        class="session-qa-filter-btn session-qa-overflow-btn"
-                        data-testid="qa-mobile-more"
-                        [matMenuTriggerFor]="qaMobileMoreMenu"
-                        [attr.aria-label]="qaMobileMoreAriaLabel()"
-                      >
-                        <mat-icon aria-hidden="true">more_horiz</mat-icon>
-                        <span i18n="@@sessionQa.mobileMoreLabel">Mehr</span>
-                      </button>
-                      <mat-menu #qaMobileMoreMenu="matMenu" xPosition="before">
+                      @if (
+                        session()?.channels?.qa?.moderationMode ||
+                        qaPendingCount() > 0 ||
+                        qaShowPendingOnly()
+                      ) {
                         <button
-                          mat-menu-item
+                          #qaPendingFilter
                           type="button"
-                          role="menuitemradio"
-                          data-testid="qa-mobile-sort-top"
-                          [attr.aria-checked]="qaSortMode() === 'TOP'"
-                          (click)="setQaSortMode('TOP')"
+                          class="session-qa-filter-btn"
+                          [class.session-qa-filter-btn--active]="qaShowPendingOnly()"
+                          data-testid="qa-filter-pending"
+                          [attr.aria-pressed]="qaShowPendingOnly()"
+                          [attr.aria-label]="qaPendingFilterAriaLabel()"
+                          (click)="setQaPendingFilter(!qaShowPendingOnly())"
                         >
-                          <mat-icon aria-hidden="true">{{
-                            qaSortMode() === 'TOP' ? 'check' : 'thumb_up'
-                          }}</mat-icon>
-                          <span i18n="@@sessionQa.sortTop">Meist unterstützt</span>
+                          @if (qaShowPendingOnly()) {
+                            <mat-icon aria-hidden="true">visibility</mat-icon>
+                            <span i18n="@@sessionQa.filterShowAllLabel">Alle anzeigen</span>
+                          } @else {
+                            <mat-icon aria-hidden="true">hourglass_top</mat-icon>
+                            <span i18n="@@sessionQa.filterPendingLabel">Nur in Moderation</span>
+                          }
                         </button>
+                      }
+                      @if (qaCompactToolbar()) {
                         <button
-                          mat-menu-item
+                          #qaMobileMore
+                          #qaMobileMoreTrigger="matMenuTrigger"
                           type="button"
-                          role="menuitemradio"
-                          data-testid="qa-mobile-sort-time"
-                          [attr.aria-checked]="qaSortMode() === 'TIME'"
-                          (click)="setQaSortMode('TIME')"
+                          class="session-qa-filter-btn session-qa-overflow-btn"
+                          data-testid="qa-mobile-more"
+                          [matMenuTriggerFor]="qaMobileMoreMenu"
+                          [attr.aria-label]="qaMobileMoreAriaLabel()"
                         >
-                          <mat-icon aria-hidden="true">{{
-                            qaSortMode() === 'TIME' ? 'check' : 'schedule'
-                          }}</mat-icon>
-                          <span i18n="@@sessionQa.sortTime">Zeit</span>
+                          <mat-icon aria-hidden="true">more_horiz</mat-icon>
+                          <span i18n="@@sessionQa.mobileMoreLabel">Mehr</span>
                         </button>
+                        <mat-menu #qaMobileMoreMenu="matMenu" xPosition="before">
+                          <button
+                            mat-menu-item
+                            type="button"
+                            role="menuitemradio"
+                            data-testid="qa-mobile-sort-top"
+                            [attr.aria-checked]="qaSortMode() === 'TOP'"
+                            (click)="setQaSortMode('TOP')"
+                          >
+                            <mat-icon aria-hidden="true">{{
+                              qaSortMode() === 'TOP' ? 'check' : 'thumb_up'
+                            }}</mat-icon>
+                            <span i18n="@@sessionQa.sortTop">Meist unterstützt</span>
+                          </button>
+                          <button
+                            mat-menu-item
+                            type="button"
+                            role="menuitemradio"
+                            data-testid="qa-mobile-sort-time"
+                            [attr.aria-checked]="qaSortMode() === 'TIME'"
+                            (click)="setQaSortMode('TIME')"
+                          >
+                            <mat-icon aria-hidden="true">{{
+                              qaSortMode() === 'TIME' ? 'check' : 'schedule'
+                            }}</mat-icon>
+                            <span i18n="@@sessionQa.sortTime">Zeit</span>
+                          </button>
+                          <button
+                            mat-menu-item
+                            type="button"
+                            role="menuitemradio"
+                            data-testid="qa-mobile-sort-best"
+                            [attr.aria-checked]="qaSortMode() === 'BEST'"
+                            (click)="setQaSortMode('BEST')"
+                          >
+                            <mat-icon aria-hidden="true">{{
+                              qaSortMode() === 'BEST' ? 'check' : 'auto_awesome'
+                            }}</mat-icon>
+                            <span i18n="@@sessionQa.sortBest">Beste Fragen</span>
+                          </button>
+                          <button
+                            mat-menu-item
+                            type="button"
+                            role="menuitemradio"
+                            data-testid="qa-mobile-sort-controversial"
+                            [attr.aria-checked]="qaSortMode() === 'CONTROVERSIAL'"
+                            (click)="setQaSortMode('CONTROVERSIAL')"
+                          >
+                            <mat-icon aria-hidden="true">{{
+                              qaSortMode() === 'CONTROVERSIAL' ? 'check' : 'compare_arrows'
+                            }}</mat-icon>
+                            <span i18n="@@sessionQa.sortControversial">Umstritten</span>
+                          </button>
+                          <button
+                            mat-menu-item
+                            type="button"
+                            data-testid="qa-questions-export"
+                            (click)="exportQaQuestionsCsv()"
+                            [disabled]="exportExporting()"
+                            [attr.aria-busy]="exportExporting()"
+                            i18n-aria-label="@@sessionQa.exportAria"
+                            aria-label="Fragen als CSV exportieren"
+                          >
+                            <mat-icon aria-hidden="true">download</mat-icon>
+                            <span i18n="@@sessionQa.exportLabel">Fragen exportieren</span>
+                          </button>
+                        </mat-menu>
+                      } @else {
                         <button
-                          mat-menu-item
                           type="button"
-                          role="menuitemradio"
-                          data-testid="qa-mobile-sort-best"
-                          [attr.aria-checked]="qaSortMode() === 'BEST'"
-                          (click)="setQaSortMode('BEST')"
-                        >
-                          <mat-icon aria-hidden="true">{{
-                            qaSortMode() === 'BEST' ? 'check' : 'auto_awesome'
-                          }}</mat-icon>
-                          <span i18n="@@sessionQa.sortBest">Beste Fragen</span>
-                        </button>
-                        <button
-                          mat-menu-item
-                          type="button"
-                          role="menuitemradio"
-                          data-testid="qa-mobile-sort-controversial"
-                          [attr.aria-checked]="qaSortMode() === 'CONTROVERSIAL'"
-                          (click)="setQaSortMode('CONTROVERSIAL')"
-                        >
-                          <mat-icon aria-hidden="true">{{
-                            qaSortMode() === 'CONTROVERSIAL' ? 'check' : 'compare_arrows'
-                          }}</mat-icon>
-                          <span i18n="@@sessionQa.sortControversial">Umstritten</span>
-                        </button>
-                        <button
-                          mat-menu-item
-                          type="button"
+                          class="session-qa-filter-btn"
                           data-testid="qa-questions-export"
                           (click)="exportQaQuestionsCsv()"
                           [disabled]="exportExporting()"
@@ -4339,169 +4460,180 @@
                           <mat-icon aria-hidden="true">download</mat-icon>
                           <span i18n="@@sessionQa.exportLabel">Fragen exportieren</span>
                         </button>
-                      </mat-menu>
-                    } @else {
-                      <button
-                        type="button"
-                        class="session-qa-filter-btn"
-                        data-testid="qa-questions-export"
-                        (click)="exportQaQuestionsCsv()"
-                        [disabled]="exportExporting()"
-                        [attr.aria-busy]="exportExporting()"
-                        i18n-aria-label="@@sessionQa.exportAria"
-                        aria-label="Fragen als CSV exportieren"
-                      >
-                        <mat-icon aria-hidden="true">download</mat-icon>
-                        <span i18n="@@sessionQa.exportLabel">Fragen exportieren</span>
-                      </button>
-                    }
-                  </div>
-                  @if (exportExporting()) {
-                    <p
-                      class="session-host__export-status"
-                      role="status"
-                      i18n="@@sessionQa.exportLoading"
-                    >
-                      Wird exportiert…
-                    </p>
-                  }
-                  @if (exportStatus(); as status) {
-                    <p class="session-host__export-status" role="status">{{ status }}</p>
-                  }
-                  @if (showParticipantDirectory() && participantDirectoryOpen()) {
-                    <div
-                      id="session-participant-directory-content"
-                      class="session-participant-directory__content session-qa-summary__directory-panel"
-                      [attr.aria-busy]="participantDirectoryLoading()"
-                    >
-                      <mat-form-field appearance="outline" subscriptSizing="dynamic">
-                        <mat-label i18n="@@sessionHost.participantDirectorySearch"
-                          >Nickname suchen</mat-label
-                        >
-                        <input
-                          matInput
-                          type="search"
-                          maxlength="100"
-                          [value]="participantDirectorySearchDraft()"
-                          (input)="onParticipantDirectorySearchInput($any($event.target).value)"
-                        />
-                      </mat-form-field>
-                      @if (participantDirectorySearchDraft()) {
-                        <button
-                          mat-icon-button
-                          type="button"
-                          (click)="clearParticipantDirectorySearch()"
-                          i18n-aria-label="@@sessionHost.participantDirectoryClear"
-                          aria-label="Teilnahmesuche leeren"
-                        >
-                          <mat-icon>close</mat-icon>
-                        </button>
                       }
+                    </div>
+                    @if (showParticipantDirectory() && participantDirectoryOpen()) {
+                      <div
+                        id="session-participant-directory-content"
+                        class="session-participant-directory__content session-qa-summary__directory-panel"
+                        [attr.aria-busy]="participantDirectoryLoading()"
+                      >
+                        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+                          <mat-label i18n="@@sessionHost.participantDirectorySearch"
+                            >Nickname suchen</mat-label
+                          >
+                          <input
+                            matInput
+                            type="search"
+                            maxlength="100"
+                            [value]="participantDirectorySearchDraft()"
+                            (input)="onParticipantDirectorySearchInput($any($event.target).value)"
+                          />
+                        </mat-form-field>
+                        @if (participantDirectorySearchDraft()) {
+                          <button
+                            mat-icon-button
+                            type="button"
+                            (click)="clearParticipantDirectorySearch()"
+                            i18n-aria-label="@@sessionHost.participantDirectoryClear"
+                            aria-label="Teilnahmesuche leeren"
+                          >
+                            <mat-icon>close</mat-icon>
+                          </button>
+                        }
 
-                      <p class="session-participant-directory__count" role="status">
-                        <span i18n="@@sessionHost.participantDirectoryCount">Treffer:</span>
-                        {{ formatCount(participantDirectoryTotal()) }}
-                      </p>
-                      @if (participantDirectoryError(); as directoryError) {
-                        <p role="alert" class="session-participant-directory__error">
-                          {{ directoryError }}
-                        </p>
-                      } @else if (
-                        participantDirectoryLoading() && participantDirectoryEntries().length === 0
-                      ) {
                         <p class="session-participant-directory__count" role="status">
-                          <span i18n="@@sessionHost.participantDirectoryLoading"
-                            >Teilnahmen werden geladen.</span
-                          >
+                          <span i18n="@@sessionHost.participantDirectoryCount">Treffer:</span>
+                          {{ formatCount(participantDirectoryTotal()) }}
                         </p>
-                      } @else if (participantDirectoryEntries().length === 0) {
-                        <p class="session-participant-directory__count" role="status">
-                          <span i18n="@@sessionHost.participantDirectoryEmpty"
-                            >Keine Teilnahme gefunden.</span
+                        @if (participantDirectoryError(); as directoryError) {
+                          <p role="alert" class="session-participant-directory__error">
+                            {{ directoryError }}
+                          </p>
+                        } @else if (
+                          participantDirectoryLoading() &&
+                          participantDirectoryEntries().length === 0
+                        ) {
+                          <p class="session-participant-directory__count" role="status">
+                            <span i18n="@@sessionHost.participantDirectoryLoading"
+                              >Teilnahmen werden geladen.</span
+                            >
+                          </p>
+                        } @else if (participantDirectoryEntries().length === 0) {
+                          <p class="session-participant-directory__count" role="status">
+                            <span i18n="@@sessionHost.participantDirectoryEmpty"
+                              >Keine Teilnahme gefunden.</span
+                            >
+                          </p>
+                        } @else {
+                          <ul
+                            class="session-participant-directory__list"
+                            role="list"
+                            i18n-aria-label="@@sessionHost.participantDirectoryAria"
+                            aria-label="Geladene Teilnahmen"
                           >
-                        </p>
-                      } @else {
-                        <ul
-                          class="session-participant-directory__list"
-                          role="list"
-                          i18n-aria-label="@@sessionHost.participantDirectoryAria"
-                          aria-label="Geladene Teilnahmen"
-                        >
-                          @for (
-                            participant of participantDirectoryEntries();
-                            track participant.id
-                          ) {
-                            <li>
-                              <button
-                                type="button"
-                                class="session-participant-directory__identity"
-                                [class.session-participant-directory__identity--selected]="
-                                  isQaAuthorNicknameSelected(participant.nickname)
-                                "
-                                [attr.aria-pressed]="
-                                  isQaAuthorNicknameSelected(participant.nickname)
-                                "
-                                [attr.aria-label]="qaDirectoryAuthorAriaLabel(participant.nickname)"
-                                (click)="selectQaAuthorFromDirectory(participant.nickname)"
-                              >
-                                <span>{{ participant.nickname }}</span>
-                                @if (participant.teamName) {
-                                  <span class="session-participant-directory__team">
-                                    @if (teamNameEmojiMarker(participant.teamName); as teamEmoji) {
-                                      @if (teamNameEmojiMarkerTrailing(participant.teamName)) {
-                                        <span>{{
-                                          teamNameLabelWithoutEmojiMarker(participant.teamName)
-                                        }}</span>
-                                        <span aria-hidden="true">{{ teamEmoji }}</span>
+                            @for (
+                              participant of participantDirectoryEntries();
+                              track participant.id
+                            ) {
+                              <li>
+                                <button
+                                  type="button"
+                                  class="session-participant-directory__identity"
+                                  [class.session-participant-directory__identity--selected]="
+                                    isQaAuthorNicknameSelected(participant.nickname)
+                                  "
+                                  [attr.aria-pressed]="
+                                    isQaAuthorNicknameSelected(participant.nickname)
+                                  "
+                                  [attr.aria-label]="
+                                    qaDirectoryAuthorAriaLabel(participant.nickname)
+                                  "
+                                  (click)="selectQaAuthorFromDirectory(participant.nickname)"
+                                >
+                                  <span>{{ participant.nickname }}</span>
+                                  @if (participant.teamName) {
+                                    <span class="session-participant-directory__team">
+                                      @if (
+                                        teamNameEmojiMarker(participant.teamName);
+                                        as teamEmoji
+                                      ) {
+                                        @if (teamNameEmojiMarkerTrailing(participant.teamName)) {
+                                          <span>{{
+                                            teamNameLabelWithoutEmojiMarker(participant.teamName)
+                                          }}</span>
+                                          <span aria-hidden="true">{{ teamEmoji }}</span>
+                                        } @else {
+                                          <span aria-hidden="true">{{ teamEmoji }}</span>
+                                          <span>{{
+                                            teamNameLabelWithoutEmojiMarker(participant.teamName)
+                                          }}</span>
+                                        }
                                       } @else {
-                                        <span aria-hidden="true">{{ teamEmoji }}</span>
                                         <span>{{
                                           teamNameLabelWithoutEmojiMarker(participant.teamName)
                                         }}</span>
                                       }
-                                    } @else {
-                                      <span>{{
-                                        teamNameLabelWithoutEmojiMarker(participant.teamName)
-                                      }}</span>
-                                    }
-                                  </span>
-                                }
-                              </button>
-                            </li>
-                          }
-                        </ul>
-                      }
+                                    </span>
+                                  }
+                                </button>
+                              </li>
+                            }
+                          </ul>
+                        }
 
-                      <div class="session-participant-directory__paging">
+                        <div class="session-participant-directory__paging">
+                          <button
+                            mat-stroked-button
+                            type="button"
+                            [disabled]="
+                              participantDirectoryLoading() || participantDirectoryPageIndex() === 0
+                            "
+                            (click)="loadPreviousParticipantDirectoryPage()"
+                            i18n="@@sessionHost.participantDirectoryPrevious"
+                          >
+                            Zurück
+                          </button>
+                          <span i18n="@@sessionHost.participantDirectoryPage"
+                            >Seite {{ participantDirectoryPageIndex() + 1 }}</span
+                          >
+                          <button
+                            mat-stroked-button
+                            type="button"
+                            [disabled]="
+                              participantDirectoryLoading() || !participantDirectoryNextCursor()
+                            "
+                            (click)="loadNextParticipantDirectoryPage()"
+                            i18n="@@sessionHost.participantDirectoryNext"
+                          >
+                            Weiter
+                          </button>
+                        </div>
+                      </div>
+                    }
+                    @if (qaWordCloudQuestions().length > 0) {
+                      <div class="session-host__extra">
                         <button
-                          mat-stroked-button
                           type="button"
-                          [disabled]="
-                            participantDirectoryLoading() || participantDirectoryPageIndex() === 0
-                          "
-                          (click)="loadPreviousParticipantDirectoryPage()"
-                          i18n="@@sessionHost.participantDirectoryPrevious"
+                          class="session-host__extra-summary session-host__extra-summary--button"
+                          (click)="openQaWordCloudDialog()"
+                          data-testid="qa-word-cloud"
                         >
-                          Zurück
-                        </button>
-                        <span i18n="@@sessionHost.participantDirectoryPage"
-                          >Seite {{ participantDirectoryPageIndex() + 1 }}</span
-                        >
-                        <button
-                          mat-stroked-button
-                          type="button"
-                          [disabled]="
-                            participantDirectoryLoading() || !participantDirectoryNextCursor()
-                          "
-                          (click)="loadNextParticipantDirectoryPage()"
-                          i18n="@@sessionHost.participantDirectoryNext"
-                        >
-                          Weiter
+                          <span class="session-host__extra-summary-main">
+                            <mat-icon aria-hidden="true">bubble_chart</mat-icon>
+                            <span>{{ qaWordCloudOpenLabel() }}</span>
+                          </span>
+                          <span class="session-host__extra-summary-meta">{{
+                            qaWordCloudInfo()
+                          }}</span>
                         </button>
                       </div>
-                    </div>
-                  }
-                </div>
+                    }
+                    <p class="session-qa-sort-hint">{{ qaSortHint() }}</p>
+                  </div>
+                </section>
+                @if (exportExporting()) {
+                  <p
+                    class="session-host__export-status"
+                    role="status"
+                    i18n="@@sessionQa.exportLoading"
+                  >
+                    Wird exportiert…
+                  </p>
+                }
+                @if (exportStatus(); as status) {
+                  <p class="session-host__export-status" role="status">{{ status }}</p>
+                }
                 @if (
                   qaListPageLoading() &&
                   qaVisibleQuestions().length === 0 &&
@@ -4525,23 +4657,6 @@
                     </p>
                   </div>
                 } @else {
-                  <p class="session-qa-sort-hint">{{ qaSortHint() }}</p>
-                  @if (hasQaListFocus()) {
-                    <div class="session-qa-focus-bar">
-                      <p class="session-qa-focus-bar__hint" i18n="@@sessionQa.focusHint">
-                        Zugehörige Beiträge stehen oben und folgen der Sortierung.
-                      </p>
-                      <button
-                        type="button"
-                        class="session-qa-focus-bar__clear"
-                        (click)="clearQaListFocus()"
-                        i18n-aria-label="@@sessionQa.clearFocusAria"
-                        aria-label="Markierung lösen"
-                      >
-                        <span i18n="@@sessionQa.clearFocusLabel">Markierung lösen</span>
-                      </button>
-                    </div>
-                  }
                   @if (qaShowNewBanner()) {
                     <button
                       type="button"
@@ -4557,23 +4672,6 @@
                         >{{ formatCount(qaUnseenCount()) }} neue Fragen</span
                       >
                     </button>
-                  }
-                  @if (qaWordCloudQuestions().length > 0) {
-                    <div class="session-host__extra">
-                      <button
-                        type="button"
-                        class="session-host__extra-summary session-host__extra-summary--button"
-                        (click)="openQaWordCloudDialog()"
-                      >
-                        <span class="session-host__extra-summary-main">
-                          <mat-icon aria-hidden="true">bubble_chart</mat-icon>
-                          <span>{{ qaWordCloudOpenLabel() }}</span>
-                        </span>
-                        <span class="session-host__extra-summary-meta">{{
-                          qaWordCloudInfo()
-                        }}</span>
-                      </button>
-                    </div>
                   }
                   @if (qaListTotalCount() > 0 || qaQuestions().length > 0) {
                     <nav
@@ -4884,7 +4982,29 @@
         </div>
       } @else if (activeChannel() === 'quickFeedback') {
         <div class="session-host__channel-panel session-host__channel-panel--feedback">
-          <app-feedback-host [sessionCode]="code" [embeddedInSession]="true" />
+          <app-feedback-host
+            #feedbackHostWorkspace
+            [sessionCode]="code"
+            [embeddedInSession]="true"
+            [roundControlPending]="quickFeedbackActionPending() || channelNavigationBusy()"
+          >
+            @if (showQuickFeedbackAnchorAction()) {
+              <button
+                feedbackRoundControl
+                mat-flat-button
+                color="primary"
+                type="button"
+                class="session-host__feedback-round-control"
+                data-testid="feedback-primary-round-control"
+                [disabled]="feedbackHostWorkspace.roundActionBusy()"
+                [disabledInteractive]="true"
+                (click)="!feedbackHostWorkspace.roundActionBusy() && toggleQuickFeedbackRoundLock()"
+              >
+                <mat-icon aria-hidden="true">{{ quickFeedbackAnchorActionIcon() }}</mat-icon>
+                <span>{{ quickFeedbackAnchorActionLabel() }}</span>
+              </button>
+            }
+          </app-feedback-host>
         </div>
       }
     </div>
@@ -5039,8 +5159,7 @@
         [class.session-host__exit-anchor--quiz]="activeChannel() === 'quiz'"
         [class.session-host__exit-anchor--fixed]="showChannelNavigation()"
         [class.session-host__exit-anchor--with-primary]="
-          showQuickFeedbackAnchorAction() ||
-          (showQuizAnchorActions() && showQuizPrimaryAnchorAction())
+          showQuizAnchorActions() && showQuizPrimaryAnchorAction()
         "
         (wheel)="onExitAnchorWheel($event)"
         (touchstart)="onExitAnchorTouchStart($event)"
@@ -5121,19 +5240,6 @@
               </p>
             }
           </div>
-        }
-        @if (showQuickFeedbackAnchorAction()) {
-          <button
-            mat-flat-button
-            color="primary"
-            type="button"
-            class="session-host__exit-anchor-button session-host__exit-anchor-button--primary"
-            [disabled]="quickFeedbackActionPending()"
-            (click)="toggleQuickFeedbackRoundLock()"
-          >
-            <mat-icon aria-hidden="true">{{ quickFeedbackAnchorActionIcon() }}</mat-icon>
-            <span>{{ quickFeedbackAnchorActionLabel() }}</span>
-          </button>
         }
         @if (
           showQuizAnchorActions() &&

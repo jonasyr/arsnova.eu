@@ -9,6 +9,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { of } from 'rxjs';
 import { HomeComponent } from './home.component';
+import { QUICK_FEEDBACK_HOME_CHIPS } from '../feedback/feedback.config';
 import { QuizStoreService } from '../quiz/data/quiz-store.service';
 import { clearHostToken, setHostToken } from '../../core/host-session-token';
 import { MotdHeaderStateService } from '../../core/motd-header-state.service';
@@ -2398,6 +2399,40 @@ describe('HomeComponent', () => {
       expect(navSpy).toHaveBeenCalledWith(['feedback', 'ABC123']);
       expect(comp.quickFeedbackError()).toBeNull();
     });
+
+    it.each(QUICK_FEEDBACK_HOME_CHIPS)(
+      'startet den sichtbaren $type-Chip ohne Dialog genau einmal in einer Session',
+      async ({ type, label }) => {
+        const { trpc } = await import('../../core/trpc.client');
+        vi.mocked(trpc.session.create.mutate).mockResolvedValueOnce({
+          id: 'sess-chip',
+          code: 'CHP123',
+          hostToken: 'chip-host-token',
+        });
+        const fixture = createHomeFixture();
+        fixture.detectChanges();
+        const navSpy = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+        const startSpy = vi.spyOn(fixture.componentInstance, 'startSessionBoundQuickFeedback');
+        const chip = [
+          ...fixture.nativeElement.querySelectorAll('#host-quick-feedback .home-feedback-chip'),
+        ].find((button) => button.getAttribute('aria-label') === label) as HTMLButtonElement;
+        expect(chip).toBeTruthy();
+        matDialogMock.open.mockClear();
+        chip.click();
+        expect(startSpy).toHaveBeenCalledExactlyOnceWith(type);
+        await startSpy.mock.results[0]!.value;
+        expect(trpc.session.create.mutate).toHaveBeenCalledTimes(1);
+        expect(trpc.session.create.mutate).toHaveBeenCalledWith(
+          expect.objectContaining({ type: 'QUIZ', quickFeedbackEnabled: true }),
+        );
+        expect(trpc.quickFeedback.create.mutate).not.toHaveBeenCalled();
+        expect(matDialogMock.open).not.toHaveBeenCalled();
+        expect(navSpy).toHaveBeenCalledTimes(1);
+        expect(navSpy).toHaveBeenCalledWith(
+          `/session/CHP123/host?tab=quickFeedback&feedbackType=${type}`,
+        );
+      },
+    );
 
     it('startet Tempo über den Startseiten-Chip als sitzungsgebundenes Blitzlicht', async () => {
       const { trpc } = await import('../../core/trpc.client');

@@ -526,9 +526,7 @@ async function addHostChannels(host, code, hostTrpc) {
 
 async function verifyHostQaTab(host, hardFailures) {
   await clickChannelTab(host, 1);
-  const hostQaArea = host
-    .locator('.session-qa-list, .session-qa-empty, .session-qa-summary')
-    .first();
+  const hostQaArea = host.getByTestId('qa-tools-toggle');
   try {
     await waitForVisible(hostQaArea);
     logStep(true, 'Host can open Q&A tab');
@@ -689,12 +687,13 @@ async function verifyPresenterView(host, presenter, code, hardFailures) {
     logStep(false, 'Presenter Q&A questions fit HDMI viewport');
   }
 
+  const qaTools = host.getByTestId('qa-tools-toggle');
+  if ((await qaTools.getAttribute('aria-expanded')) !== 'true') await qaTools.click();
   const openWordCloud = host
     .locator('.session-host__extra-summary--button', { hasText: /wortwolke|word cloud/i })
     .first();
-  if (await openWordCloud.isVisible().catch(() => false)) {
-    await clickViaDom(openWordCloud);
-  }
+  await waitForVisible(openWordCloud);
+  await clickViaDom(openWordCloud);
   const exclusiveWordCloudVisible = await presenter
     .locator('.session-present__word-cloud-card')
     .waitFor({ state: 'visible', timeout: 10_000 })

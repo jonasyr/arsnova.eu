@@ -7491,14 +7491,6 @@
           <context context-type="linenumber">2697</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="sessionTabs.quickFeedbackHostTitle" datatype="html">
-        <source> Blitzlicht direkt starten</source>
-        <target>Avvia subito un sondaggio rapido</target>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/feedback/feedback-host.component.html</context>
-          <context context-type="linenumber">25,27</context>
-        </context-group>
-      </trans-unit>
       <trans-unit id="sessionTabs.quickFeedbackHostPlaceholder" datatype="html">
         <source> Wähle ein Format – in Sekunden siehst du die Stimmung.</source>
         <target>Scegli un formato – in pochi secondi vedi l&apos;umore.</target>
@@ -7978,7 +7970,7 @@
         <target>Impossibile caricare il sondaggio rapido. Riprova.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/feedback/feedback-host.component.ts</context>
-          <context context-type="linenumber">412</context>
+          <context context-type="linenumber">514</context>
         </context-group>
       </trans-unit>
       <trans-unit id="9053966995979025004" datatype="html">
@@ -31827,6 +31819,94 @@
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.html</context>
           <context context-type="linenumber">4898,4900</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionQa.wallOpen" datatype="html">
+        <source> Fragenwand offen </source>
+        <target>Bacheca delle domande aperta</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.html</context>
+          <context context-type="linenumber">4038,4040</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionQa.reviewPending" datatype="html">
+        <source>Fragen prüfen (<x id="INTERPOLATION" equiv-text="{{ formatCount(qaSessionPendingCount()) }}"/>)</source>
+        <target>Esamina le domande (<x id="INTERPOLATION" equiv-text="{{ formatCount(qaSessionPendingCount()) }}"/>)</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.html</context>
+          <context context-type="linenumber">4054</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionQa.activeFilters" datatype="html">
+        <source>Aktive Filter</source>
+        <target>Filtri attivi</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.html</context>
+          <context context-type="linenumber">4161</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionQa.clearSearchFilter" datatype="html">
+        <source>Suche löschen: <x id="INTERPOLATION" equiv-text="{{ qaSearchDraft() }}"/></source>
+        <target>Cancella ricerca: <x id="INTERPOLATION" equiv-text="{{ qaSearchDraft() }}"/></target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.html</context>
+          <context context-type="linenumber">4172,4173</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionQa.clearPinnedFilter" datatype="html">
+        <source>Hervorgehoben: Filter lösen</source>
+        <target>In evidenza: rimuovi filtro</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.html</context>
+          <context context-type="linenumber">4184</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionQa.clearPendingFilter" datatype="html">
+        <source>In Moderation: Filter lösen</source>
+        <target>In moderazione: rimuovi filtro</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.html</context>
+          <context context-type="linenumber">4195</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionQa.tools" datatype="html">
+        <source>Auswertung &amp; Werkzeuge</source>
+        <target>Analisi e strumenti</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.html</context>
+          <context context-type="linenumber">4248</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="feedbackHost.roundSettings" datatype="html">
+        <source>Rundeneinstellungen</source>
+        <target>Impostazioni del turno</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/feedback/feedback-host.component.html</context>
+          <context context-type="linenumber">885</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="feedbackHost.tempoRecommended" datatype="html">
+        <source>Empfohlen: Tempo</source>
+        <target>Consigliato: ritmo</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/feedback/feedback-host.component.html</context>
+          <context context-type="linenumber">51</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="feedbackHost.roundActionPending" datatype="html">
+        <source>Blitzlicht wird aktualisiert …</source>
+        <target>Aggiornamento del feedback rapido…</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/feedback/feedback-host.component.html</context>
+          <context context-type="linenumber">11</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="feedbackHost.roundActionFailed" datatype="html">
+        <source>Das Blitzlicht konnte nicht geändert werden. Bitte erneut versuchen.</source>
+        <target>Non è stato possibile modificare il feedback rapido. Riprova.</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/feedback/feedback-host.component.ts</context>
+          <context context-type="linenumber">205</context>
         </context-group>
       </trans-unit>
     </body>

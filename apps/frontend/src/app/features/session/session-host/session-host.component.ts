@@ -794,8 +794,12 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   @ViewChild('qaMobileMore', { read: ElementRef })
   private qaMobileMoreRef?: ElementRef<HTMLButtonElement>;
   @ViewChild('qaMobileMoreTrigger') private qaMobileMoreTrigger?: MatMenuTrigger;
-  @ViewChild('qaPinnedFilter') private qaPinnedFilterRef?: ElementRef<HTMLButtonElement>;
   @ViewChild('qaPendingFilter') qaPendingFilterRef?: ElementRef<HTMLButtonElement>;
+  @ViewChild('qaToolsToggle', { read: ElementRef })
+  private qaToolsToggleRef?: ElementRef<HTMLButtonElement>;
+  @ViewChild('qaReviewPending', { read: ElementRef })
+  private qaReviewPendingRef?: ElementRef<HTMLButtonElement>;
+  readonly qaToolsOpen = signal(false);
   @ViewChild('qaPendingSummary') qaPendingSummaryRef?: ElementRef<HTMLButtonElement>;
   @ViewChild('moderationCompassButton') moderationCompassButtonRef?: ElementRef<HTMLButtonElement>;
   @ViewChild('exitAnchor') private exitAnchorRef?: ElementRef<HTMLElement>;
@@ -2843,6 +2847,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   }
 
   clearQaListFocus(): void {
+    this.preserveQaToolsFocusBeforeRemoval('.session-qa-focus-bar');
     this.clearQaCompassFocus();
     this.moderationCompassFocusedTerm.set(null);
   }
@@ -3456,6 +3461,16 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   private readonly injector = inject(Injector);
 
   constructor() {
+    effect(() => {
+      const reviewVisible = this.session()?.channels?.qa?.moderationMode === true;
+      if (
+        (!reviewVisible &&
+          this.qaReviewPendingRef?.nativeElement === this.document.activeElement) ||
+        (reviewVisible && this.qaPendingSummaryRef?.nativeElement === this.document.activeElement)
+      ) {
+        untracked(() => this.focusQaToolsToggle());
+      }
+    });
     effect(() => {
       this.ensureActiveChannel();
     });
@@ -4416,6 +4431,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       return;
     }
     if (this.participantDirectoryOpen()) {
+      this.preserveQaToolsFocusBeforeRemoval('#session-participant-directory-content');
       this.participantDirectoryOpen.set(false);
       ev.preventDefault();
       return;
@@ -6916,35 +6932,17 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   }
 
   private preserveQaToolbarFocusAcrossLayout(compactToolbar: boolean): void {
-    if (compactToolbar === this.qaCompactToolbar()) {
-      return;
-    }
-    const activeElement = this.document.activeElement;
+    if (compactToolbar === this.qaCompactToolbar()) return;
+    const active = this.document.activeElement;
     const focusMovesWithToolbar = compactToolbar
-      ? activeElement !== null &&
-        this.qaDesktopSortRef?.nativeElement.contains(activeElement) === true
-      : activeElement !== null &&
-        (this.qaMobileMoreRef?.nativeElement.contains(activeElement) === true ||
+      ? active !== null && this.qaDesktopSortRef?.nativeElement.contains(active) === true
+      : active !== null &&
+        (this.qaMobileMoreRef?.nativeElement.contains(active) === true ||
           this.qaMobileMoreTrigger?.menuOpen === true);
-    if (!focusMovesWithToolbar) {
-      return;
-    }
-
-    afterNextRender(
-      () => {
-        if (this.destroyRef.destroyed) return;
-        const target = compactToolbar
-          ? this.qaMobileMoreRef?.nativeElement
-          : (this.qaDesktopSortRef?.nativeElement.querySelector<HTMLButtonElement>(
-              '.mat-button-toggle-checked button, button[aria-pressed="true"]',
-            ) ??
-            this.qaDesktopSortRef?.nativeElement.querySelector<HTMLButtonElement>(
-              'button:not([disabled])',
-            ));
-        target?.focus({ preventScroll: true });
-      },
-      { injector: this.injector },
-    );
+    if (!focusMovesWithToolbar) return;
+    this.qaMobileMoreTrigger?.closeMenu();
+    // A stable visible target exists before either responsive control is removed.
+    this.focusQaToolsToggle();
   }
 
   private recalculateTeamFoyerDirections(): void {
@@ -9227,6 +9225,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   }
 
   async selectQaAuthorFromDirectory(nickname: string): Promise<void> {
+    this.preserveQaToolsFocusBeforeRemoval('#session-participant-directory-content');
     const trimmedNickname = nickname.trim();
     if (!trimmedNickname) {
       return;
@@ -9250,6 +9249,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   }
 
   clearQaAuthorSelection(): void {
+    this.preserveQaToolsFocusBeforeRemoval('[data-testid="qa-clear-author"]');
     if (this.qaSelectedAuthorNickname() !== null) {
       this.qaSelectedAuthorNickname.set(null);
     }
@@ -9268,6 +9268,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
 
   private async applyQaAuthorFilter(nickname: string): Promise<void> {
     this.captureUnfilteredQaChrome();
+    this.preserveQaToolsFocusBeforeRemoval('#session-participant-directory-content');
     this.qaSelectedAuthorNickname.set(nickname);
     this.participantDirectoryOpen.set(false);
     if (this.activeChannel() !== 'qa') {
@@ -11304,21 +11305,15 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   }
 
   private preserveFocusBeforeRemovingQaPendingControls(): void {
-    const activeElement = this.document.activeElement;
-    if (!activeElement) {
-      return;
-    }
+    const active = this.document.activeElement;
+    if (!active) return;
     const pendingSummaryHasFocus =
-      this.qaPendingSummaryRef?.nativeElement.contains(activeElement) === true;
+      this.qaPendingSummaryRef?.nativeElement.contains(active) === true;
     const pendingFilterWillDisappear =
       this.session()?.channels?.qa?.moderationMode !== true &&
-      this.qaPendingFilterRef?.nativeElement.contains(activeElement) === true;
-    if (!pendingSummaryHasFocus && !pendingFilterWillDisappear) {
-      return;
-    }
-    (this.qaPinnedFilterRef?.nativeElement ?? this.qaChannelHeadingRef?.nativeElement)?.focus({
-      preventScroll: true,
-    });
+      (this.qaPendingFilterRef?.nativeElement.contains(active) === true ||
+        active.closest('[data-testid="qa-clear-pending"]') !== null);
+    if (pendingSummaryHasFocus || pendingFilterWillDisappear) this.focusQaToolsToggle();
   }
 
   private hostQaListQueryInput(cursor?: string | null) {
@@ -11358,8 +11353,52 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     }
   }
 
+  toggleQaTools(): void {
+    if (this.qaToolsOpen()) {
+      // Close overlays before hiding their trigger; Material owns menu return focus.
+      this.qaMobileMoreTrigger?.closeMenu();
+      this.preserveQaToolsFocusBeforeRemoval('#qa-tools-content');
+    }
+    this.qaToolsOpen.update((open) => !open);
+  }
+
+  private focusQaToolsToggle(): void {
+    const target = this.qaToolsToggleRef?.nativeElement;
+    if (!target || !this.isElementVisibleForFocus(target)) return;
+    scrollAndFocusInAppMain(target, { block: 'start', behavior: 'instant' });
+  }
+
+  private preserveQaToolsFocusBeforeRemoval(selector: string): void {
+    const active = this.document.activeElement;
+    if (active?.closest(selector) && this.hostElement.nativeElement.contains(active)) {
+      this.focusQaToolsToggle();
+    }
+  }
+
+  async reviewPendingQaQuestions(): Promise<void> {
+    // An explicit review starts with the whole moderation queue, even after a search.
+    if (this.qaSearchTimer) {
+      clearTimeout(this.qaSearchTimer);
+      this.qaSearchTimer = null;
+    }
+    this.preserveQaToolsFocusBeforeRemoval('[data-testid="qa-active-filters"]');
+    this.qaSearchDraft.set('');
+    this.qaSearch.set('');
+    this.clearQaAuthorSelection();
+    this.releaseQaChromeIfUnfiltered();
+    this.qaShowPinnedOnly.set(false);
+    this.qaShowPendingOnly.set(true);
+    this.ensureQaSubscription();
+    await this.refreshQaQuestions({ replaceStale: true });
+    this.scrollQaListToTop();
+    // No delayed focus: the existing failure callout owns error and retry focus.
+  }
+
   async setQaPinnedFilter(pinnedOnly: boolean): Promise<void> {
     if (this.qaShowPinnedOnly() === pinnedOnly) return;
+    this.preserveQaToolsFocusBeforeRemoval(
+      '[data-testid="qa-clear-pinned"], [data-testid="qa-clear-pending"]',
+    );
     this.qaShowPinnedOnly.set(pinnedOnly);
     if (pinnedOnly) {
       this.qaShowPendingOnly.set(false);
@@ -11371,6 +11410,9 @@ export class SessionHostComponent implements OnInit, OnDestroy {
 
   async setQaPendingFilter(pendingOnly: boolean): Promise<void> {
     if (this.qaShowPendingOnly() === pendingOnly) return;
+    this.preserveQaToolsFocusBeforeRemoval(
+      '[data-testid="qa-clear-pending"], [data-testid="qa-clear-pinned"]',
+    );
     this.qaShowPendingOnly.set(pendingOnly);
     if (pendingOnly) {
       this.qaShowPinnedOnly.set(false);
@@ -11381,12 +11423,9 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   }
 
   async toggleQaPendingFilterFromSummary(): Promise<void> {
-    const pendingOnly = !this.qaShowPendingOnly();
-    await this.setQaPendingFilter(pendingOnly);
-    const focusTarget = pendingOnly
-      ? this.qaPendingFilterRef?.nativeElement
-      : this.qaPendingSummaryRef?.nativeElement;
-    (focusTarget ?? this.qaChannelHeadingRef?.nativeElement)?.focus({ preventScroll: true });
+    await this.setQaPendingFilter(!this.qaShowPendingOnly());
+    // The summary stays outside the disclosure. Never focus a hidden filter or
+    // steal focus after a delayed list response.
   }
 
   onQaSearchInput(value: string): void {
@@ -11418,6 +11457,9 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   }
 
   clearQaSearch(): void {
+    this.preserveQaToolsFocusBeforeRemoval(
+      '[data-testid="qa-clear-search"], [data-testid="qa-tools-clear-search"]',
+    );
     if (this.qaSearchTimer) {
       clearTimeout(this.qaSearchTimer);
       this.qaSearchTimer = null;

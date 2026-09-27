@@ -73,31 +73,14 @@
 }
 
 .feedback-host--embedded .feedback-host__wrapper {
-  margin-block: auto;
-  gap: 1.25rem;
+  margin-block: 0;
+  gap: 1rem;
 }
 
-/* Session-Host: nach Start der Abstimmung zuerst Balken/Titel, darunter Chips & Aktionen (Live-Banner bleibt oben auf der Session-Seite). */
+/* Embedded content follows its visual order in the DOM: results, primary control, settings. */
 .feedback-host--embedded .feedback-host__results {
-  order: 1;
   width: 100%;
   max-width: none;
-}
-
-.feedback-host--embedded .feedback-host__join {
-  order: 2;
-  width: 100%;
-  gap: 0.35rem;
-}
-
-.feedback-host--embedded .feedback-host__code {
-  font-size: 1.35rem;
-  letter-spacing: 0.14rem;
-  margin-top: 0.1rem;
-}
-
-.feedback-host--embedded .feedback-host__url {
-  display: none;
 }
 
 .feedback-host--embedded .feedback-host__actions {
@@ -168,37 +151,6 @@
 
 .session-channel-card__content--blitz-head {
   text-align: left;
-}
-
-.session-channel-card__header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
-  padding-bottom: 0.15rem;
-}
-
-.session-channel-card__header-main {
-  display: grid;
-  gap: 0.25rem;
-  min-width: 0;
-  flex: 1 1 auto;
-}
-
-.session-channel-card__eyebrow {
-  margin: 0;
-  font: var(--mat-sys-label-large);
-  color: var(--mat-sys-primary);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.session-channel-card__title {
-  margin: 0;
-  font: var(--mat-sys-title-large);
-  color: var(--mat-sys-on-surface);
-  line-height: 1.28;
-  text-wrap: balance;
 }
 
 .session-channel-card__text {
@@ -293,11 +245,6 @@
   flex-direction: column;
   align-items: center;
   gap: 0.75rem;
-}
-
-.feedback-host__join--embedded {
-  width: 100%;
-  gap: 0;
 }
 
 .feedback-host__join--standalone-shell {
@@ -1045,10 +992,6 @@
   font-weight: 700;
 }
 
-.feedback-host--embedded .feedback-host__actions + .feedback-host__template-switch {
-  margin-top: clamp(2rem, 5vh, 3.25rem);
-}
-
 .feedback-host:not(.feedback-host--embedded) .feedback-host__template-switch {
   margin-bottom: 0;
   padding: 0.2rem 0 0;
@@ -1249,8 +1192,7 @@
     .feedback-host__template-switch {
     padding-bottom: calc(var(--host-mobile-safe-bottom) + 8.75rem);
   }
-  .feedback-host__actions + .feedback-host__template-switch,
-  .feedback-host--embedded .feedback-host__actions + .feedback-host__template-switch {
+  .feedback-host__actions + .feedback-host__template-switch {
     margin-top: 1.35rem;
   }
   .feedback-host__template-action {
@@ -2449,4 +2391,92 @@ $round2-color: var(--mat-sys-primary);
   .feedback-host__template-switch {
     grid-template-columns: 1fr;
   }
+}
+
+.feedback-host__workspace-title {
+  scroll-margin-block: 6rem;
+  padding: 0.25rem;
+}
+
+.feedback-host__workspace-title:focus {
+  outline: 2px solid var(--mat-sys-primary);
+  outline-offset: 0.25rem;
+  border-radius: var(--mat-sys-corner-small);
+}
+
+.feedback-host__action-status,
+.feedback-host__action-error {
+  margin: 0.5rem 0;
+  font: var(--mat-sys-body-medium);
+  line-height: 1.5;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.feedback-host__action-status:empty {
+  margin: 0;
+}
+
+.feedback-host__action-error {
+  color: var(--mat-sys-error);
+}
+
+.feedback-host__round-primary {
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+}
+
+.feedback-host__round-settings {
+  display: grid;
+  gap: 0.75rem;
+  width: 100%;
+  min-width: 0;
+  border-top: 1px solid var(--mat-sys-outline-variant);
+  padding-top: 0.75rem;
+}
+
+.feedback-host__round-settings-trigger {
+  justify-self: center;
+  height: auto;
+  min-height: 2.75rem;
+  max-width: 100%;
+  white-space: normal;
+  scroll-margin-block: 6rem;
+}
+
+.feedback-host__round-settings-content:not([hidden]) {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.feedback-host__round-settings-content[hidden] {
+  display: none;
+}
+
+.feedback-host__round-settings-content .feedback-host__template-switch {
+  margin: 0;
+}
+
+.feedback-host__round-settings-content .feedback-host__actions > button {
+  height: auto;
+  min-height: 2.75rem;
+  max-width: 100%;
+  white-space: normal;
+}
+
+.feedback-host__template-switch.feedback-host__template-switch--empty {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin: 0.75rem 0 0;
+}
+
+.feedback-host__template-switch--empty .feedback-host__template-action {
+  flex: 1 1 8rem;
+  min-height: 2.75rem;
+  height: auto;
+  max-width: 100%;
+  white-space: normal;
 }

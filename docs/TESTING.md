@@ -457,6 +457,7 @@ Auf dem Server übernimmt `scripts/deploy.sh` die Reihenfolge **Digest-Image pul
 | `smoke:host-pairing-security`      | Story 2.10: Host / Smartphone / Presenter, Missbrauch + Lifecycle + Widerruf               |
 | `smoke:presenter-viewports`        | Gefüllte Presenter-Lobby in vier Tablet-/Beamer-Viewports                                  |
 | `smoke:host-music`                 | Host-Musik-/Sound-Smoke                                                                    |
+| `smoke:host-qa-feedback-tools`     | Q&A-/Blitzlicht-Werkzeuge, Filter, Fokus, Fristen, Runden und fünf Locales                 |
 | `smoke:host-phase-controls`        | Quiz-Phasen, PI, fünf Locales, mobile Labels und Menü-/Dialogfokus                         |
 | `smoke:short-text`                 | Kurzantwort-Flow inklusive axe                                                             |
 | `smoke:numeric-estimate`           | Numerische-Schätzfrage-Flow-Smoke                                                          |
@@ -611,6 +612,12 @@ und Dialogabbruch sowie die Export-Einstiegspunkte; er erzeugt keine PDF-Dateien
 `SMOKE_ARTIFACT_DIR` legt das Verzeichnis für Lobby-, Diskussions- und
 Abschlussbilder fest. Er ist ein gezielter lokaler Zusatzlauf, kein neuer
 Required-Check.
+
+`smoke:host-qa-feedback-tools` prüft Slice 4 von #470 gegen lokalisierte Builds und echte lokale Backend-Dienste. Sechs Kontexte laufen nacheinander: de/en/fr/es/it, 320/600/840/1440 CSS-Pixel, beide Presets und Light/Dark; fünf mit reduzierter Bewegung, Italienisch ohne Bewegungsreduktion. Geprüft werden Q&A leer/mit Fragen, Vormoderation, alle vier Sortierungen, aufklappbare Werkzeuge und einzeln lösbare aktive Filter, Teilnahmeverzeichnis, Wortwolke, CSV und Kompass. Blitzlicht umfasst Tempo, Stopp/Fortsetzen, Live-Ergebnisse, Formatwechsel und dessen Sperre, Vergleichsrunde, Reset, Fehler/Retry, Reload und im Desktopfall Offline/Online mit Übernahme eines zwischenzeitlich geänderten Serverstands. Der deutsche Desktopfall prüft zusätzlich die Identitätssperre nach Join und weiterhin erlaubte Moderation nach einer echten Q&A-Frist. Fokusprüfungen verlangen ein sichtbares Ziel innerhalb des Viewports ohne verdeckendes Element. Der Smoke erzeugt Sessions per API; Startseiten-Chips und Beides bleiben eigene Home-/Session-Regressionen.
+
+```bash
+BASE_URL=http://localhost:4173/de TRPC_URL=http://localhost:3000/trpc SMOKE_ARTIFACT_DIR=/private/tmp/host-qa-feedback-tools npm run smoke:host-qa-feedback-tools -w @arsnova/frontend
+```
 
 Mit `PRESENTER_VIEWPORT_SCREENSHOTS=1` speichert der Presenter-Smoke auch bei
 erfolgreichen Prüfungen alle vier Screenshots. Das Zielverzeichnis lässt sich
