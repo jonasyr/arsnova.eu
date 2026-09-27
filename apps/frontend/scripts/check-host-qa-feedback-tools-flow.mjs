@@ -9,8 +9,8 @@
  *   npm run smoke:host-qa-feedback-tools -w @arsnova/frontend
  */
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { mkdir, readFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createTRPCProxyClient, httpBatchLink } from '@trpc/client';
 import { chromium } from 'playwright';
@@ -22,7 +22,7 @@ const BASE_URL = (process.env.BASE_URL || 'http://localhost:4200/de')
   .replace(/\/(de|en|fr|es|it)$/, '');
 const TRPC_URL = process.env.TRPC_URL || 'http://localhost:3000/trpc';
 const ARTIFACT_DIR =
-  process.env.SMOKE_ARTIFACT_DIR || join(tmpdir(), 'arsnova-host-qa-feedback-tools');
+  process.env.SMOKE_ARTIFACT_DIR || join('tmp', 'host-qa-feedback-tools', randomUUID());
 const CASES = [
   { locale: 'de', preset: 'PLAYFUL', width: 320, theme: 'light', moderation: true },
   { locale: 'de', preset: 'SERIOUS', width: 1440, theme: 'dark', moderation: true, detailed: true },

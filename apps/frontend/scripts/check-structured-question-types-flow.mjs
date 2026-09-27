@@ -11,8 +11,8 @@
  *   BASE_URL=http://localhost:4200/de TRPC_URL=http://localhost:3000/trpc \
  *     npm run smoke:structured-question-types -w @arsnova/frontend
  */
+import { randomUUID } from 'node:crypto';
 import { mkdir, readFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createTRPCProxyClient, httpBatchLink } from '@trpc/client';
@@ -44,7 +44,7 @@ const API_PARTICIPANT_PREFIX = 'StrukturShadow';
 const SHADOW_PARTICIPANT_COUNT = 4; // UI + 4 Shadows = 5 ≥ CONFIDENCE_SUMMARY_MIN_RESPONSES
 const A11Y_SCAN_ENABLED = process.env.A11Y_SCAN !== '0';
 const ARTIFACT_DIR =
-  process.env.SMOKE_ARTIFACT_DIR || join(tmpdir(), 'arsnova-structured-question-types-e2e');
+  process.env.SMOKE_ARTIFACT_DIR || join('tmp', 'structured-question-types-e2e', randomUUID());
 const HIGH_CONFIDENCE = 5;
 const EXPECTED_DEBRIEF_PRIORITY = 3;
 const END_SESSION_RE = /session beenden|end session/i;

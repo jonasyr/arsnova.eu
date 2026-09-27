@@ -9,8 +9,8 @@
  *   SMOKE_ARTIFACT_DIR=/tmp/host-phase-controls \
  *   npm run smoke:host-phase-controls -w @arsnova/frontend
  */
+import { randomUUID } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createTRPCProxyClient, httpBatchLink } from '@trpc/client';
 import { QuizUploadInputSchema, SubmitVoteInputSchema } from '@arsnova/shared-types';
@@ -21,7 +21,7 @@ const BASE_URL = (process.env.BASE_URL || 'http://localhost:4200/de')
   .replace(/\/(de|en|fr|es|it)$/, '');
 const TRPC_URL = process.env.TRPC_URL || 'http://localhost:3000/trpc';
 const ARTIFACT_DIR =
-  process.env.SMOKE_ARTIFACT_DIR || join(tmpdir(), 'arsnova-host-phase-controls');
+  process.env.SMOKE_ARTIFACT_DIR || join('tmp', 'host-phase-controls', randomUUID());
 const PRIMARY = '.session-host__exit-anchor-button--primary';
 const MORE = '[data-testid="host-more-actions"]';
 // Pairwise sample, deliberately not a full cartesian product.

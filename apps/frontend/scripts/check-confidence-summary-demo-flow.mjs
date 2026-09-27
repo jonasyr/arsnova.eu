@@ -21,8 +21,8 @@
  *   SESSION_CODE=XFNHXE HOST_TOKEN=... BASE_URL=http://localhost:4200 PARTICIPANTS=30 \
  *   npm run e2e:confidence-summary-demo -w @arsnova/frontend
  */
+import { randomUUID } from 'node:crypto';
 import { mkdir, readFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createTRPCProxyClient, httpBatchLink } from '@trpc/client';
@@ -63,7 +63,7 @@ const SKIP_HOST_UI = ['1', 'true', 'yes'].includes(
     .toLowerCase(),
 );
 const ARTIFACT_DIR =
-  process.env.E2E_ARTIFACT_DIR || join(tmpdir(), 'arsnova-confidence-summary-demo-e2e');
+  process.env.E2E_ARTIFACT_DIR || join('tmp', 'confidence-summary-demo-e2e', randomUUID());
 const HOST_SCREENSHOT = join(ARTIFACT_DIR, 'host-confidence-summary.png');
 const HOST_TOKEN_STORAGE_PREFIX = 'arsnova-host-token:';
 

@@ -11,8 +11,8 @@
  *   BASE_URL=http://localhost:4200/de TRPC_URL=http://localhost:3000/trpc \
  *     npm run smoke:session-question-progress -w @arsnova/frontend
  */
+import { randomUUID } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createTRPCProxyClient, httpBatchLink } from '@trpc/client';
 import {
@@ -24,7 +24,7 @@ import { chromium, webkit } from 'playwright';
 const BASE_URL = (process.env.BASE_URL || 'http://localhost:4200/de').replace(/\/+$/, '');
 const TRPC_URL = process.env.TRPC_URL || 'http://localhost:3000/trpc';
 const ARTIFACT_DIR =
-  process.env.SMOKE_ARTIFACT_DIR || join(tmpdir(), 'arsnova-session-question-progress-e2e');
+  process.env.SMOKE_ARTIFACT_DIR || join('tmp', 'session-question-progress-e2e', randomUUID());
 const HOST_TOKEN_STORAGE_PREFIX = 'arsnova-host-token:';
 const DESKTOP = { width: 1440, height: 1000 };
 const MOBILE = { width: 430, height: 932 };
