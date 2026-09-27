@@ -198,7 +198,7 @@
           matButton="outlined"
           class="home-scenario__option"
           [attr.aria-pressed]="hostScenario.preference() === 'CLASSROOM'"
-          (click)="selectHostScenario('CLASSROOM')"
+          (click)="selectHostScenario('CLASSROOM', $event)"
           i18n="@@homeScenario.classroom"
         >
           Meinen Kurs begleiten
@@ -208,7 +208,7 @@
           matButton="outlined"
           class="home-scenario__option"
           [attr.aria-pressed]="hostScenario.preference() === 'EVENT'"
-          (click)="selectHostScenario('EVENT')"
+          (click)="selectHostScenario('EVENT', $event)"
           i18n="@@homeScenario.event"
         >
           Eine Veranstaltung moderieren
@@ -218,7 +218,7 @@
           matButton="outlined"
           class="home-scenario__option"
           [attr.aria-pressed]="hostScenario.preference() === 'QUICK'"
-          (click)="selectHostScenario('QUICK')"
+          (click)="selectHostScenario('QUICK', $event)"
           i18n="@@homeScenario.quick"
         >
           Schnell ein Format einsetzen
@@ -241,7 +241,14 @@
             </span>
             <div class="home-card__header-copy">
               <p class="home-card__eyebrow" i18n="@@homeQuizCard.eyebrow">Fragen ans Publikum</p>
-              <h3 mat-card-title class="home-card__title" i18n="@@homeHero.channelQuiz">Quiz</h3>
+              <h3
+                mat-card-title
+                class="home-card__title home-card__scenario-focus-target"
+                tabindex="-1"
+                i18n="@@homeHero.channelQuiz"
+              >
+                Quiz
+              </h3>
             </div>
           </div>
         </mat-card-header>
@@ -429,7 +436,14 @@
             </span>
             <div class="home-card__header-copy">
               <p class="home-card__eyebrow" i18n="@@homeQaCard.eyebrow">Fragen vom Publikum</p>
-              <h3 mat-card-title class="home-card__title" i18n="@@homeHero.channelQa">Q&amp;A</h3>
+              <h3
+                mat-card-title
+                class="home-card__title home-card__scenario-focus-target"
+                tabindex="-1"
+                i18n="@@homeHero.channelQa"
+              >
+                Q&amp;A
+              </h3>
             </div>
           </div>
         </mat-card-header>
@@ -666,7 +680,12 @@
               <p class="home-card__eyebrow" i18n="@@homeBlitzlichtCard.eyebrow">
                 Feedback vom Publikum
               </p>
-              <h3 mat-card-title class="home-card__title" i18n="@@homeHero.channelBlitzlicht">
+              <h3
+                mat-card-title
+                class="home-card__title home-card__scenario-focus-target"
+                tabindex="-1"
+                i18n="@@homeHero.channelBlitzlicht"
+              >
                 Blitzlicht
               </h3>
             </div>

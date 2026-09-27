@@ -267,7 +267,7 @@ describe('HomeComponent', () => {
   });
 
   describe('Host-Szenario', () => {
-    it('hält alle Karten im DOM, den Fokus auf der Auswahl und scrollt zur passenden Karte', async () => {
+    it('hält alle Karten im DOM und führt Tastaturfokus und Scrollziel zur passenden Karte', async () => {
       const fixture = createHomeFixture();
       fixture.detectChanges();
       const root = fixture.nativeElement as HTMLElement;
@@ -295,7 +295,9 @@ describe('HomeComponent', () => {
         choice.click();
         fixture.detectChanges();
         await fixture.whenStable();
-        expect(document.activeElement).toBe(choice);
+        const focusTarget = target!.querySelector<HTMLElement>('.home-card__scenario-focus-target');
+        expect(focusTarget?.tabIndex).toBe(-1);
+        expect(document.activeElement).toBe(focusTarget);
         expect(choice.getAttribute('aria-pressed')).toBe('true');
         expect(
           cards.filter((card) => card.classList.contains('home-card--scenario-selected')),
@@ -320,6 +322,25 @@ describe('HomeComponent', () => {
       }
       expect(TestBed.inject(HostScenarioService).preference()).toBe('QUICK');
       expect(matDialogMock.open).not.toHaveBeenCalled();
+    });
+
+    it('behält bei Pointer-Auswahl den Fokus auf dem Auswahlbutton', async () => {
+      const fixture = createHomeFixture();
+      fixture.detectChanges();
+      const root = fixture.nativeElement as HTMLElement;
+      const choice = root.querySelectorAll<HTMLButtonElement>('.home-scenario__option')[1];
+      const target = root.querySelector<HTMLElement>('#home-host-qa');
+      const scrollIntoView = vi.fn();
+      target!.scrollIntoView = scrollIntoView;
+      choice.focus();
+
+      choice.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      expect(document.activeElement).toBe(choice);
+      expect(scrollIntoView).toHaveBeenCalledOnce();
+      expect(target?.classList.contains('home-card--scenario-selected')).toBe(true);
     });
 
     it('scrollt bei reduzierter Bewegung ohne Animation zur ausgewählten Karte', async () => {

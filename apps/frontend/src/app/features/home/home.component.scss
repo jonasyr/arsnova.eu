@@ -774,6 +774,12 @@
     0 0 0 0.5rem color-mix(in srgb, var(--mat-sys-primary) 14%, transparent);
 }
 
+.home-card__scenario-focus-target:focus-visible {
+  outline: 3px solid var(--mat-sys-primary);
+  outline-offset: 0.25rem;
+  border-radius: var(--mat-sys-corner-extra-small);
+}
+
 .home-card--scenario-selected .home-card__icon-wrap {
   border-color: var(--mat-sys-primary);
   background: var(--mat-sys-primary-container);

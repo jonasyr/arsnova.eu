@@ -79,7 +79,7 @@ async function primaryFocusState(page) {
 }
 
 async function isActiveLocator(locator) {
-  return locator.evaluate((element) => element === document.activeElement);
+  return locator.evaluate((element) => element.matches(':focus'));
 }
 
 async function activeElementLabel(page) {

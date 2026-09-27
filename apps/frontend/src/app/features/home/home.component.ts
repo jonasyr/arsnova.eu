@@ -354,11 +354,12 @@ export class HomeComponent implements OnInit, AfterViewInit, OnDestroy {
   readonly codeSlots = [0, 1, 2, 3, 4, 5];
   readonly quickFeedbackPresetChips = QUICK_FEEDBACK_HOME_CHIPS;
 
-  selectHostScenario(scenario: HostScenario): void {
+  selectHostScenario(scenario: HostScenario, event?: MouseEvent): void {
     this.hostScenario.selectScenario(scenario);
     if (!isPlatformBrowser(this.platformId)) {
       return;
     }
+    const moveFocusToCard = event?.detail === 0;
 
     afterNextRender(
       () => {
@@ -374,6 +375,11 @@ export class HomeComponent implements OnInit, AfterViewInit, OnDestroy {
           block: 'start',
           inline: 'nearest',
         });
+        if (moveFocusToCard) {
+          target
+            ?.querySelector<HTMLElement>('.home-card__scenario-focus-target')
+            ?.focus({ preventScroll: true });
+        }
       },
       { injector: this.injector },
     );

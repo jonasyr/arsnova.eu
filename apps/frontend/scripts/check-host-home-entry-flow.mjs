@@ -237,7 +237,27 @@ async function quickStarts(browser) {
 }
 
 async function chooseEvent(page) {
-  await page.locator('.home-scenario__option').nth(1).click();
+  const eventChoice = page.locator('.home-scenario__option').nth(1);
+  if (page.viewportSize().width === 320) {
+    const quickChoice = page.locator('.home-scenario__option').nth(2);
+    await eventChoice.focus();
+    await eventChoice.press('Enter');
+    await expectFocus(page, '#home-host-qa .home-card__scenario-focus-target');
+    await page.keyboard.press('Tab');
+    await expectFocus(page, '[data-testid="home-live-qa-create"]');
+
+    await quickChoice.focus();
+    await quickChoice.press('Space');
+    await expectFocus(page, '#host-quick-feedback .home-card__scenario-focus-target');
+    await page.keyboard.press('Tab');
+    await expectFocus(page, '#host-quick-feedback .home-feedback-chip');
+
+    await eventChoice.focus();
+    await eventChoice.press('Enter');
+    await expectFocus(page, '#home-host-qa .home-card__scenario-focus-target');
+  } else {
+    await eventChoice.click();
+  }
   await page.getByTestId('home-event-both').waitFor();
   if (page.viewportSize().width >= 1200) {
     await page.evaluate(() => document.fonts.ready);
