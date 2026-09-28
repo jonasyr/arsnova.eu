@@ -73,7 +73,8 @@ import {
   localeIdToSupported,
   type SupportedLocale,
 } from '../../../core/locale-from-path';
-import { refreshTrpcWsBinding, trpc } from '../../../core/trpc.client';
+import { forceReconnectTrpcWs, refreshTrpcWsBinding, trpc } from '../../../core/trpc.client';
+import { WsConnectionService } from '../../../core/ws-connection.service';
 import {
   clearHostBrowserCapability,
   clearStagedHostRecoveryCard,
@@ -297,6 +298,7 @@ const SESSION_LIFECYCLE_DIALOG_OVERLAY = {
 const HOST_AUX_POLL_MS = 3000;
 const HOST_CLOCK_POLL_MS = 15000;
 const HOST_REALTIME_RESUBSCRIBE_MS = 5000;
+const HOST_MANUAL_RECONNECT_TIMEOUT_MS = 12000;
 const QA_WORD_CLOUD_ANALYSIS_DEBOUNCE_MS = 180;
 const QA_WORD_CLOUD_ANALYZE_CONFLICT_RETRIES = 3;
 const QA_WORD_CLOUD_ANALYZE_CONFLICT_RETRY_MS = 80;
@@ -823,8 +825,11 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   private hostRealtimeFallbackActive = false;
   private hostRealtimeFallbackRefreshInFlight = false;
   private hostRealtimeSubscriptionRetryTimer: ReturnType<typeof setTimeout> | null = null;
+  private unregisterPairedHostManualReconnect: (() => void) | null = null;
+  private pairedHostManualReconnectGeneration = 0;
   private currentQuestionRefreshRunId = 0;
   private hostVoteProgressRefreshRunId = 0;
+  private sessionLifecycleRefreshRunId = 0;
   private participantBaselineReady = false;
   private knownParticipantIds = new Set<string>();
   private foyerArrivalSequence = 0;
@@ -872,6 +877,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   private readonly wordCloudTermExtractor = inject(WordCloudTermExtractorService);
   private readonly sessionTokenStorage = inject(SessionTokenStorageService);
   private readonly hostScenario = inject(HostScenarioService);
+  private readonly wsConnection = inject(WsConnectionService);
   readonly contextualFeedbackOffer = inject(ContextualFeedbackOfferService);
   private presenterWindowOpenInFlight = false;
   private presenterWindowHandle: Window | null = null;
@@ -1766,7 +1772,15 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   readonly showHostViewControls = computed(() => this.isLiveHostSurface());
   readonly presenterSurfacePending = signal(false);
   readonly pendingHostMoreAction = signal<
-    'skip' | 'previous' | 'replace' | 'leave' | 'endPresentation' | 'feedback' | 'end' | null
+    | 'skip'
+    | 'previous'
+    | 'replace'
+    | 'leave'
+    | 'openPresentation'
+    | 'endPresentation'
+    | 'feedback'
+    | 'end'
+    | null
   >(null);
 
   /** Material restores the persistent menu trigger before emitting menuClosed. */
@@ -1792,6 +1806,9 @@ export class SessionHostComponent implements OnInit, OnDestroy {
         break;
       case 'leave':
         void this.onLeaveHostKeepingQaOpen();
+        break;
+      case 'openPresentation':
+        void this.openPresenterView(true);
         break;
       case 'endPresentation':
         void this.endPresentationView();
@@ -4630,6 +4647,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
 
   async ngOnInit(): Promise<void> {
     if (this.code.length !== 6) return;
+    this.syncPairedHostManualReconnectRegistration();
     if (this.isPairedHostClient()) {
       this.sound.setOutputEnabled(false);
     }
@@ -4706,12 +4724,17 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     }
   }
 
-  private async reloadSessionInfo(): Promise<SessionInfoDTO> {
+  private async reloadSessionInfo(
+    options: { isCurrent?: () => boolean } = {},
+  ): Promise<SessionInfoDTO> {
     const requestedAt = Date.now();
     const session = await trpc.session.getInfoForReconnect.query({
       code: this.code.toUpperCase(),
       anonymousClientId: getAnonymousClientId(),
     });
+    if (options.isCurrent && !options.isCurrent()) {
+      return session;
+    }
     recordServerTimeSample(session.serverTime, requestedAt);
     this.sessionUnavailable.set(false);
     this.keepHostTokenOnDeactivate = false;
@@ -4735,15 +4758,26 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     return session;
   }
 
-  private async refreshSessionLifecycle(): Promise<void> {
-    if (!this.code || this.sessionLifecyclePending() || this.hostAccessRevoked()) {
+  private async refreshSessionLifecycle(
+    options: { throwOnError?: boolean; isCurrent?: () => boolean } = {},
+  ): Promise<void> {
+    if (
+      !this.code ||
+      (this.sessionLifecyclePending() && !options.isCurrent) ||
+      this.hostAccessRevoked()
+    ) {
+      if (options.throwOnError) {
+        throw new Error('Session lifecycle snapshot is not available.');
+      }
       return;
     }
+    const runId = ++this.sessionLifecycleRefreshRunId;
     this.sessionLifecyclePending.set(true);
     try {
       const lifecycle = await trpc.session.getLifecycleForHost.query({
         code: this.code.toUpperCase(),
       });
+      if (options.isCurrent && !options.isCurrent()) return;
       this.sessionLifecycle.set(lifecycle);
       this.sessionDeadline.applySnapshot(lifecycle);
       this.applyLifecycleDeadlineToSession(lifecycle);
@@ -4781,10 +4815,13 @@ export class SessionHostComponent implements OnInit, OnDestroy {
         return;
       }
       this.scheduleSessionLifecycleCheck();
-    } catch {
+    } catch (error: unknown) {
+      if (options.throwOnError) throw error;
       // Die Status-Subscription bleibt maßgeblich; Warnungen werden beim nächsten Snapshot erneut geplant.
     } finally {
-      this.sessionLifecyclePending.set(false);
+      if (runId === this.sessionLifecycleRefreshRunId) {
+        this.sessionLifecyclePending.set(false);
+      }
     }
   }
 
@@ -5317,21 +5354,23 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       });
   }
 
-  private async refreshAuxiliaryHostData(): Promise<void> {
+  private async refreshAuxiliaryHostData(
+    options: { isCurrent?: () => boolean } = {},
+  ): Promise<void> {
     if (typeof document !== 'undefined' && document.hidden) {
       return;
     }
     if (this.shouldPollLiveFreetext()) {
-      await this.refreshLiveFreetext();
+      await this.refreshLiveFreetext(options);
     }
     if (this.shouldPollQaQuestions()) {
-      await this.refreshQaQuestions({ silent: true, preservePaging: true });
+      await this.refreshQaQuestions({ silent: true, preservePaging: true, ...options });
     }
     if (this.shouldPollQuickFeedback()) {
-      await this.refreshQuickFeedbackResult();
+      await this.refreshQuickFeedbackResult(options);
     }
     if (this.shouldPollEmojiReactions()) {
-      await this.refreshEmojiReactions();
+      await this.refreshEmojiReactions(options);
     }
   }
 
@@ -5429,6 +5468,75 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     this.hostRealtimeSubscriptionRetryTimer = null;
   }
 
+  private syncPairedHostManualReconnectRegistration(): void {
+    const shouldRegister = this.isPairedHostClient() && !this.hostAccessRevoked();
+    if (shouldRegister && !this.unregisterPairedHostManualReconnect) {
+      this.unregisterPairedHostManualReconnect = this.wsConnection.registerManualReconnect(() =>
+        this.reconnectPairedHostControl(),
+      );
+      return;
+    }
+    if (!shouldRegister && this.unregisterPairedHostManualReconnect) {
+      this.unregisterPairedHostManualReconnect();
+      this.unregisterPairedHostManualReconnect = null;
+    }
+  }
+
+  private async reconnectPairedHostControl(): Promise<void> {
+    if (!this.isPairedHostClient() || this.hostAccessRevoked()) {
+      throw new Error('Paired host control is no longer available.');
+    }
+
+    const generation = ++this.pairedHostManualReconnectGeneration;
+    const isCurrent = (): boolean => generation === this.pairedHostManualReconnectGeneration;
+    const assertCurrent = (): void => {
+      if (!isCurrent()) throw new Error('WebSocket reconnect was superseded.');
+    };
+    this.clearHostRealtimeSubscriptionRetry();
+    let timeout: ReturnType<typeof setTimeout> | null = null;
+    const reconnectTimeout = new Promise<never>((_, reject) => {
+      timeout = setTimeout(() => {
+        if (isCurrent()) this.pairedHostManualReconnectGeneration += 1;
+        reject(new Error('WebSocket reconnect timed out.'));
+      }, HOST_MANUAL_RECONNECT_TIMEOUT_MS);
+    });
+
+    this.hostRealtimeFallbackActive = true;
+    const restoreSnapshot = async (): Promise<void> => {
+      await forceReconnectTrpcWs();
+      assertCurrent();
+      await this.reloadSessionInfo({ isCurrent });
+      assertCurrent();
+      await Promise.all([
+        this.refreshParticipantsPayload({ throwOnError: true, isCurrent }),
+        this.refreshCurrentQuestionForHost({ throwOnError: true, isCurrent }),
+        this.refreshHostVoteProgress({ throwOnError: true, isCurrent }),
+        this.refreshSessionLifecycle({ throwOnError: true, isCurrent }),
+      ]);
+      assertCurrent();
+      await this.refreshAuxiliaryHostData({ isCurrent });
+      assertCurrent();
+    };
+
+    try {
+      await Promise.race([restoreSnapshot(), reconnectTimeout]);
+      assertCurrent();
+      this.hostRealtimeFallbackActive = false;
+    } catch (error: unknown) {
+      if (isCurrent()) this.consumeHostUnauthorized(error);
+      throw error;
+    } finally {
+      if (timeout) clearTimeout(timeout);
+      if (!this.hostAccessRevoked()) {
+        this.ensureParticipantSubscription();
+        this.ensureStatusSubscription();
+        this.ensureCurrentQuestionSubscription();
+        this.ensureVoteProgressSubscription();
+        this.startHostPolling();
+      }
+    }
+  }
+
   /** Periodische Kalibrierung gegen die Serverzeit (Health), falls keine Status-Events kommen. */
   private async refreshServerClockSkew(): Promise<void> {
     try {
@@ -5441,6 +5549,8 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.unregisterPairedHostManualReconnect?.();
+    this.unregisterPairedHostManualReconnect = null;
     this.unbindPresenterDesktopMedia();
     if (typeof document !== 'undefined') {
       document.removeEventListener('visibilitychange', this.onVisibilityChange);
@@ -5551,8 +5661,11 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     this.hostDisplayMode.setPreferImmersiveHost(!this.isImmersiveMode());
   }
 
-  async openPresenterView(): Promise<void> {
-    if (!this.showPresenterViewButton() || this.presenterWindowOpenInFlight) {
+  async openPresenterView(allowCompactViewport = false): Promise<void> {
+    if (
+      (!allowCompactViewport && !this.showPresenterViewButton()) ||
+      this.presenterWindowOpenInFlight
+    ) {
       return;
     }
     if (this.syncPresenterWindowOpenState()) {
@@ -5613,6 +5726,12 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   readonly projectionPagePending = signal(false);
   readonly projectionControlsVisible = signal(false);
   readonly projectionPageError = signal('');
+  readonly showProjectionPageNavigation = computed(() => {
+    const session = this.session();
+    const page = session?.presenterPage;
+    if (!page || session?.presenterSurface === 'ended') return false;
+    return page.count > 1 || this.projectionControlsVisible() || !this.showPresenterViewButton();
+  });
   async changeProjectionPage(delta: -1 | 1): Promise<void> {
     const page = this.session()?.presenterPage;
     if (
@@ -5724,6 +5843,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
 
   private applyHostTwinMode(paired: boolean): void {
     this.isPairedHostClient.set(paired);
+    this.syncPairedHostManualReconnectRegistration();
     this.sound.setOutputEnabled(!paired && !this.hostAccessRevoked());
     if (paired) {
       this.sound.stopAll();
@@ -5749,6 +5869,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       return;
     }
     this.hostAccessRevoked.set(true);
+    this.syncPairedHostManualReconnectRegistration();
     this.canManagePairedHosts.set(false);
     this.participantSub?.unsubscribe();
     this.participantSub = null;
@@ -7997,7 +8118,9 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     }
   }
 
-  private async refreshParticipantsPayload(): Promise<void> {
+  private async refreshParticipantsPayload(
+    options: { throwOnError?: boolean; isCurrent?: () => boolean } = {},
+  ): Promise<void> {
     if (!this.code) {
       this.participantsPayload.set(null);
       this.participantBaselineReady = false;
@@ -8009,11 +8132,13 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       const summary = await trpc.session.getParticipantSummary.query({
         code: this.code.toUpperCase(),
       });
+      if (options.isCurrent && !options.isCurrent()) return;
       this.updateParticipantsPayload(
         this.participantSummaryToPayload(summary),
         this.participantBaselineReady,
       );
-    } catch {
+    } catch (error: unknown) {
+      if (options.throwOnError) throw error;
       // Subscription updates remain the primary live path; keep the last payload on transient failures.
     }
   }
@@ -11635,6 +11760,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     silent?: boolean;
     surfaceFailure?: boolean;
     replaceStale?: boolean;
+    isCurrent?: () => boolean;
     /** Aktuelle Fragenseite nach Live-Invalidierung behalten (nicht auf Seite 1 springen). */
     preservePaging?: boolean;
   }): Promise<boolean> {
@@ -11674,7 +11800,10 @@ export class SessionHostComponent implements OnInit, OnDestroy {
 
       for (let page = 0; page <= targetPage; page += 1) {
         snapshot = await trpc.qa.list.query(this.hostQaListQueryInput(cursor));
-        if (requestGeneration !== this.qaListRequestGeneration) {
+        if (
+          (options?.isCurrent && !options.isCurrent()) ||
+          requestGeneration !== this.qaListRequestGeneration
+        ) {
           return false;
         }
         if (page === targetPage || !snapshot.nextCursor) {
@@ -11686,7 +11815,11 @@ export class SessionHostComponent implements OnInit, OnDestroy {
         pageReached = page + 1;
       }
 
-      if (!snapshot || requestGeneration !== this.qaListRequestGeneration) {
+      if (
+        !snapshot ||
+        (options?.isCurrent && !options.isCurrent()) ||
+        requestGeneration !== this.qaListRequestGeneration
+      ) {
         return false;
       }
 
@@ -11702,6 +11835,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
           silent: options?.silent,
           surfaceFailure: true,
           replaceStale: true,
+          isCurrent: options?.isCurrent,
         });
       }
       if (targetPage > 0) {
@@ -11712,6 +11846,9 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       this.dismissQaSteeringCallout();
       return true;
     } catch (error) {
+      if (options?.isCurrent && !options.isCurrent()) {
+        return false;
+      }
       if (requestGeneration !== this.qaListRequestGeneration) {
         return false;
       }
@@ -11724,6 +11861,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
           silent: options.silent,
           surfaceFailure: options.surfaceFailure,
           preservePaging: false,
+          isCurrent: options.isCurrent,
         });
       }
       if (options?.silent && !options.surfaceFailure) {
@@ -12446,7 +12584,9 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     }
   }
 
-  private async refreshQuickFeedbackResult(): Promise<void> {
+  private async refreshQuickFeedbackResult(
+    options: { isCurrent?: () => boolean } = {},
+  ): Promise<void> {
     if (!this.channels().quickFeedback || this.code.length !== 6) {
       this.quickFeedbackResult.set(null);
       this.quickFeedbackSeenVoteCount.set(0);
@@ -12457,6 +12597,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       const result = await trpc.quickFeedback.hostResults.query({
         sessionCode: this.code.toUpperCase(),
       });
+      if (options.isCurrent && !options.isCurrent()) return;
       this.quickFeedbackResult.set(result);
     } catch {
       // Keep the last snapshot visible during transient polling failures.
@@ -12776,7 +12917,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     }
   }
 
-  async refreshEmojiReactions(): Promise<void> {
+  async refreshEmojiReactions(options: { isCurrent?: () => boolean } = {}): Promise<void> {
     if (
       (this.effectiveStatus() !== 'RESULTS' && this.effectiveStatus() !== 'ACTIVE') ||
       !this.session()?.enableEmojiReactions
@@ -12806,6 +12947,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
         questionId: qid,
         round,
       });
+      if (options.isCurrent && !options.isCurrent()) return;
       this.emojiReactions.set(data);
       const delta = data.total - previousTotal;
       if (delta > 0) {
@@ -12820,6 +12962,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
         }, 700);
       }
     } catch {
+      if (options.isCurrent && !options.isCurrent()) return;
       this.emojiReactions.set(null);
       this.clearEmojiNewBadge();
     }
@@ -13220,7 +13363,9 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     }
   }
 
-  private async refreshCurrentQuestionForHost(): Promise<void> {
+  private async refreshCurrentQuestionForHost(
+    options: { throwOnError?: boolean; isCurrent?: () => boolean } = {},
+  ): Promise<void> {
     if (!this.code || this.code.length !== 6) return;
     const runId = ++this.currentQuestionRefreshRunId;
     const expectedStatus = this.effectiveStatus();
@@ -13230,6 +13375,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
         code: this.code.toUpperCase(),
       });
       if (
+        (options.isCurrent && !options.isCurrent()) ||
         runId !== this.currentQuestionRefreshRunId ||
         this.effectiveStatus() !== expectedStatus ||
         this.effectiveCurrentQuestionState() !== expectedQuestion
@@ -13238,9 +13384,15 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       }
       this.syncCurrentQuestionForHost(q);
     } catch (error: unknown) {
-      if (this.consumeHostUnauthorized(error)) {
+      if (options.isCurrent && !options.isCurrent()) {
+        if (options.throwOnError) throw error;
         return;
       }
+      if (this.consumeHostUnauthorized(error)) {
+        if (options.throwOnError) throw error;
+        return;
+      }
+      if (options.throwOnError) throw error;
       if (
         runId !== this.currentQuestionRefreshRunId ||
         this.effectiveStatus() !== expectedStatus ||
@@ -13252,7 +13404,9 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     }
   }
 
-  private async refreshHostVoteProgress(): Promise<void> {
+  private async refreshHostVoteProgress(
+    options: { throwOnError?: boolean; isCurrent?: () => boolean } = {},
+  ): Promise<void> {
     if (!this.code || this.code.length !== 6) return;
     const runId = ++this.hostVoteProgressRefreshRunId;
     const expectedStatus = this.effectiveStatus();
@@ -13263,6 +13417,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
         code: this.code.toUpperCase(),
       });
       if (
+        (options.isCurrent && !options.isCurrent()) ||
         runId !== this.hostVoteProgressRefreshRunId ||
         this.effectiveStatus() !== expectedStatus ||
         this.effectiveCurrentQuestionState() !== expectedQuestion ||
@@ -13271,7 +13426,8 @@ export class SessionHostComponent implements OnInit, OnDestroy {
         return;
       }
       this.syncHostVoteProgress(progress);
-    } catch {
+    } catch (error: unknown) {
+      if (options.throwOnError) throw error;
       if (
         runId !== this.hostVoteProgressRefreshRunId ||
         this.effectiveStatus() !== expectedStatus ||
@@ -13330,9 +13486,10 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     this.hostQuestionDetailsRetryCount = 0;
   }
 
-  private async refreshLiveFreetext(): Promise<void> {
+  private async refreshLiveFreetext(options: { isCurrent?: () => boolean } = {}): Promise<void> {
     try {
       const data = await trpc.session.getLiveFreetext.query({ code: this.code.toUpperCase() });
+      if (options.isCurrent && !options.isCurrent()) return;
       this.freetextResponses.set(data.responses);
 
       if (data.questionType === 'FREETEXT') {
@@ -13356,6 +13513,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
         this.wordCloudExpanded.set(false);
       }
     } catch {
+      if (options.isCurrent && !options.isCurrent()) return;
       this.wordCloudInfo.set($localize`Live-Freitextdaten konnten nicht geladen werden.`);
     }
   }
