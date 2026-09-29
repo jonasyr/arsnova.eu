@@ -839,10 +839,36 @@
                           <mat-icon aria-hidden="true">thumb_up</mat-icon>
                           <span>{{ formatCount(question.upvoteCount) }}</span>
                         </div>
-                        <div
-                          class="session-present__qa-list-text"
-                          [innerHTML]="renderMarkdown(question.text)"
-                        ></div>
+                        <div class="session-present__qa-list-body">
+                          @if (question.passagesRedacted) {
+                            <span
+                              class="session-present__qa-redacted"
+                              [attr.aria-label]="
+                                qaPassagesRedactedAria(qaPassagesRedactedAt(question))
+                              "
+                            >
+                              <mat-icon class="session-present__qa-redacted-icon" aria-hidden="true"
+                                >visibility_off</mat-icon
+                              >
+                              <span class="session-present__qa-redacted-copy">
+                                <span i18n="@@sessionQa.badgePassagesRedacted"
+                                  >Passagen durch Moderation geschwärzt</span
+                                >
+                                @if (qaPassagesRedactedAt(question); as redactedAt) {
+                                  <time
+                                    class="session-present__qa-redacted-time"
+                                    [attr.datetime]="redactedAt"
+                                    >{{ formatQaRedactedAt(redactedAt) }}</time
+                                  >
+                                }
+                              </span>
+                            </span>
+                          }
+                          <div
+                            class="session-present__qa-list-text"
+                            [innerHTML]="renderMarkdown(question.text)"
+                          ></div>
+                        </div>
                       </article>
                     }
                   </div>

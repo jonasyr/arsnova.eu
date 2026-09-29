@@ -138,6 +138,8 @@ import {
   isQaChannelJoinable,
   QA_LIST_DEFAULT_PAGE_SIZE,
   QA_LIST_PAGE_SIZE_OPTIONS,
+  qaQuestionTextVersion,
+  qaRedactionDialogTextIsCurrent,
   type QaListPageSize,
   type WordCloudLemmaLocale,
   type ProductFeedbackInAppArea,
@@ -9835,6 +9837,31 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     return days === 1 ? $localize`vor 1\u00A0Tag` : $localize`vor ${days}\u00A0Tagen`;
   }
 
+  formatQaRedactedAt(isoDate: string): string {
+    return new Intl.DateTimeFormat(this.localeId, {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    }).format(new Date(isoDate));
+  }
+
+  /** Zeitpunkt der Schwärzung; Fallback auf updatedAt nur wenn das Feld noch fehlt. */
+  qaPassagesRedactedAt(
+    question: Pick<QaQuestionDTO, 'passagesRedacted' | 'passagesRedactedAt' | 'updatedAt'>,
+  ): string | null {
+    if (!question.passagesRedacted) {
+      return null;
+    }
+    return question.passagesRedactedAt ?? question.updatedAt ?? null;
+  }
+
+  qaPassagesRedactedAria(isoDate?: string | null): string {
+    if (!isoDate) {
+      return $localize`:@@sessionQa.badgePassagesRedactedAria:Passagen durch Moderation geschwärzt`;
+    }
+    const when = this.formatQaRedactedAt(isoDate);
+    return $localize`:@@sessionQa.badgePassagesRedactedAriaAt:Passagen durch Moderation geschwärzt am ${when}:when:`;
+  }
+
   qaActionLabel(
     action: 'APPROVE' | 'PIN' | 'UNPIN' | 'ARCHIVE' | 'DELETE',
     status?: QaQuestionDTO['status'],
@@ -12889,6 +12916,113 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       this.openHostSteeringCalloutForQaFailure(
         () => void this.moderateQaQuestion(questionId, action),
       );
+    } finally {
+      const remaining = new Set(this.qaPendingQuestionIds());
+      remaining.delete(questionId);
+      this.qaPendingQuestionIds.set(remaining);
+    }
+  }
+
+  async openQaRedactPassagesDialog(questionId: string): Promise<void> {
+    if (!this.code || !this.qaHostWritesAllowed()) {
+      return;
+    }
+    const question = this.qaVisibleQuestions().find((entry) => entry.id === questionId);
+    if (!question) {
+      return;
+    }
+
+    const { QaRedactPassagesDialogComponent } =
+      await import('./qa-redact-passages-dialog.component');
+    const dialogRef = this.dialog.open(QaRedactPassagesDialogComponent, {
+      width: 'min(42rem, calc(100vw - 1.5rem))',
+      autoFocus: 'dialog',
+      restoreFocus: true,
+      data: {
+        question: {
+          id: question.id,
+          text: question.text,
+          updatedAt: question.updatedAt,
+          passagesRedacted: question.passagesRedacted === true,
+        },
+        applyRedaction: (ranges: Array<{ start: number; end: number }>, sourceText: string) =>
+          this.applyQaPassageRedaction(questionId, ranges, sourceText),
+      },
+    });
+    const result = await firstValueFrom(dialogRef.afterClosed());
+    if (!result?.applied) {
+      return;
+    }
+    this.qaInfo.set($localize`:@@sessionQa.redactSuccess:Passagen wurden dauerhaft geschwärzt.`);
+    this.dismissHostSteeringCallout();
+    this.scrollHostQaQuestionIntoView(questionId);
+  }
+
+  private async applyQaPassageRedaction(
+    questionId: string,
+    ranges: Array<{ start: number; end: number }>,
+    sourceText: string,
+  ): Promise<import('./qa-redact-passages-dialog.component').QaRedactPassagesApplyOutcome> {
+    if (!this.code || !this.qaHostWritesAllowed()) {
+      return { ok: false, reason: 'error' };
+    }
+    const current = this.qaVisibleQuestions().find((entry) => entry.id === questionId);
+    if (!current) {
+      return { ok: false, reason: 'error' };
+    }
+    // Ranges stammen aus dem Dialogtext — nie die Version aus einer inzwischen aktualisierten Liste nehmen.
+    if (!qaRedactionDialogTextIsCurrent(sourceText, current.text)) {
+      await this.refreshQaQuestions();
+      const refreshed = this.qaVisibleQuestions().find((entry) => entry.id === questionId);
+      if (!refreshed) {
+        return { ok: false, reason: 'error' };
+      }
+      return {
+        ok: false,
+        reason: 'conflict',
+        question: {
+          id: refreshed.id,
+          text: refreshed.text,
+          updatedAt: refreshed.updatedAt,
+          passagesRedacted: refreshed.passagesRedacted === true,
+        },
+      };
+    }
+    const pending = new Set(this.qaPendingQuestionIds());
+    if (pending.has(questionId)) {
+      return { ok: false, reason: 'error' };
+    }
+    pending.add(questionId);
+    this.qaPendingQuestionIds.set(pending);
+
+    try {
+      await trpc.qa.redactPassages.mutate({
+        sessionCode: this.code.toUpperCase(),
+        questionId,
+        expectedTextVersion: qaQuestionTextVersion(sourceText),
+        ranges,
+      });
+      await this.refreshQaQuestions();
+      return { ok: true };
+    } catch (error) {
+      if (this.isTrpcConflictError(error)) {
+        await this.refreshQaQuestions();
+        const refreshed = this.qaVisibleQuestions().find((entry) => entry.id === questionId);
+        if (!refreshed) {
+          return { ok: false, reason: 'error' };
+        }
+        return {
+          ok: false,
+          reason: 'conflict',
+          question: {
+            id: refreshed.id,
+            text: refreshed.text,
+            updatedAt: refreshed.updatedAt,
+            passagesRedacted: refreshed.passagesRedacted === true,
+          },
+        };
+      }
+      return { ok: false, reason: 'error' };
     } finally {
       const remaining = new Set(this.qaPendingQuestionIds());
       remaining.delete(questionId);

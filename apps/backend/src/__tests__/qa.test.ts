@@ -82,6 +82,7 @@ vi.mock('../lib/qaTelemetry', () => ({
 
 import { emitQaQuestionsSignal, resetQaQuestionsSignalsForTests } from '../lib/qaQuestionsSignal';
 import { qaRouter, resetSharedQaRankingCacheForTests } from '../routers/qa';
+import { QA_REDACTION_PLACEHOLDER, qaQuestionTextVersion } from '@arsnova/shared-types';
 
 function hostCtx(token: string | null) {
   return {
@@ -313,6 +314,7 @@ describe('qa router (Epic 8)', () => {
           negativeVoteCount: 0,
           status: 'ACTIVE',
           createdAt: '2026-03-13T12:00:00.000Z',
+          passagesRedacted: false,
           hasUpvoted: true,
           isOwn: false,
           myVote: 'UP',
@@ -1243,6 +1245,8 @@ describe('qa router (Epic 8)', () => {
       upvoteCount: 5,
       status: 'ACTIVE',
       createdAt: new Date('2026-03-13T12:00:00.000Z'),
+      updatedAt: new Date('2026-03-13T12:00:00.000Z'),
+      passagesRedacted: false,
     });
     prismaMock.qaQuestion.delete.mockResolvedValue({});
 
@@ -1261,6 +1265,7 @@ describe('qa router (Epic 8)', () => {
       text: 'Diese Frage soll entfernt werden',
       upvoteCount: 5,
       status: 'DELETED',
+      passagesRedacted: false,
     });
   });
 
@@ -1327,6 +1332,200 @@ describe('qa router (Epic 8)', () => {
     });
     expect(prismaMock.qaQuestion.update).not.toHaveBeenCalled();
   });
+
+  trpcDodIt(
+    {
+      procedure: 'qa.redactPassages',
+      case: 'happy',
+      mode: 'direct',
+      title: 'schwärzt mehrere disjunkte Passagen atomar und setzt das Label',
+    },
+    async () => {
+      const updatedAt = new Date('2026-03-13T12:00:00.000Z');
+      prismaMock.session.findUnique.mockResolvedValue({
+        ...ACTIVE_QA_SESSION,
+        id: SESSION_ID,
+        type: 'QUIZ',
+        qaEnabled: true,
+        qaOpen: true,
+        status: 'ACTIVE',
+      });
+      prismaMock.qaQuestion.findUnique.mockResolvedValue({
+        id: QUESTION_ID,
+        sessionId: SESSION_ID,
+        participantId: PARTICIPANT_ID,
+        text: 'Bitte Max und Anna anonymisieren',
+        upvoteCount: 2,
+        status: 'PENDING',
+        createdAt: updatedAt,
+        updatedAt,
+        passagesRedacted: false,
+      });
+      prismaMock.qaQuestion.update.mockResolvedValue({
+        id: QUESTION_ID,
+        participantId: PARTICIPANT_ID,
+        text: `Bitte ${QA_REDACTION_PLACEHOLDER} und ${QA_REDACTION_PLACEHOLDER} anonymisieren`,
+        upvoteCount: 2,
+        status: 'PENDING',
+        createdAt: updatedAt,
+        updatedAt: new Date('2026-03-13T12:01:00.000Z'),
+        passagesRedacted: true,
+        passagesRedactedAt: new Date('2026-03-13T12:01:00.000Z'),
+      });
+
+      const result = await hostCaller.redactPassages({
+        sessionCode: 'ABC123',
+        questionId: QUESTION_ID,
+        expectedTextVersion: qaQuestionTextVersion('Bitte Max und Anna anonymisieren'),
+        ranges: [
+          { start: 6, end: 9 },
+          { start: 14, end: 18 },
+        ],
+      });
+
+      expect(prismaMock.qaQuestion.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: QUESTION_ID },
+          data: expect.objectContaining({
+            text: `Bitte ${QA_REDACTION_PLACEHOLDER} und ${QA_REDACTION_PLACEHOLDER} anonymisieren`,
+            passagesRedacted: true,
+            passagesRedactedAt: expect.any(Date),
+          }),
+        }),
+      );
+      expect(result).toMatchObject({
+        id: QUESTION_ID,
+        passagesRedacted: true,
+        passagesRedactedAt: '2026-03-13T12:01:00.000Z',
+        status: 'PENDING',
+        upvoteCount: 2,
+        text: `Bitte ${QA_REDACTION_PLACEHOLDER} und ${QA_REDACTION_PLACEHOLDER} anonymisieren`,
+      });
+    },
+  );
+
+  trpcDodIt(
+    {
+      procedure: 'qa.redactPassages',
+      case: 'happy',
+      mode: 'direct',
+      title: 'erlaubt zweite Schwärzung hinter dem ursprünglichen 500er-Offset',
+    },
+    async () => {
+      const updatedAt = new Date('2026-03-13T12:00:00.000Z');
+      const original = `${'a'.repeat(499)}Z`;
+      const afterFirst = `${'a'.repeat(499)}${QA_REDACTION_PLACEHOLDER}`;
+      prismaMock.session.findUnique.mockResolvedValue({
+        ...ACTIVE_QA_SESSION,
+        id: SESSION_ID,
+        type: 'QUIZ',
+        qaEnabled: true,
+        qaOpen: true,
+        status: 'ACTIVE',
+      });
+      prismaMock.qaQuestion.findUnique.mockResolvedValue({
+        id: QUESTION_ID,
+        sessionId: SESSION_ID,
+        participantId: PARTICIPANT_ID,
+        text: afterFirst,
+        upvoteCount: 0,
+        status: 'ACTIVE',
+        createdAt: updatedAt,
+        updatedAt,
+        passagesRedacted: true,
+        passagesRedactedAt: updatedAt,
+      });
+      const grownEnd = Array.from(afterFirst).length;
+      prismaMock.qaQuestion.update.mockResolvedValue({
+        id: QUESTION_ID,
+        participantId: PARTICIPANT_ID,
+        text: `${'a'.repeat(498)}${QA_REDACTION_PLACEHOLDER}${QA_REDACTION_PLACEHOLDER}`,
+        upvoteCount: 0,
+        status: 'ACTIVE',
+        createdAt: updatedAt,
+        updatedAt: new Date('2026-03-13T12:02:00.000Z'),
+        passagesRedacted: true,
+        passagesRedactedAt: new Date('2026-03-13T12:02:00.000Z'),
+      });
+
+      const result = await hostCaller.redactPassages({
+        sessionCode: 'ABC123',
+        questionId: QUESTION_ID,
+        expectedTextVersion: qaQuestionTextVersion(afterFirst),
+        ranges: [{ start: 498, end: 499 }],
+      });
+
+      expect(grownEnd).toBeGreaterThan(500);
+      expect(prismaMock.qaQuestion.update).toHaveBeenCalled();
+      expect(result.passagesRedacted).toBe(true);
+      expect(original.length).toBe(500);
+    },
+  );
+
+  it('lehnt Schwärzung bei veralteter Textversion und Überlappung ab', async () => {
+    const updatedAt = new Date('2026-03-13T12:00:00.000Z');
+    prismaMock.session.findUnique.mockResolvedValue({
+      ...ACTIVE_QA_SESSION,
+      id: SESSION_ID,
+      type: 'QUIZ',
+      qaEnabled: true,
+      qaOpen: true,
+      status: 'ACTIVE',
+    });
+    prismaMock.qaQuestion.findUnique.mockResolvedValue({
+      id: QUESTION_ID,
+      sessionId: SESSION_ID,
+      participantId: PARTICIPANT_ID,
+      text: 'abcdef',
+      upvoteCount: 0,
+      status: 'ACTIVE',
+      createdAt: updatedAt,
+      updatedAt,
+      passagesRedacted: false,
+    });
+
+    await expect(
+      hostCaller.redactPassages({
+        sessionCode: 'ABC123',
+        questionId: QUESTION_ID,
+        expectedTextVersion: qaQuestionTextVersion('andere Fassung'),
+        ranges: [{ start: 0, end: 2 }],
+      }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+
+    await expect(
+      hostCaller.redactPassages({
+        sessionCode: 'ABC123',
+        questionId: QUESTION_ID,
+        expectedTextVersion: qaQuestionTextVersion('abcdef'),
+        ranges: [
+          { start: 0, end: 3 },
+          { start: 2, end: 5 },
+        ],
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(prismaMock.qaQuestion.update).not.toHaveBeenCalled();
+  });
+
+  trpcDodIt(
+    {
+      procedure: 'qa.redactPassages',
+      case: 'error',
+      mode: 'direct',
+      contract: 'UNAUTHORIZED',
+      title: 'lehnt Schwärzung ohne gültigen Host-Token ab',
+    },
+    async () => {
+      await expect(
+        caller.redactPassages({
+          sessionCode: 'ABC123',
+          questionId: QUESTION_ID,
+          expectedTextVersion: qaQuestionTextVersion('ab'),
+          ranges: [{ start: 0, end: 2 }],
+        }),
+      ).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
+    },
+  );
 
   trpcDodIt(
     {
@@ -1702,6 +1901,7 @@ describe('qa router (Epic 8)', () => {
         score: 0,
         status: 'PENDING',
         createdAt: '2026-03-13T12:00:00.000Z',
+        passagesRedacted: false,
         positiveVoteCount: 0,
         negativeVoteCount: 0,
         voteCount: 0,

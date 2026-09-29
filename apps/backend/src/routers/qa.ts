@@ -19,12 +19,15 @@ import {
   QaSummaryRuntimeDTOSchema,
   QaVoteInputSchema,
   QaVoteOutputSchema,
+  RedactQaPassagesInputSchema,
   ReleasePendingQaQuestionsInputSchema,
   ReleasePendingQaQuestionsOutputSchema,
   RequestQaSummaryInputSchema,
   SubmitQaQuestionInputSchema,
   SubmitQaQuestionOutputSchema,
   ToggleQaModerationInputSchema,
+  applyQaPassageRedaction,
+  qaQuestionTextVersion,
   isQaOpenForParticipants,
   ToggleQaUpvoteOutputSchema,
   UpvoteQaQuestionInputSchema,
@@ -34,9 +37,13 @@ import { waitWhileHostTokenValid } from '../lib/hostRealtimeGuard';
 import { prisma } from '../db';
 import { isQaNlpEnabled } from '../lib/qaNlpConfig';
 import { getQaNlpMetrics } from '../lib/qaNlpQueue';
-import { enqueueQaNlpJob } from '../lib/qaNlpQueue';
+import { enqueueQaNlpJob, invalidateQaNlpForQuestion } from '../lib/qaNlpQueue';
 import { isQaSummaryEnabled } from '../lib/qaSummaryConfig';
-import { getQaSummaryRuntime, requestQaSummary } from '../lib/qaSummaryQueue';
+import {
+  getQaSummaryRuntime,
+  invalidateQaSummaryForSession,
+  requestQaSummary,
+} from '../lib/qaSummaryQueue';
 import {
   buildSessionRetentionTimeline,
   isSessionEffectivelyFinished,
@@ -76,6 +83,9 @@ type QaQuestionRecord = {
   upvoteCount: number;
   status: 'PENDING' | 'ACTIVE' | 'PINNED' | 'ARCHIVED' | 'DELETED';
   createdAt: Date;
+  updatedAt?: Date | string | null;
+  passagesRedacted?: boolean | null;
+  passagesRedactedAt?: Date | string | null;
   participantId: string;
   nlpStatus?: QaNlpPersistStatus | null;
   nlpCategory?: QaNlpPersistCategory | null;
@@ -457,6 +467,12 @@ function mapQaQuestion(
   const myUpvote = participantId
     ? (question.upvotes ?? []).find((v) => v.participantId === participantId)
     : undefined;
+  const updatedAt =
+    question.updatedAt instanceof Date
+      ? question.updatedAt.toISOString()
+      : question.updatedAt
+        ? new Date(question.updatedAt).toISOString()
+        : undefined;
   return QaQuestionDTOSchema.parse({
     id: question.id,
     text: question.text,
@@ -490,6 +506,16 @@ function mapQaQuestion(
       question.createdAt instanceof Date
         ? question.createdAt.toISOString()
         : new Date(question.createdAt).toISOString(),
+    ...(updatedAt ? { updatedAt } : {}),
+    passagesRedacted: question.passagesRedacted === true,
+    ...(question.passagesRedacted === true && question.passagesRedactedAt
+      ? {
+          passagesRedactedAt:
+            question.passagesRedactedAt instanceof Date
+              ? question.passagesRedactedAt.toISOString()
+              : new Date(question.passagesRedactedAt).toISOString(),
+        }
+      : {}),
     ...(question.participant?.nickname?.trim()
       ? { authorNickname: question.participant.nickname.trim() }
       : {}),
@@ -1567,6 +1593,8 @@ export const qaRouter = router({
               upvoteCount: true,
               status: true,
               createdAt: true,
+              updatedAt: true,
+              passagesRedacted: true,
             },
           });
           if (!question || question.sessionId !== session.id) {
@@ -1581,6 +1609,8 @@ export const qaRouter = router({
               upvoteCount: question.upvoteCount,
               status: 'DELETED',
               createdAt: question.createdAt.toISOString(),
+              updatedAt: question.updatedAt.toISOString(),
+              passagesRedacted: question.passagesRedacted === true,
               myVote: null,
               isOwn: false,
               hasUpvoted: false,
@@ -1617,6 +1647,8 @@ export const qaRouter = router({
               upvoteCount: true,
               status: true,
               createdAt: true,
+              updatedAt: true,
+              passagesRedacted: true,
               participantId: true,
             },
           });
@@ -1624,6 +1656,151 @@ export const qaRouter = router({
         });
         emitQaQuestionsSignal(session.id, { immediate: true });
         return moderated;
+      } catch (error) {
+        if (String(error).includes('ARSNOVA_SESSION_ENDED')) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: 'Die Session ist beendet.',
+            cause: error,
+          });
+        }
+        throw error;
+      }
+    }),
+
+  /**
+   * Host-only: konkrete Passagen einer Frage dauerhaft schwärzen.
+   * Kein freies Umschreiben — nur disjunkte Bereiche, Server erzeugt den Platzhalter.
+   */
+  redactPassages: hostProcedure
+    .input(RedactQaPassagesInputSchema)
+    .output(QaQuestionDTOSchema)
+    .mutation(async ({ input }) => {
+      const session = await prisma.session.findUnique({
+        where: { code: input.sessionCode.toUpperCase() },
+        select: {
+          id: true,
+          type: true,
+          qaEnabled: true,
+          qaOpen: true,
+          qaClosesAt: true,
+          status: true,
+          endedAt: true,
+          expiresAt: true,
+        },
+      });
+      if (!session) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Session nicht gefunden.' });
+      }
+      if (!isQaEnabled(session)) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Fragen sind in dieser Session nicht aktiviert.',
+        });
+      }
+      assertQaSessionOpenForParticipants(session);
+
+      const nlpEnabled = isQaNlpEnabled();
+      let redactedQuestionId = '';
+      let redactedText = '';
+
+      try {
+        const redacted = await prisma.$transaction(async (tx) => {
+          await tx.$executeRaw`SELECT arsnova_lock_session_for_participant_join(${session.id})`;
+          const question = await tx.qaQuestion.findUnique({
+            where: { id: input.questionId },
+            select: {
+              id: true,
+              sessionId: true,
+              text: true,
+              upvoteCount: true,
+              status: true,
+              createdAt: true,
+              updatedAt: true,
+              passagesRedacted: true,
+              participantId: true,
+            },
+          });
+          if (!question || question.sessionId !== session.id) {
+            throw new TRPCError({ code: 'NOT_FOUND', message: 'Frage nicht gefunden.' });
+          }
+          if (question.status === 'DELETED') {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: 'Gelöschte Fragen können nicht geschwärzt werden.',
+            });
+          }
+          if (qaQuestionTextVersion(question.text) !== input.expectedTextVersion) {
+            throw new TRPCError({
+              code: 'CONFLICT',
+              message:
+                'Die Frage wurde inzwischen geändert. Lade sie bitte neu und wiederhole die Schwärzung.',
+            });
+          }
+
+          const applied = applyQaPassageRedaction(question.text, input.ranges);
+          if (!applied.ok) {
+            const messageByReason: Record<typeof applied.reason, string> = {
+              EMPTY_RANGES: 'Mindestens eine Passage muss ausgewählt sein.',
+              TOO_MANY_RANGES: 'Zu viele Passagen auf einmal.',
+              INVALID_RANGE: 'Ungültiger Schwärzungsbereich.',
+              OUT_OF_BOUNDS: 'Der Schwärzungsbereich liegt außerhalb des Fragetexts.',
+              RANGE_TOO_LONG: 'Eine Passage ist zu lang.',
+              OVERLAPPING_RANGES: 'Die ausgewählten Passagen dürfen sich nicht überlappen.',
+              OVERLAPS_PLACEHOLDER:
+                'Bereits geschwärzte Stellen können nicht erneut ausgewählt werden.',
+              EMPTY_RESULT: 'Nach der Schwärzung bliebe kein verständlicher Fragetext übrig.',
+            };
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: messageByReason[applied.reason],
+            });
+          }
+
+          // Fehlerantworten und Antwort-DTOs enthalten bewusst keinen Originalwortlaut.
+          const updated = await tx.qaQuestion.update({
+            where: { id: question.id },
+            data: {
+              text: applied.text,
+              passagesRedacted: true,
+              passagesRedactedAt: new Date(),
+              nlpStatus: nlpEnabled ? 'PENDING' : 'DISABLED',
+              nlpCategory: null,
+              nlpConfidence: null,
+              nlpModelVersion: null,
+              nlpAnalyzedAt: null,
+            },
+            select: {
+              id: true,
+              text: true,
+              upvoteCount: true,
+              status: true,
+              createdAt: true,
+              updatedAt: true,
+              passagesRedacted: true,
+              passagesRedactedAt: true,
+              participantId: true,
+            },
+          });
+          redactedQuestionId = updated.id;
+          redactedText = updated.text;
+          return mapQaQuestion(updated);
+        });
+
+        invalidateQaSummaryForSession(session.id);
+        // Immer invalidieren: ein früher gestarteter Job kann noch laufen, auch wenn NLP jetzt aus ist.
+        if (redactedQuestionId) {
+          invalidateQaNlpForQuestion(redactedQuestionId);
+          if (nlpEnabled) {
+            enqueueQaNlpJob({
+              sessionId: session.id,
+              questionId: redactedQuestionId,
+              text: redactedText,
+            });
+          }
+        }
+        emitQaQuestionsSignal(session.id, { immediate: true });
+        return redacted;
       } catch (error) {
         if (String(error).includes('ARSNOVA_SESSION_ENDED')) {
           throw new TRPCError({
