@@ -3,8 +3,11 @@
     <nav
       class="session-host__projection-pages"
       [class.session-host__projection-pages--app-frame]="!isImmersiveMode()"
-      aria-label="Projektionsseiten"
-      i18n-aria-label="@@sessionHost.projectionPages"
+      [attr.aria-label]="
+        projectionNavigationIsQaQuestions()
+          ? projectionQaQuestionsAriaLabel
+          : projectionPagesAriaLabel
+      "
       [attr.aria-busy]="projectionPagePending()"
     >
       <button
@@ -12,21 +15,44 @@
         type="button"
         (click)="changeProjectionPage(-1)"
         [disabledInteractive]="true"
-        [disabled]="projectionPagePending() || page.index === 0"
-        i18n="@@sessionHost.projectionPrevious"
+        [disabled]="
+          projectionPagePending() ||
+          (projectionNavigationIsQaQuestions() && qaListNavFadeBusy()) ||
+          (projectionNavigationIsQaQuestions()
+            ? projectionQaNavDisplayIndex() === 0
+            : page.index === 0)
+        "
       >
-        Vorherige Seite
+        @if (projectionNavigationIsQaQuestions()) {
+          <span i18n="@@sessionHost.projectionQaPrevious">Vorherige Frage</span>
+        } @else {
+          <span i18n="@@sessionHost.projectionPrevious">Vorherige Seite</span>
+        }
       </button>
-      <span aria-live="polite">{{ page.index + 1 }} / {{ page.count }}</span>
+      <span aria-live="polite"
+        >{{
+          (projectionNavigationIsQaQuestions() ? projectionQaNavDisplayIndex() : page.index) + 1
+        }}
+        / {{ projectionPageDisplayCount() }}</span
+      >
       <button
         matButton="outlined"
         type="button"
         (click)="changeProjectionPage(1)"
         [disabledInteractive]="true"
-        [disabled]="projectionPagePending() || page.index >= page.count - 1"
-        i18n="@@sessionHost.projectionNext"
+        [disabled]="
+          projectionPagePending() ||
+          (projectionNavigationIsQaQuestions() && qaListNavFadeBusy()) ||
+          (projectionNavigationIsQaQuestions()
+            ? projectionQaNavDisplayIndex() >= projectionPageDisplayCount() - 1
+            : page.index >= projectionPageDisplayCount() - 1)
+        "
       >
-        Nächste Seite
+        @if (projectionNavigationIsQaQuestions()) {
+          <span i18n="@@sessionHost.projectionQaNext">Nächste Frage</span>
+        } @else {
+          <span i18n="@@sessionHost.projectionNext">Nächste Seite</span>
+        }
       </button>
       @if (projectionPageError()) {
         <p class="session-host__projection-pages-error" role="alert">
@@ -3746,10 +3772,6 @@
                       </button>
                       @if (freetextWordCloudShowSmoothing()) {
                         <div class="session-host__smooth-cluster">
-                          <app-word-cloud-lemma-locale-select
-                            [locale]="qaWordCloudAnalysisLocale()"
-                            (localeChange)="setWordCloudLemmaLocale($event)"
-                          />
                           <button
                             mat-button
                             type="button"
@@ -4106,20 +4128,22 @@
                           <span>{{ qaHostStatusPinnedChipLabel() }}</span>
                         </span>
                       }
-                      @if (qaArchivedCount() > 0) {
-                        <span
+                      @if (qaArchivedCount() > 0 || qaShowArchivedOnly()) {
+                        <button
+                          type="button"
                           class="session-qa-summary__chip session-qa-summary__chip--archived"
-                          tabindex="0"
                           [matTooltip]="qaArchivedSummaryTooltip()"
                           matTooltipPosition="above"
                           [attr.aria-label]="qaArchivedSummaryAria()"
+                          [attr.aria-pressed]="qaShowArchivedOnly()"
+                          (click)="toggleQaArchivedFilterFromSummary()"
                           data-testid="qa-summary-archived"
                         >
                           <mat-icon class="session-qa-summary__icon" aria-hidden="true"
                             >archive</mat-icon
                           >
                           <span>{{ qaHostStatusArchivedChipLabel() }}</span>
-                        </span>
+                        </button>
                       }
                       @if (qaDeletedCount() > 0) {
                         <span
@@ -4148,10 +4172,10 @@
                     Q&amp;A geschlossen: Teilnehmende können keine Fragen einreichen oder bewerten
                   </p>
                 }
-                @if (session()?.channels?.qa?.moderationMode) {
+                @if (session()?.channels?.qa?.moderationMode && qaSessionPendingCount() > 0) {
                   <button
                     #qaReviewPending
-                    mat-flat-button
+                    matButton="filled"
                     type="button"
                     class="session-qa-review-pending"
                     data-testid="qa-review-pending"
@@ -4236,21 +4260,32 @@
                       <span i18n="@@sessionQa.clearPendingFilter">In Moderation: Filter lösen</span>
                     </button>
                   }
+                  @if (qaShowArchivedOnly()) {
+                    <button
+                      mat-stroked-button
+                      type="button"
+                      data-testid="qa-clear-archived"
+                      (click)="setQaArchivedFilter(false)"
+                    >
+                      <mat-icon aria-hidden="true">close</mat-icon>
+                      <span i18n="@@sessionQa.clearArchivedFilter"
+                        >Nur im Archiv: Filter lösen</span
+                      >
+                    </button>
+                  }
                   @if (qaSelectedAuthorNickname(); as authorNickname) {
                     <button
+                      mat-stroked-button
                       type="button"
-                      class="session-qa-filter-btn session-qa-filter-btn--active"
                       data-testid="qa-clear-author"
                       [attr.title]="authorNickname"
                       (click)="clearQaAuthorFilter()"
                       i18n-aria-label="@@sessionQa.authorFilterClearAria"
                       aria-label="Teilnahme-Filter aufheben"
                     >
-                      <mat-icon aria-hidden="true">person_search</mat-icon>
-                      <span
-                        class="session-qa-filter-btn__label"
-                        i18n="@@sessionQa.authorFilterLabel"
-                        >Fragen von {{ authorNickname }}</span
+                      <mat-icon aria-hidden="true">close</mat-icon>
+                      <span i18n="@@sessionQa.authorFilterLabel"
+                        >Fragen von {{ authorNickname }}: Filter lösen</span
                       >
                     </button>
                   }
@@ -4274,7 +4309,7 @@
                 <section class="session-qa-tools" aria-labelledby="qa-tools-toggle">
                   <button
                     #qaToolsToggle
-                    mat-stroked-button
+                    [matButton]="qaToolsToggleEmphasis()"
                     type="button"
                     id="qa-tools-toggle"
                     data-testid="qa-tools-toggle"
@@ -4293,6 +4328,24 @@
                     class="session-qa-tools__content"
                     [hidden]="!qaToolsOpen()"
                   >
+                    @if (qaWordCloudQuestions().length > 0) {
+                      <div class="session-host__extra session-host__extra--tools-lead">
+                        <button
+                          type="button"
+                          class="session-host__extra-summary session-host__extra-summary--button"
+                          (click)="openQaWordCloudDialog()"
+                          data-testid="qa-word-cloud"
+                        >
+                          <span class="session-host__extra-summary-main">
+                            <mat-icon aria-hidden="true">bubble_chart</mat-icon>
+                            <span>{{ qaWordCloudOpenLabel() }}</span>
+                          </span>
+                          <span class="session-host__extra-summary-meta">{{
+                            qaWordCloudInfo()
+                          }}</span>
+                        </button>
+                      </div>
+                    }
                     <div class="session-qa-summary__actions">
                       @if (showParticipantDirectory()) {
                         <section
@@ -4353,36 +4406,68 @@
                           <mat-button-toggle value="TOP" i18n="@@sessionQa.sortTop"
                             >Meist unterstützt</mat-button-toggle
                           >
-                          <mat-button-toggle value="BEST" i18n="@@sessionQa.sortBest"
-                            >Beste Fragen</mat-button-toggle
-                          >
-                          <mat-button-toggle
-                            value="CONTROVERSIAL"
-                            i18n="@@sessionQa.sortControversial"
-                            >Umstritten</mat-button-toggle
-                          >
+                          <mat-button-toggle value="BEST">
+                            <span class="session-qa-sort-toggle__label">
+                              <span i18n="@@sessionQa.sortBest">Beste Fragen</span>
+                              <span
+                                class="session-qa-sort-help"
+                                role="button"
+                                tabindex="0"
+                                data-testid="qa-sort-help-best"
+                                i18n-aria-label="@@sessionQa.sortHelpBestAria"
+                                aria-label="Hilfe zu »Beste Fragen«"
+                                (click)="openQaSortHelp($event, 'BEST')"
+                                (keydown.enter)="openQaSortHelp($event, 'BEST')"
+                                (keydown.space)="openQaSortHelp($event, 'BEST')"
+                                (mousedown)="$event.stopPropagation()"
+                              >
+                                <mat-icon aria-hidden="true">help_outline</mat-icon>
+                              </span>
+                            </span>
+                          </mat-button-toggle>
+                          <mat-button-toggle value="CONTROVERSIAL">
+                            <span class="session-qa-sort-toggle__label">
+                              <span i18n="@@sessionQa.sortControversial">Umstritten</span>
+                              <span
+                                class="session-qa-sort-help"
+                                role="button"
+                                tabindex="0"
+                                data-testid="qa-sort-help-controversial"
+                                i18n-aria-label="@@sessionQa.sortHelpControversialAria"
+                                aria-label="Hilfe zu »Umstritten«"
+                                (click)="openQaSortHelp($event, 'CONTROVERSIAL')"
+                                (keydown.enter)="openQaSortHelp($event, 'CONTROVERSIAL')"
+                                (keydown.space)="openQaSortHelp($event, 'CONTROVERSIAL')"
+                                (mousedown)="$event.stopPropagation()"
+                              >
+                                <mat-icon aria-hidden="true">help_outline</mat-icon>
+                              </span>
+                            </span>
+                          </mat-button-toggle>
                           <mat-button-toggle value="TIME" i18n="@@sessionQa.sortTime"
                             >Zeit</mat-button-toggle
                           >
                         </mat-button-toggle-group>
                       }
-                      <button
-                        type="button"
-                        class="session-qa-filter-btn"
-                        [class.session-qa-filter-btn--active]="qaShowPinnedOnly()"
-                        data-testid="qa-filter-pinned"
-                        [attr.aria-pressed]="qaShowPinnedOnly()"
-                        [attr.aria-label]="qaPinnedFilterAriaLabel()"
-                        (click)="setQaPinnedFilter(!qaShowPinnedOnly())"
-                      >
-                        @if (qaShowPinnedOnly()) {
-                          <mat-icon aria-hidden="true">visibility</mat-icon>
-                          <span i18n="@@sessionQa.filterShowAllLabel">Alle anzeigen</span>
-                        } @else {
-                          <mat-icon aria-hidden="true">push_pin</mat-icon>
-                          <span i18n="@@sessionQa.filterPinnedLabel">Nur hervorgehobene</span>
-                        }
-                      </button>
+                      @if (!qaCompactToolbar()) {
+                        <button
+                          type="button"
+                          class="session-qa-filter-btn"
+                          [class.session-qa-filter-btn--active]="qaShowPinnedOnly()"
+                          data-testid="qa-filter-pinned"
+                          [attr.aria-pressed]="qaShowPinnedOnly()"
+                          [attr.aria-label]="qaPinnedFilterAriaLabel()"
+                          (click)="setQaPinnedFilter(!qaShowPinnedOnly())"
+                        >
+                          @if (qaShowPinnedOnly()) {
+                            <mat-icon aria-hidden="true">visibility</mat-icon>
+                            <span i18n="@@sessionQa.filterShowAllLabel">Alle anzeigen</span>
+                          } @else {
+                            <mat-icon aria-hidden="true">push_pin</mat-icon>
+                            <span i18n="@@sessionQa.filterPinnedLabel">Nur hervorgehobene</span>
+                          }
+                        </button>
+                      }
                       @if (
                         session()?.channels?.qa?.moderationMode ||
                         qaPendingCount() > 0 ||
@@ -4404,6 +4489,25 @@
                           } @else {
                             <mat-icon aria-hidden="true">hourglass_top</mat-icon>
                             <span i18n="@@sessionQa.filterPendingLabel">Nur in Moderation</span>
+                          }
+                        </button>
+                      }
+                      @if (!qaCompactToolbar() && (qaArchivedCount() > 0 || qaShowArchivedOnly())) {
+                        <button
+                          type="button"
+                          class="session-qa-filter-btn"
+                          [class.session-qa-filter-btn--active]="qaShowArchivedOnly()"
+                          data-testid="qa-filter-archived"
+                          [attr.aria-pressed]="qaShowArchivedOnly()"
+                          [attr.aria-label]="qaArchivedFilterAriaLabel()"
+                          (click)="setQaArchivedFilter(!qaShowArchivedOnly())"
+                        >
+                          @if (qaShowArchivedOnly()) {
+                            <mat-icon aria-hidden="true">visibility</mat-icon>
+                            <span i18n="@@sessionQa.filterShowAllLabel">Alle anzeigen</span>
+                          } @else {
+                            <mat-icon aria-hidden="true">archive</mat-icon>
+                            <span i18n="@@sessionQa.filterArchivedLabel">Nur im Archiv</span>
                           }
                         </button>
                       }
@@ -4476,6 +4580,64 @@
                           <button
                             mat-menu-item
                             type="button"
+                            data-testid="qa-mobile-sort-help-best"
+                            (click)="openQaSortHelp($event, 'BEST')"
+                          >
+                            <mat-icon aria-hidden="true">help_outline</mat-icon>
+                            <span i18n="@@sessionQa.sortHelpBestMenu">Hilfe: Beste Fragen</span>
+                          </button>
+                          <button
+                            mat-menu-item
+                            type="button"
+                            data-testid="qa-mobile-sort-help-controversial"
+                            (click)="openQaSortHelp($event, 'CONTROVERSIAL')"
+                          >
+                            <mat-icon aria-hidden="true">help_outline</mat-icon>
+                            <span i18n="@@sessionQa.sortHelpControversialMenu"
+                              >Hilfe: Umstritten</span
+                            >
+                          </button>
+                          <button
+                            mat-menu-item
+                            type="button"
+                            role="menuitemcheckbox"
+                            data-testid="qa-filter-pinned"
+                            [attr.aria-checked]="qaShowPinnedOnly()"
+                            [attr.aria-label]="qaPinnedFilterAriaLabel()"
+                            (click)="setQaPinnedFilter(!qaShowPinnedOnly())"
+                          >
+                            <mat-icon aria-hidden="true">{{
+                              qaShowPinnedOnly() ? 'visibility' : 'push_pin'
+                            }}</mat-icon>
+                            @if (qaShowPinnedOnly()) {
+                              <span i18n="@@sessionQa.filterShowAllLabel">Alle anzeigen</span>
+                            } @else {
+                              <span i18n="@@sessionQa.filterPinnedLabel">Nur hervorgehobene</span>
+                            }
+                          </button>
+                          @if (qaArchivedCount() > 0 || qaShowArchivedOnly()) {
+                            <button
+                              mat-menu-item
+                              type="button"
+                              role="menuitemcheckbox"
+                              data-testid="qa-filter-archived"
+                              [attr.aria-checked]="qaShowArchivedOnly()"
+                              [attr.aria-label]="qaArchivedFilterAriaLabel()"
+                              (click)="setQaArchivedFilter(!qaShowArchivedOnly())"
+                            >
+                              <mat-icon aria-hidden="true">{{
+                                qaShowArchivedOnly() ? 'visibility' : 'archive'
+                              }}</mat-icon>
+                              @if (qaShowArchivedOnly()) {
+                                <span i18n="@@sessionQa.filterShowAllLabel">Alle anzeigen</span>
+                              } @else {
+                                <span i18n="@@sessionQa.filterArchivedLabel">Nur im Archiv</span>
+                              }
+                            </button>
+                          }
+                          <button
+                            mat-menu-item
+                            type="button"
                             data-testid="qa-questions-export"
                             (click)="exportQaQuestionsCsv()"
                             [disabled]="exportExporting()"
@@ -4503,12 +4665,57 @@
                         </button>
                       }
                     </div>
+                    @if (qaVisibleListPageSizeOptions().length > 1) {
+                      <div
+                        class="session-qa-paging__sizes session-qa-tools__page-size"
+                        role="group"
+                        data-testid="qa-tools-page-size"
+                        i18n-aria-label="@@sessionQa.pageSizeAria"
+                        aria-label="Fragen pro Seite"
+                      >
+                        <span
+                          class="session-qa-paging__sizes-label"
+                          i18n="@@sessionQa.pageSizeLabel"
+                          >Pro Seite</span
+                        >
+                        @for (size of qaVisibleListPageSizeOptions(); track size) {
+                          <button
+                            mat-stroked-button
+                            type="button"
+                            class="session-qa-paging__size"
+                            data-testid="qa-tools-page-size-option"
+                            [class.session-qa-paging__size--active]="qaListPageSize() === size"
+                            [attr.aria-pressed]="qaListPageSize() === size"
+                            [disabled]="qaListPageLoading()"
+                            (click)="setQaListPageSize(size)"
+                          >
+                            {{ size }}
+                          </button>
+                        }
+                      </div>
+                    }
                     @if (showParticipantDirectory() && participantDirectoryOpen()) {
                       <div
                         id="session-participant-directory-content"
                         class="session-participant-directory__content session-qa-summary__directory-panel"
                         [attr.aria-busy]="participantDirectoryLoading()"
                       >
+                        @if (qaSelectedAuthorNickname(); as selectedAuthor) {
+                          <button
+                            mat-stroked-button
+                            type="button"
+                            class="session-participant-directory__clear-selection"
+                            data-testid="qa-directory-clear-author"
+                            (click)="clearQaAuthorFilter()"
+                            i18n-aria-label="@@sessionQa.authorFilterClearAria"
+                            aria-label="Teilnahme-Filter aufheben"
+                          >
+                            <mat-icon aria-hidden="true">close</mat-icon>
+                            <span i18n="@@sessionQa.authorFilterLabel"
+                              >Fragen von {{ selectedAuthor }}: Filter lösen</span
+                            >
+                          </button>
+                        }
                         <mat-form-field appearance="outline" subscriptSizing="dynamic">
                           <mat-label i18n="@@sessionHost.participantDirectorySearch"
                             >Nickname suchen</mat-label
@@ -4642,24 +4849,6 @@
                         </div>
                       </div>
                     }
-                    @if (qaWordCloudQuestions().length > 0) {
-                      <div class="session-host__extra">
-                        <button
-                          type="button"
-                          class="session-host__extra-summary session-host__extra-summary--button"
-                          (click)="openQaWordCloudDialog()"
-                          data-testid="qa-word-cloud"
-                        >
-                          <span class="session-host__extra-summary-main">
-                            <mat-icon aria-hidden="true">bubble_chart</mat-icon>
-                            <span>{{ qaWordCloudOpenLabel() }}</span>
-                          </span>
-                          <span class="session-host__extra-summary-meta">{{
-                            qaWordCloudInfo()
-                          }}</span>
-                        </button>
-                      </div>
-                    }
                     <p class="session-qa-sort-hint">{{ qaSortHint() }}</p>
                   </div>
                 </section>
@@ -4687,7 +4876,12 @@
                     </p>
                   </div>
                 } @else if (
-                  qaForumQuestionCount() === 0 && !qaSearch() && !qaSelectedAuthorNickname()
+                  qaForumQuestionCount() === 0 &&
+                  !qaSearch() &&
+                  !qaSelectedAuthorNickname() &&
+                  !qaShowPinnedOnly() &&
+                  !qaShowPendingOnly() &&
+                  !qaShowArchivedOnly()
                 ) {
                   <div class="session-qa-empty">
                     <mat-icon class="session-qa-empty__icon" aria-hidden="true"
@@ -4715,37 +4909,12 @@
                     </button>
                   }
                   @if (qaListTotalCount() > 0 || qaQuestions().length > 0) {
-                    <nav
-                      class="session-qa-paging session-qa-paging--before-list"
-                      i18n-aria-label="@@sessionQa.pagingAria"
-                      aria-label="Fragenseiten"
-                    >
-                      <div
-                        class="session-qa-paging__sizes"
-                        role="group"
-                        i18n-aria-label="@@sessionQa.pageSizeAria"
-                        aria-label="Fragen pro Seite"
+                    @if (qaListPageIndex() > 0 || qaListNextCursor()) {
+                      <nav
+                        class="session-qa-paging session-qa-paging--before-list"
+                        i18n-aria-label="@@sessionQa.pagingAria"
+                        aria-label="Fragenseiten"
                       >
-                        <span
-                          class="session-qa-paging__sizes-label"
-                          i18n="@@sessionQa.pageSizeLabel"
-                          >Pro Seite</span
-                        >
-                        @for (size of qaListPageSizeOptions; track size) {
-                          <button
-                            mat-stroked-button
-                            type="button"
-                            class="session-qa-paging__size"
-                            [class.session-qa-paging__size--active]="qaListPageSize() === size"
-                            [attr.aria-pressed]="qaListPageSize() === size"
-                            [disabled]="qaListPageLoading()"
-                            (click)="setQaListPageSize(size)"
-                          >
-                            {{ size }}
-                          </button>
-                        }
-                      </div>
-                      @if (qaListPageIndex() > 0 || qaListNextCursor()) {
                         <div class="session-qa-paging__nav">
                           <button
                             mat-stroked-button
@@ -4767,8 +4936,8 @@
                             Weiter
                           </button>
                         </div>
-                      }
-                    </nav>
+                      </nav>
+                    }
                   }
                   <div
                     class="session-qa-list"
@@ -4781,11 +4950,18 @@
                       <article
                         class="session-qa-card"
                         [attr.id]="'host-qa-question-' + question.id"
-                        [class.session-qa-card--highlight]="isQaQuestionHighlighted(question.id)"
+                        [class.session-qa-card--highlight]="
+                          isQaQuestionHighlighted(question.id) &&
+                          !isQaPresenterHeroCard(question.id)
+                        "
                         [class.session-qa-card--compass-focus]="isQaCompassFocused(question.id)"
                         [class.session-qa-card--author-selected]="isQaAuthorSelected(question)"
-                        [class.session-qa-card--pinned]="question.status === 'PINNED'"
+                        [class.session-qa-card--pinned]="isQaPresenterHeroCard(question.id)"
                         [class.session-qa-card--pending]="question.status === 'PENDING'"
+                        [class.session-qa-card--nav-fade-out]="
+                          isQaListNavFading(question.id, 'out')
+                        "
+                        [class.session-qa-card--nav-fade-in]="isQaListNavFading(question.id, 'in')"
                         [attr.aria-current]="isQaCompassFocusPrimary(question.id) ? 'true' : null"
                         role="listitem"
                       >
@@ -4869,6 +5045,16 @@
                                 {{ qaStatusLabel(question.status) }}
                               </span>
                             }
+                            @if (isQaQuestionOnPresenterStage(question.id)) {
+                              <span
+                                class="session-qa-card__badge session-qa-card__badge--on-presenter"
+                              >
+                                <mat-icon class="session-qa-card__badge-icon" aria-hidden="true"
+                                  >present_to_all</mat-icon
+                                >
+                                {{ qaPresenterStageBadgeLabel }}
+                              </span>
+                            }
                             @if (isQaQuestionHighlighted(question.id)) {
                               <span class="session-qa-card__marker" aria-hidden="true"></span>
                             }
@@ -4876,13 +5062,6 @@
                               <span
                                 class="session-qa-card__badge session-qa-card__badge--compass"
                                 >{{ qaFocusBadge() }}</span
-                              >
-                            }
-                            @if (question.isControversial) {
-                              <span
-                                class="session-qa-card__badge session-qa-card__badge--controversial"
-                                i18n="@@sessionQa.badgeControversial"
-                                >Umstritten</span
                               >
                             }
                             @if (question.passagesRedacted) {
@@ -4912,13 +5091,22 @@
                           </div>
                           <span
                             class="session-qa-card__votes"
-                            [class.session-qa-card__votes--positive]="qaQuestionScore(question) > 0"
-                            [class.session-qa-card__votes--negative]="qaQuestionScore(question) < 0"
+                            [attr.aria-label]="qaVotesBreakdownAriaLabel(question)"
                           >
-                            <mat-icon class="session-qa-card__votes-icon" aria-hidden="true"
-                              >thumb_up_off_alt</mat-icon
+                            <span class="session-qa-card__vote-stat session-qa-card__vote-stat--up">
+                              <mat-icon class="session-qa-card__vote-stat-icon" aria-hidden="true"
+                                >thumb_up</mat-icon
+                              >
+                              <span>{{ formatCount(qaPositiveVoteCount(question)) }}</span>
+                            </span>
+                            <span
+                              class="session-qa-card__vote-stat session-qa-card__vote-stat--down"
                             >
-                            {{ qaQuestionScore(question) }}
+                              <mat-icon class="session-qa-card__vote-stat-icon" aria-hidden="true"
+                                >thumb_down</mat-icon
+                              >
+                              <span>{{ formatCount(qaNegativeVoteCount(question)) }}</span>
+                            </span>
                           </span>
                         </div>
                         <div
@@ -4930,12 +5118,37 @@
                             relativeTime(question.createdAt)
                           }}</span>
                           @if (
-                            question.positiveVoteCount !== undefined &&
-                            question.negativeVoteCount !== undefined
+                            qaSortMode() === 'CONTROVERSIAL' && question.isControversial === true
                           ) {
-                            <span class="session-qa-card__metric" i18n="@@sessionQa.voteBreakdown"
-                              >{{ formatCount(question.positiveVoteCount) }} positiv ·
-                              {{ formatCount(question.negativeVoteCount) }} negativ</span
+                            <span
+                              class="session-qa-card__badge session-qa-card__badge--controversial"
+                              i18n="@@sessionQa.badgeControversial"
+                              >Umstritten</span
+                            >
+                          } @else if (
+                            qaSortMode() === 'CONTROVERSIAL' &&
+                            question.controversyInsufficientVotes === true
+                          ) {
+                            <span
+                              class="session-qa-card__badge session-qa-card__badge--controversy-pending"
+                              i18n-title="@@sessionQa.badgeControversyInsufficientVotesAria"
+                              title="Nicht genügend Stimmen für eine belastbare Einordnung"
+                              i18n-aria-label="@@sessionQa.badgeControversyInsufficientVotesAria"
+                              aria-label="Nicht genügend Stimmen für eine belastbare Einordnung"
+                              i18n="@@sessionQa.badgeControversyInsufficientVotes"
+                              >Zu wenige Stimmen</span
+                            >
+                          } @else if (
+                            qaSortMode() === 'CONTROVERSIAL' && question.isControversial === false
+                          ) {
+                            <span
+                              class="session-qa-card__badge session-qa-card__badge--controversy-onesided"
+                              i18n-title="@@sessionQa.badgeControversyOnesidedAria"
+                              title="Überwiegend einseitige Bewertung — nicht als umstritten eingestuft"
+                              i18n-aria-label="@@sessionQa.badgeControversyOnesidedAria"
+                              aria-label="Überwiegend einseitige Bewertung — nicht als umstritten eingestuft"
+                              i18n="@@sessionQa.badgeControversyOnesided"
+                              >Einseitig</span
                             >
                           }
                           @if (qaSortMode() === 'BEST' && question.bestScore !== undefined) {
@@ -4947,7 +5160,9 @@
                           }
                           @if (
                             qaSortMode() === 'CONTROVERSIAL' &&
-                            question.controversyScore !== undefined
+                            question.isControversial === true &&
+                            question.controversyScore !== undefined &&
+                            question.controversyScore > 0
                           ) {
                             <span
                               class="session-qa-card__metric session-qa-card__metric--controversial"
@@ -4957,52 +5172,68 @@
                             >
                           }
                         </div>
-                        <div class="session-qa-card__actions">
-                          @if (qaHostWritesAllowed()) {
-                            <button
-                              matButton="tonal"
-                              type="button"
-                              class="session-qa-card__action-btn session-qa-card__action-btn--redact"
-                              [disabled]="qaPendingQuestionIds().has(question.id)"
-                              (click)="openQaRedactPassagesDialog(question.id)"
-                            >
-                              <mat-icon class="session-qa-card__action-icon"
-                                >visibility_off</mat-icon
-                              >
-                              <span i18n="@@sessionQa.redactAction">Passagen schwärzen</span>
-                            </button>
-                          }
-                          @for (
-                            action of ['APPROVE', 'PIN', 'UNPIN', 'ARCHIVE', 'DELETE'];
-                            track action
-                          ) {
-                            @if (canModerateQaQuestion(question, $any(action))) {
+                        <div
+                          class="session-qa-card__actions"
+                          role="toolbar"
+                          i18n-aria-label="@@sessionQa.cardActionsAria"
+                          aria-label="Fragenaktionen"
+                        >
+                          <div class="session-qa-card__actions-main">
+                            @if (qaHostWritesAllowed()) {
                               <button
-                                matButton="tonal"
+                                matButton="text"
                                 type="button"
-                                class="session-qa-card__action-btn"
-                                [class.session-qa-card__action-btn--approve]="
-                                  $any(action) === 'APPROVE'
-                                "
-                                [class.session-qa-card__action-btn--pin]="$any(action) === 'PIN'"
-                                [class.session-qa-card__action-btn--unpin]="
-                                  $any(action) === 'UNPIN'
-                                "
-                                [class.session-qa-card__action-btn--archive]="
-                                  $any(action) === 'ARCHIVE'
-                                "
-                                [class.session-qa-card__action-btn--delete]="
-                                  $any(action) === 'DELETE'
-                                "
+                                class="session-qa-card__action-btn session-qa-card__action-btn--redact"
                                 [disabled]="qaPendingQuestionIds().has(question.id)"
-                                (click)="moderateQaQuestion(question.id, $any(action))"
+                                (click)="openQaRedactPassagesDialog(question.id)"
                               >
-                                <mat-icon class="session-qa-card__action-icon">{{
-                                  qaActionIcon($any(action))
-                                }}</mat-icon>
-                                {{ qaActionLabel($any(action), question.status) }}
+                                <mat-icon class="session-qa-card__action-icon" aria-hidden="true"
+                                  >visibility_off</mat-icon
+                                >
+                                <span i18n="@@sessionQa.redactAction">Passagen schwärzen</span>
                               </button>
                             }
+                            @for (action of ['APPROVE', 'PIN', 'UNPIN', 'ARCHIVE']; track action) {
+                              @if (canModerateQaQuestion(question, $any(action))) {
+                                <button
+                                  matButton="text"
+                                  type="button"
+                                  class="session-qa-card__action-btn"
+                                  [class.session-qa-card__action-btn--approve]="
+                                    $any(action) === 'APPROVE'
+                                  "
+                                  [class.session-qa-card__action-btn--pin]="$any(action) === 'PIN'"
+                                  [class.session-qa-card__action-btn--unpin]="
+                                    $any(action) === 'UNPIN'
+                                  "
+                                  [disabled]="qaPendingQuestionIds().has(question.id)"
+                                  (click)="moderateQaQuestion(question.id, $any(action))"
+                                >
+                                  <mat-icon
+                                    class="session-qa-card__action-icon"
+                                    aria-hidden="true"
+                                    >{{ qaActionIcon($any(action), question.status) }}</mat-icon
+                                  >
+                                  <span>{{ qaActionLabel($any(action), question.status) }}</span>
+                                </button>
+                              }
+                            }
+                          </div>
+                          @if (canModerateQaQuestion(question, 'DELETE')) {
+                            <div class="session-qa-card__actions-end">
+                              <button
+                                matButton="text"
+                                type="button"
+                                class="session-qa-card__action-btn session-qa-card__action-btn--delete"
+                                [disabled]="qaPendingQuestionIds().has(question.id)"
+                                (click)="moderateQaQuestion(question.id, 'DELETE')"
+                              >
+                                <mat-icon class="session-qa-card__action-icon" aria-hidden="true">{{
+                                  qaActionIcon('DELETE', question.status)
+                                }}</mat-icon>
+                                <span>{{ qaActionLabel('DELETE', question.status) }}</span>
+                              </button>
+                            </div>
                           }
                         </div>
                       </article>
@@ -5021,6 +5252,18 @@
                       <p class="session-qa-empty__text" i18n="@@sessionQa.searchEmpty">
                         Keine passenden Fragen gefunden.
                       </p>
+                      @if (
+                        projectionNavigationIsQaQuestions() &&
+                        session()?.presenterSurface !== 'ended' &&
+                        (session()?.presenterPage?.count ?? 0) > 0
+                      ) {
+                        <p
+                          class="session-qa-empty__hint"
+                          i18n="@@sessionQa.searchEmptyPresenterHint"
+                        >
+                          Die Präsentation zeigt weiterhin die zuletzt präsentierte Frage.
+                        </p>
+                      }
                     </div>
                   } @else if (qaFilteredQuestions().length === 0 && qaShowPinnedOnly()) {
                     <div class="session-qa-empty session-qa-empty--filtered" role="status">
@@ -5038,6 +5281,13 @@
                       >
                       <p class="session-qa-empty__text" i18n="@@sessionQa.filterPendingEmptyHint">
                         Nur in Moderation aktiv – gerade wartet nichts auf Freigabe.
+                      </p>
+                    </div>
+                  } @else if (qaFilteredQuestions().length === 0 && qaShowArchivedOnly()) {
+                    <div class="session-qa-empty session-qa-empty--filtered" role="status">
+                      <mat-icon class="session-qa-empty__icon" aria-hidden="true">archive</mat-icon>
+                      <p class="session-qa-empty__text" i18n="@@sessionQa.filterArchivedEmptyHint">
+                        Nur im Archiv aktiv – gerade keine archivierten Fragen.
                       </p>
                     </div>
                   } @else if (qaFilteredQuestions().length === 0 && qaSelectedAuthorNickname()) {

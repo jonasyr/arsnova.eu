@@ -355,6 +355,7 @@ import {
   isSessionEffectivelyFinished,
 } from '../lib/sessionLifecycle';
 import { emitQaQuestionsSignal } from '../lib/qaQuestionsSignal';
+import { clearAllQaPresenterSortModes, clearQaPresenterSortMode } from '../lib/qaPresenterSortMode';
 import { registerSessionPurgeInvalidator } from '../lib/sessionPurgeInvalidation';
 
 const QUESTION_TEXT_SHORT_MAX = 100;
@@ -604,6 +605,7 @@ export function resetSessionReadCachesForTests(): void {
   presenterPageByCode.clear();
   presenterPageIdentityByCode.clear();
   qaWordCloudProjectionByCode.clear();
+  clearAllQaPresenterSortModes();
   finishProjectionByCode.clear();
   sessionStatusVersions.clear();
   sessionParticipantVersions.clear();
@@ -1038,6 +1040,7 @@ export async function purgeSessionRuntimeArtifacts(params: {
   presenterPageByCode.delete(code);
   presenterPageIdentityByCode.delete(code);
   qaWordCloudProjectionByCode.delete(code);
+  clearQaPresenterSortMode(code);
   finishProjectionByCode.delete(code);
   for (const key of emojiStore.keys()) {
     if (key.startsWith(`${params.sessionId}:`)) {
@@ -7728,7 +7731,11 @@ const sessionCoreRouter = router({
           });
         }
         const count = input.page.count ?? currentPage.count;
-        const index = Math.max(0, Math.min(count - 1, currentPage.index + (input.page.delta ?? 0)));
+        const rawIndex =
+          input.page.index !== undefined
+            ? input.page.index
+            : currentPage.index + (input.page.delta ?? 0);
+        const index = Math.max(0, Math.min(count - 1, rawIndex));
         const presenterPage = { ...currentPage, count, index };
         presenterPageByCode.set(code, presenterPage);
         clearSessionInfoCache(code);

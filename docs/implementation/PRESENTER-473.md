@@ -70,7 +70,42 @@ Tastaturfokus nicht verloren geht.
 
 - Crowd-Lobby: Gesamtzahl und bei höchstens acht Teams Teamzahlen ersetzen
   Nicknames; QR und Code erhalten Vorrang.
-- Q&A: angeheftete Frage, höchstens zwei weitere Fragen und Restzahl.
+- Q&A: oben die aktuelle Host-Sortierung (»Sortierung: …«), darunter die angeheftete
+  Frage dominant (vertikal mittig, hörsaaltaugliche Typografie ≥36 px bei 1080p),
+  darunter höchstens zwei Queue-Fragen untereinander (≥30 px); Gesamtsumme nur im
+  Queue-Badge (»… Fragen«), ohne Seitenindikator und Restzahl auf der Bühne;
+  Hero und Queue zeigen Erstellungszeit (relativ) sowie die passende Sortier-Metrik:
+  bei BEST Zustimmung (%), bei CONTROVERSIAL geteilte Reaktionen (%) – nie beides;
+  `qa.presentProjection` liefert die Scores dafür immer mit (ohne Moderator-NLP),
+  auch außerhalb von BEST/CONTROVERSIAL;
+  `qa.presentProjection` lädt bis zu 500 `ACTIVE`/`PINNED`-Fragen (Forum-Seitenmaximum),
+  damit Presenter und Host dieselbe absolute Bühnenreihenfolge teilen;
+  der Host speichert denselben ungefilterten Snapshot für die Presenter-Synchronisation;
+  der Fragen-Navigator (Vor/Zurück, Anzeige »n / m«) erscheint bei mindestens einer
+  in der Host-Liste sichtbaren Frage und folgt exakt der aktuellen Listenreihenfolge
+  aus »Auswertung & Werkzeuge« (Sortierung TOP/BEST/CONTROVERSIAL/TIME, Suche, Autor,
+  Pin-/Pending-/Archiv-Filter und geladene Seite) — einschließlich PENDING und ARCHIVED;
+  Presenter-Bühne und absolute `presenterPage` bleiben auf ACTIVE/PINNED begrenzt und
+  werden nur mitgezogen, wenn die navigierte Listenfrage auf der Bühne liegt;
+  fehlt der Snapshot, navigiert der Host über die aktuelle Listenreihenfolge;
+  fehlt der Snapshot während der Projektion nicht mehr als harte Leersperre für den Host-Hero;
+  Host publiziert den Sortiermodus beim Q&A-Abonnement und vor dem Öffnen der
+  Präsentation (`qa.setPresenterSortMode`), damit Forum und Bühne denselben Modus nutzen;
+  weicht `presentProjection.sortMode` vom Host ab (z. B. nach Backend-Restart),
+  publiziert der Host den Modus erneut (`force`);
+  Teilnehmer-Forum färbt denselben Navigator-Hero (via `presenterPage`) ein;
+  `PINNED` steht in der Presenter-Bühnenreihenfolge zuerst (Host vor `PENDING`/`ACTIVE`);
+  die Host-Liste rotiert ab dem Navigator-Cursor (Position 1 = Hero, 2 = nächster
+  Kandidat, …); der Hero trägt allein die Primary-Rand-Markierung (wandert mit dem
+  Cursor; Rahmen bleibt auch ohne laufende Projektion als Host-Bearbeitungshilfe);
+  Hero nutzt die Standard-Kartenfläche und nur einen verstärkten Primary-Rand; der Neu-Hinweis (`--highlight`)
+  überschreibt die Hero-Fläche nicht; Host-Forum markiert Hero und die aktuelle
+  Warteschlangen-Fragen während laufender Projektion mit »Aktuell in der Präsentation«
+  (Badge entfällt bei `presenterSurface === 'ended'`);
+  der Host rückt den Hero über denselben Projektionsnavigator wie beim Quiz vor
+  (Beschriftung »Vorherige Frage« / »Nächste Frage«, solange der Q&A-Kanal
+  bevorzugt ist); die bisherige Hero-Frage wandert aus dem Fokus, die nächste
+  Bühnenfrage (PINNED/ACTIVE in Presenter-Reihenfolge) wird Hero.
 - Wortwolken: höchstens 24 Ausgangsbegriffe, mindestens 30 px nach Layout und
   eine sichtbare Restzahl. Tatsächliche Textflächen werden auf Überschneidung
   geprüft; nicht passend darstellbare Begriffe gehen in die Restzahl ein.

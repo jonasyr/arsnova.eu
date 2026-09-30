@@ -162,6 +162,7 @@ import {
   QaQuestionsInvalidationDTO,
   QaQuestionsListDTO,
   QaQuestionSortMode,
+  QaQuestionSortModeEnum,
   QaSummaryRuntimeDTO,
   QaSummarySource,
   QuickFeedbackResult,
@@ -189,7 +190,6 @@ import {
   WordCloudAnalysisVariant,
   WordCloudNormalizationFallbackReason,
 } from '@arsnova/shared-types';
-import { WordCloudLemmaLocaleSelectComponent } from './word-cloud-lemma-locale-select.component';
 import {
   isDisplayableThemeWordCloudEntry,
   isWordCloudUnigramEntryKey,
@@ -678,7 +678,6 @@ function musicTracksForPhase(
     MatSlideToggle,
     MatTooltip,
     WordCloudComponent,
-    WordCloudLemmaLocaleSelectComponent,
     CountdownFingersComponent,
     MusicEqualizerIconComponent,
     ModerationCompassIconComponent,
@@ -754,6 +753,13 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   readonly qaQuickFeedbackPending = signal(false);
   readonly activeChannel = signal<SessionChannelTab>('quiz');
   readonly qaQuestions = signal<QaQuestionDTO[]>([]);
+  /**
+   * ACTIVE+PINNED-Bühnenliste aus `qa.presentProjection` (inkl. Host-Such-/Pin-Filter).
+   * `null` = kein gültiger Snapshot (während Projektion: leere Bühne, kein Forum-Fallback).
+   */
+  private readonly qaPresenterStageOrderedQuestions = signal<QaQuestionDTO[] | null>(null);
+  /** Invalidiert in-flight `presentProjection`-Refreshes (Beenden / Kanalwechsel). */
+  private qaPresenterStageRefreshGeneration = 0;
   readonly qaListTotalCount = signal(0);
   /** Host: PENDING-Zähler aus qa.list (filterweit, seitenunabhängig); null = Fallback auf geladene Seite. */
   private readonly qaListPendingCount = signal<number | null>(null);
@@ -770,7 +776,20 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   readonly qaListRankingRevision = signal<string | null>(null);
   readonly qaListPageIndex = signal(0);
   readonly qaListPageSize = signal<QaListPageSize>(QA_LIST_DEFAULT_PAGE_SIZE);
-  readonly qaListPageSizeOptions = QA_LIST_PAGE_SIZE_OPTIONS;
+  /**
+   * Seitengrößen-Kontingente, die zum aktuellen Fragenkorpus passen:
+   * 250 nur bei mehr als 100 Fragen, 500 nur bei mehr als 250.
+   */
+  readonly qaVisibleListPageSizeOptions = computed(() => {
+    const total = this.qaForumQuestionCount();
+    return QA_LIST_PAGE_SIZE_OPTIONS.filter((_size, index) => {
+      if (index === 0) {
+        return total > 0;
+      }
+      const previous = QA_LIST_PAGE_SIZE_OPTIONS[index - 1]!;
+      return total > previous;
+    });
+  });
   readonly qaListPageLoading = signal(false);
   private qaListCurrentCursor: string | null = null;
   private qaListCursorHistory: Array<string | null> = [];
@@ -1109,6 +1128,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   private freetextWordCloudSemanticAnalysisRunId = 0;
   private presenterProjectionSyncQueue: Promise<void> = Promise.resolve();
   private lastQaWordCloudProjectionKey: string | null = null;
+  private lastQaPresenterStageViewKey: string | null = null;
   private channelToggleSyncing = false;
   private lastQaWordCloudAnalysisRequestKey: string | null = null;
   private lastQaWordCloudSemanticAnalyzedKey: string | null = null;
@@ -1990,6 +2010,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   readonly qaSortMode = signal<QaQuestionSortMode>('BEST');
   readonly qaShowPinnedOnly = signal(false);
   readonly qaShowPendingOnly = signal(false);
+  readonly qaShowArchivedOnly = signal(false);
   readonly qaPinnedFilterAriaLabel = computed(() =>
     this.qaShowPinnedOnly()
       ? $localize`:@@sessionQa.filterShowAllAria:Alle Fragen anzeigen`
@@ -1999,6 +2020,11 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     this.qaShowPendingOnly()
       ? $localize`:@@sessionQa.filterShowAllAria:Alle Fragen anzeigen`
       : $localize`:@@sessionQa.filterPendingAria:Nur Fragen in Moderation anzeigen`,
+  );
+  readonly qaArchivedFilterAriaLabel = computed(() =>
+    this.qaShowArchivedOnly()
+      ? $localize`:@@sessionQa.filterShowAllAria:Alle Fragen anzeigen`
+      : $localize`:@@sessionQa.filterArchivedAria:Fragen im Archiv anzeigen`,
   );
   readonly qaSearchDraft = signal('');
   readonly qaSearch = signal('');
@@ -2020,26 +2046,43 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     if (this.qaShowPendingOnly()) {
       return all.filter((q) => q.status === 'PENDING');
     }
+    if (this.qaShowArchivedOnly()) {
+      return all.filter((q) => q.status === 'ARCHIVED');
+    }
     return all;
   });
   readonly qaVisibleQuestions = computed(() => {
     const questions = this.qaFilteredQuestions();
     const focused = this.qaCompassFocusQuestionIds();
+    let ordered: QaQuestionDTO[];
     if (focused.size === 0) {
-      return questions;
-    }
-
-    const focusedQuestions: QaQuestionDTO[] = [];
-    const rest: QaQuestionDTO[] = [];
-    for (const question of questions) {
-      if (focused.has(question.id)) {
-        focusedQuestions.push(question);
-      } else {
-        rest.push(question);
+      ordered = [...questions];
+    } else {
+      const focusedQuestions: QaQuestionDTO[] = [];
+      const rest: QaQuestionDTO[] = [];
+      for (const question of questions) {
+        if (focused.has(question.id)) {
+          focusedQuestions.push(question);
+        } else {
+          rest.push(question);
+        }
       }
+      focusedQuestions.sort((left, right) => this.compareQaForumSort(left, right));
+      ordered = [...focusedQuestions, ...rest];
+      // Kompass-Fokus bleibt oben; Hero-Einfärbung wandert weiter mit, ohne die
+      // Moderationsreihenfolge zu überschreiben.
+      return ordered;
     }
-    focusedQuestions.sort((left, right) => this.compareQaForumSort(left, right));
-    return [...focusedQuestions, ...rest];
+    // Liste ab Navigator-Cursor rotieren: Position 1 = Hero, 2 = nächster Kandidat, …
+    const heroId = this.qaPresenterHeroQuestionId();
+    if (!heroId) {
+      return ordered;
+    }
+    const heroIndex = ordered.findIndex((question) => question.id === heroId);
+    if (heroIndex <= 0) {
+      return ordered;
+    }
+    return [...ordered.slice(heroIndex), ...ordered.slice(0, heroIndex)];
   });
   readonly liveQaWordCloudQuestions = computed(() => {
     const visibleQuestions = (this.qaUnfilteredChromeQuestions() ?? this.qaQuestions()).filter(
@@ -2049,7 +2092,9 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       ? visibleQuestions.filter((question) => question.status === 'PINNED')
       : this.qaShowPendingOnly()
         ? visibleQuestions.filter((question) => question.status === 'PENDING')
-        : visibleQuestions;
+        : this.qaShowArchivedOnly()
+          ? []
+          : visibleQuestions;
   });
   readonly qaWordCloudQuestions = computed(() =>
     this.qaWordCloudFrozen()
@@ -2414,13 +2459,13 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   readonly qaSortHint = computed(() => {
     switch (this.qaSortMode()) {
       case 'BEST':
-        return $localize`:@@sessionQa.sortHintBest:Zeigt Fragen mit viel Zustimmung und genug Stimmen zuerst. Hervorgehobene Fragen sind markiert, aber nicht vorgezogen.`;
+        return $localize`:@@sessionQa.sortHintBest:Zeigt Fragen mit viel Zustimmung und genug Stimmen zuerst. Hervorgehobene Fragen erscheinen zuerst und sind markiert.`;
       case 'CONTROVERSIAL':
-        return $localize`:@@sessionQa.sortHintControversial:Zeigt Fragen mit gemischter Reaktion zuerst. Hervorgehobene Fragen sind markiert, aber nicht vorgezogen.`;
+        return $localize`:@@sessionQa.sortHintControversial:Zeigt Fragen mit gemischter Reaktion zuerst. Hervorgehobene Fragen erscheinen zuerst und sind markiert.`;
       case 'TIME':
-        return $localize`:@@sessionQa.sortHintTime:Zeigt die neuesten Fragen zuerst. Hervorgehobene Fragen sind markiert, aber nicht vorgezogen.`;
+        return $localize`:@@sessionQa.sortHintTime:Zeigt die neuesten Fragen zuerst. Hervorgehobene Fragen erscheinen zuerst und sind markiert.`;
       default:
-        return $localize`:@@sessionQa.sortHintTop:Zeigt Fragen mit den meisten positiven Stimmen zuerst. Hervorgehobene Fragen sind markiert, aber nicht vorgezogen.`;
+        return $localize`:@@sessionQa.sortHintTop:Zeigt Fragen mit den meisten positiven Stimmen zuerst. Hervorgehobene Fragen erscheinen zuerst und sind markiert.`;
     }
   });
   readonly qaWordCloudOpenLabel = computed(
@@ -2454,6 +2499,15 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   });
   readonly qaSessionPendingCount = computed(
     () => this.qaListSessionPendingCount() ?? this.qaPendingCount(),
+  );
+  /**
+   * Genau eine gefüllte Q&A-Primäraktion: bei wartenden PENDING-Fragen
+   * »Fragen prüfen«, sonst »Auswertung & Werkzeuge«.
+   */
+  readonly qaToolsToggleEmphasis = computed<'filled' | 'tonal'>(() =>
+    this.session()?.channels?.qa?.moderationMode && this.qaSessionPendingCount() > 0
+      ? 'tonal'
+      : 'filled',
   );
   readonly qaActiveCount = computed(() => {
     const fromHost = this.qaHostStatusCounts()?.active;
@@ -2596,8 +2650,6 @@ export class SessionHostComponent implements OnInit, OnDestroy {
           smoothingHint: () => this.qaWordCloudSmoothingHint(),
           smoothingDisabled: () => this.qaWordCloudSmoothingDisabled(),
           toggleSmoothing: () => this.toggleQaWordCloudSmoothing(),
-          lemmaLocale: () => this.qaWordCloudAnalysisLocale(),
-          setLemmaLocale: (locale: WordCloudLemmaLocale) => this.setWordCloudLemmaLocale(locale),
           itemLabelSingular: $localize`:@@sessionQa.wordCloudItemSingular:Frage`,
           itemLabelPlural: $localize`:@@sessionQa.wordCloudItemPlural:Fragen`,
           focusedTermLabel: () => this.moderationCompassFocusedTerm(),
@@ -2816,9 +2868,9 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     const previousChannel = this.activeChannel();
     const focusHint = this.resolveCompassFocusHint(source, cardKind);
     if (target.channel === 'qa') {
-      await this.clearQaAuthorFilter();
-      await this.setQaPinnedFilter(false);
-      await this.setQaPendingFilter(false);
+      // Kompass-Karten kommen ggf. aus dem ungefilterten Chrome-Snapshot
+      // (Suche/Autor). Filter und Suche lösen, damit Sprung und Fokus-Label greifen.
+      await this.clearQaListCriteriaForCompassJump();
     }
     await this.selectChannel(target.channel);
     if (target.surface === 'word-cloud') {
@@ -2832,11 +2884,10 @@ export class SessionHostComponent implements OnInit, OnDestroy {
         }
       }
       this.moderationCompassFocusedTerm.set(target.termLabel ?? null);
-      this.applyQaCompassFocus(
-        this.resolveQaCompassMemberQuestionIds(target),
-        'compass',
-        focusHint,
-      );
+      const cloudFocusedIds = this.resolveQaCompassMemberQuestionIds(target);
+      this.ensureCompassFocusedQuestionsInList(cloudFocusedIds);
+      this.applyQaCompassFocus(cloudFocusedIds, 'compass', focusHint);
+      this.releaseQaChromeAfterCompassJump();
       if (target.channel === 'qa') {
         await this.openQaWordCloudDialog(target.termLabel ?? null);
       } else {
@@ -2848,16 +2899,55 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     }
     if (target.channel === 'qa') {
       const focusedIds = this.resolveQaCompassMemberQuestionIds(target);
+      this.ensureCompassFocusedQuestionsInList(focusedIds);
       if (focusedIds.length > 0) {
         this.applyQaCompassFocus(focusedIds, 'compass', focusHint);
         this.scrollHostQaQuestionIntoView(focusedIds[0]!);
       } else {
         this.clearQaCompassFocus();
       }
+      this.releaseQaChromeAfterCompassJump();
     } else {
       this.clearQaCompassFocus();
     }
     this.moderationCompassReturn.set({ channel: previousChannel });
+  }
+
+  /** Suche/Autor/Statusfilter für einen Kompass-Sprung zurücksetzen (ohne Listen-Scroll). */
+  private async clearQaListCriteriaForCompassJump(): Promise<void> {
+    // Chrome erst nach dem Fokus freigeben — Kartenquellen stammen oft aus dem Snapshot.
+    await this.clearQaSearchForCompassJump();
+    if (this.qaSelectedAuthorNickname() !== null) {
+      this.clearQaAuthorSelection();
+      this.qaListNavQuestionId.set(null);
+      this.ensureQaSubscription();
+      await this.refreshQaQuestions({ replaceStale: true });
+      await this.resetQaNavigableHeroToFirstAndSyncPresenter();
+    }
+    await this.setQaPinnedFilter(false, { scrollToTop: false });
+    await this.setQaPendingFilter(false, { scrollToTop: false });
+    await this.setQaArchivedFilter(false, { scrollToTop: false });
+  }
+
+  private async clearQaSearchForCompassJump(): Promise<void> {
+    if (this.qaSearchTimer) {
+      clearTimeout(this.qaSearchTimer);
+      this.qaSearchTimer = null;
+    }
+    this.qaSearchDraft.set('');
+    if (this.qaSearch() === '') {
+      return;
+    }
+    this.qaSearch.set('');
+    this.qaListNavQuestionId.set(null);
+    this.ensureQaSubscription();
+    this.resetQaListPageNavigation();
+    this.qaListNextCursor.set(null);
+    await this.refreshQaQuestions({ replaceStale: true });
+  }
+
+  private releaseQaChromeAfterCompassJump(): void {
+    this.releaseQaChromeIfUnfiltered();
   }
 
   async followQaSummarySource(source: QaSummarySource): Promise<void> {
@@ -3054,11 +3144,20 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       return [];
     }
 
-    const forumIds = new Set(this.qaForumQuestions().map((question) => question.id));
+    // Chrome behält ungefilterte Kartenquellen (Suche/Autor); Forum ist die aktuelle Liste.
+    const forumQuestions = this.qaForumQuestions();
+    const chromeQuestions = this.qaChromeForumQuestions();
+    const knownIds = new Set([
+      ...forumQuestions.map((question) => question.id),
+      ...chromeQuestions.map((question) => question.id),
+    ]);
     const resolved: string[] = [];
     const seen = new Set<string>();
     const push = (id: string | null | undefined) => {
-      if (!id || !forumIds.has(id) || seen.has(id)) {
+      if (!id || seen.has(id)) {
+        return;
+      }
+      if (!knownIds.has(id)) {
         return;
       }
       seen.add(id);
@@ -3073,7 +3172,48 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       push(this.findQaQuestionIdForCompassMember(text));
     }
     push(this.findQaQuestionIdForCompassMember(target.memberText));
+
+    // Fallback: Quell-IDs auch ohne geladene Zeile behalten, damit Fokus-Label nicht verloren geht.
+    if (resolved.length === 0) {
+      const fallbackPush = (id: string | null | undefined) => {
+        const next = id?.trim() ?? '';
+        if (!next || seen.has(next)) {
+          return;
+        }
+        seen.add(next);
+        resolved.push(next);
+      };
+      fallbackPush(target.questionId);
+      for (const id of target.questionIds ?? []) {
+        fallbackPush(id);
+      }
+    }
     return resolved;
+  }
+
+  /** Fehlende Fokus-Fragen aus dem Chrome-Snapshot in die Host-Liste holen. */
+  private ensureCompassFocusedQuestionsInList(questionIds: readonly string[]): void {
+    if (questionIds.length === 0) {
+      return;
+    }
+    const present = new Set(this.qaQuestions().map((question) => question.id));
+    const missing = questionIds.filter((id) => !present.has(id));
+    if (missing.length === 0) {
+      return;
+    }
+    const chromeById = new Map(
+      this.qaChromeForumQuestions().map((question) => [question.id, question] as const),
+    );
+    const inject = missing
+      .map((id) => chromeById.get(id))
+      .filter((question): question is QaQuestionDTO => question !== undefined);
+    if (inject.length === 0) {
+      return;
+    }
+    this.qaQuestions.update((list) => {
+      const have = new Set(list.map((question) => question.id));
+      return [...inject.filter((question) => !have.has(question.id)), ...list];
+    });
   }
 
   private findQaQuestionIdForCompassMember(memberText: string | undefined): string | null {
@@ -3081,7 +3221,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     if (!needle || needle.length < 4) {
       return null;
     }
-    const match = this.qaForumQuestions().find((question) => {
+    const match = this.qaChromeForumQuestions().find((question) => {
       const text = question.text.trim().replace(/\s+/g, ' ').toLowerCase();
       return text === needle || text.startsWith(needle) || needle.startsWith(text);
     });
@@ -3595,7 +3735,45 @@ export class SessionHostComponent implements OnInit, OnDestroy {
 
   constructor() {
     effect(() => {
-      if ((this.session()?.presenterPage?.count ?? 1) > 1) this.projectionControlsVisible.set(true);
+      if (
+        (this.session()?.presenterPage?.count ?? 1) > 1 ||
+        this.projectionPageDisplayCount() > 1
+      ) {
+        this.projectionControlsVisible.set(true);
+      }
+    });
+    effect(() => {
+      if (!this.projectionNavigationIsQaQuestions()) {
+        return;
+      }
+      // Erst nach Host-Overview syncen — sonst überschreibt active=0 die Presenter-Seitenzahl.
+      if (!this.qaHostStatusCounts() && this.qaPresenterStageOrderedQuestions() === null) {
+        return;
+      }
+      const page = this.session()?.presenterPage;
+      const count = this.qaProjectionFullStagePageCount();
+      if (!page || page.count === count) {
+        return;
+      }
+      untracked(() => {
+        void this.syncQaProjectionPageCount(count);
+      });
+    });
+    effect(() => {
+      const projecting = this.projectionNavigationIsQaQuestions();
+      const sessionId = this.session()?.id ?? null;
+      void this.qaSortMode();
+      void this.qaListRankingRevision();
+      if (!projecting || !sessionId) {
+        untracked(() => {
+          this.qaPresenterStageRefreshGeneration += 1;
+          this.qaPresenterStageOrderedQuestions.set(null);
+        });
+        return;
+      }
+      untracked(() => {
+        void this.refreshQaPresenterStageQuestions();
+      });
     });
     effect(() => {
       const reviewVisible = this.session()?.channels?.qa?.moderationMode === true;
@@ -3611,12 +3789,84 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       this.ensureActiveChannel();
     });
     effect(() => {
+      // Listen-Navigator: Cursor halten bzw. nach Filter-/Sortwechsel neu setzen.
+      const navigable = this.qaNavigableStageQuestions();
+      const navId = this.qaListNavQuestionId();
+      const projectingQa = this.projectionNavigationIsQaQuestions();
+      const stage = this.qaProjectionStageQuestions();
+      const pageIndex = this.session()?.presenterPage?.index ?? 0;
+      untracked(() => {
+        if (navigable.length === 0) {
+          if (navId !== null) {
+            this.qaListNavQuestionId.set(null);
+          }
+          return;
+        }
+        if (navId && navigable.some((question) => question.id === navId)) {
+          return;
+        }
+        const stageQuestion = projectingQa ? stage[pageIndex] : undefined;
+        const fromStage =
+          stageQuestion && navigable.some((question) => question.id === stageQuestion.id)
+            ? stageQuestion.id
+            : null;
+        this.qaListNavQuestionId.set(fromStage ?? navigable[0]!.id);
+      });
+    });
+    effect(() => {
+      // Presenter-Index → Listen-Cursor, solange die Bühnenfrage in der Liste liegt
+      // und der Cursor nicht auf einer rein listenbasierten Frage (Pending/Archiv) steht.
+      if (!this.projectionNavigationIsQaQuestions()) {
+        return;
+      }
+      if (this.session()?.presenterSurface === 'ended') {
+        return;
+      }
+      const navigable = this.qaNavigableStageQuestions();
+      const stage = this.qaProjectionStageQuestions();
+      const pageIndex = this.session()?.presenterPage?.index ?? 0;
+      untracked(() => {
+        if (navigable.length === 0 || stage.length === 0) {
+          return;
+        }
+        const stageQuestion = stage[Math.max(0, Math.min(stage.length - 1, pageIndex))];
+        if (!stageQuestion || !navigable.some((question) => question.id === stageQuestion.id)) {
+          return;
+        }
+        const navId = this.qaListNavQuestionId();
+        if (navId === stageQuestion.id) {
+          return;
+        }
+        if (navId !== null && !stage.some((question) => question.id === navId)) {
+          return;
+        }
+        this.qaListNavQuestionId.set(stageQuestion.id);
+      });
+    });
+    effect(() => {
+      const visible = this.qaVisibleListPageSizeOptions();
+      const current = this.qaListPageSize();
+      if (visible.length === 0 || visible.includes(current)) {
+        return;
+      }
+      const next = visible[visible.length - 1]!;
+      untracked(() => {
+        void this.setQaListPageSize(next);
+      });
+    });
+    effect(() => {
       const sessionId = this.session()?.id ?? null;
       const qaEnabled = this.channels().qa;
       const qaSortMode = this.qaSortMode();
       void sessionId;
       void qaEnabled;
       void qaSortMode;
+      void this.qaShowPinnedOnly();
+      void this.qaShowPendingOnly();
+      void this.qaShowArchivedOnly();
+      void this.qaSearch();
+      void this.qaSelectedAuthorNickname();
+      void this.qaListPageSize();
       untracked(() => this.ensureQaSubscription());
     });
     effect(() => {
@@ -4843,6 +5093,10 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     }
     this.syncQaTitleDraftFromSession();
     this.scheduleQaDeadlineCheck();
+    // Nach Reconnect/Restart: ephemeral Sort-Mode-Map ggf. leer → erneut publizieren.
+    if (this.channels().qa) {
+      void this.publishQaPresenterSortMode(this.qaSortMode(), { force: true });
+    }
     return session;
   }
 
@@ -5298,19 +5552,27 @@ export class SessionHostComponent implements OnInit, OnDestroy {
           }
           this.clearFoyerArrivalStateWhenLeavingLobby(update.status);
           this.statusUpdate.set(update);
-          if (data.channels || data.preferredChannel) {
+          if (
+            data.channels ||
+            data.preferredChannel ||
+            data.presenterPage ||
+            data.presenterSurface
+          ) {
             this.session.update((current) =>
               current
                 ? {
                     ...current,
                     ...(data.channels ? { channels: data.channels } : {}),
                     ...(data.presenterPage ? { presenterPage: data.presenterPage } : {}),
+                    ...(data.presenterSurface ? { presenterSurface: data.presenterSurface } : {}),
                     ...(data.preferredChannel ? { preferredChannel: data.preferredChannel } : {}),
                   }
                 : current,
             );
-            this.ensureActiveChannel();
-            this.scheduleQaDeadlineCheck();
+            if (data.channels || data.preferredChannel) {
+              this.ensureActiveChannel();
+              this.scheduleQaDeadlineCheck();
+            }
           }
           if (
             data.serverNow &&
@@ -5818,36 +6080,311 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   readonly projectionPagePending = signal(false);
   readonly projectionControlsVisible = signal(false);
   readonly projectionPageError = signal('');
+  readonly projectionPagesAriaLabel = $localize`:@@sessionHost.projectionPages:Projektionsseiten`;
+  readonly projectionQaQuestionsAriaLabel = $localize`:@@sessionHost.projectionQaQuestions:Projektionsfragen`;
+  private static readonly QA_PROJECTION_QUEUE_VISIBLE = 2;
+  /** Entspricht `qa.presentProjection`-Cap (Forum-Seitenmaximum). */
+  private static readonly QA_PROJECTION_MAX_ACTIVE =
+    QA_LIST_PAGE_SIZE_OPTIONS[QA_LIST_PAGE_SIZE_OPTIONS.length - 1]!;
+  private qaProjectionPageSyncInFlight = false;
+  /**
+   * Q&A-Fragen-Navigator und Hero-Rahmen: solange der Q&A-Kanal bevorzugt ist
+   * (auch ohne laufende Projektion / nach »Projektionsansicht beenden«).
+   */
+  readonly projectionNavigationIsQaQuestions = computed(() => {
+    const session = this.session();
+    if (!session) {
+      return false;
+    }
+    if (session.presenterSurface === 'qaWordCloud') {
+      return false;
+    }
+    return session.preferredChannel === 'qa';
+  });
+  /**
+   * Bühnenreihenfolge wie `qa.presentProjection`: PINNED vor ACTIVE, Host-Sortierung
+   * und derselbe präsentierbare Such-/Pin-/Autor-Filter. Presenter und absolute
+   * `presenterPage.index` beziehen sich auf diese Liste.
+   * Quelle: presentProjection-Snapshot — während der Projektion kein Forum-Fallback.
+   */
+  readonly qaProjectionStageQuestions = computed(() => {
+    const fromProjection = this.qaPresenterStageOrderedQuestions();
+    if (fromProjection !== null) {
+      return fromProjection.slice(0, SessionHostComponent.QA_PROJECTION_MAX_ACTIVE);
+    }
+    // Während Q&A-Projektion: leere Bühne statt gefilterter Forum-Seite (Drift zum Presenter).
+    if (this.projectionNavigationIsQaQuestions()) {
+      return [];
+    }
+    const questions = this.qaQuestions().filter(
+      (question) => question.status === 'PINNED' || question.status === 'ACTIVE',
+    );
+    return [
+      ...questions.filter((question) => question.status === 'PINNED'),
+      ...questions.filter((question) => question.status === 'ACTIVE'),
+    ].slice(0, SessionHostComponent.QA_PROJECTION_MAX_ACTIVE);
+  });
+  /**
+   * Cursor-Frage im Listen-Navigator (ID bleibt über Sort-/Filterwechsel stabil).
+   */
+  private readonly qaListNavQuestionId = signal<string | null>(null);
+  /** Aus-/Einblendphase der Hero-Karte bei Navigator-Schritten. */
+  private readonly qaListNavFadePhase = signal<'idle' | 'out' | 'in'>('idle');
+  private readonly qaListNavFadeCardId = signal<string | null>(null);
+  private qaListNavFadePlayId = 0;
+  readonly qaListNavFadeBusy = computed(() => this.qaListNavFadePhase() !== 'idle');
+  /**
+   * Host-Navigator-Schritte.
+   * Live-Projektion: nur ACTIVE|PINNED (Beamer-Bühne) in Listenreihenfolge —
+   * Pending/Archiv dürfen Hero und »Aktuell in der Präsentation« nicht beanspruchen.
+   * Nach Projektionsende (`ended`): volle gefilterte Liste (z. B. Archiv-Durchsicht).
+   */
+  readonly qaNavigableStageQuestions = computed(() => {
+    const filtered = this.qaFilteredQuestions();
+    if (this.projectionNavigationIsQaQuestions() && this.session()?.presenterSurface !== 'ended') {
+      return filtered.filter(
+        (question) => question.status === 'PINNED' || question.status === 'ACTIVE',
+      );
+    }
+    return filtered;
+  });
+  /**
+   * Presenter-Seitenzahl (volle Bühne) — wird mit dem Presenter synchronisiert.
+   */
+  readonly qaProjectionFullStagePageCount = computed(() => {
+    const fromProjection = this.qaPresenterStageOrderedQuestions();
+    if (fromProjection !== null) {
+      return Math.max(
+        1,
+        Math.min(fromProjection.length, SessionHostComponent.QA_PROJECTION_MAX_ACTIVE),
+      );
+    }
+    const fromHost = this.qaHostStatusCounts();
+    if (fromHost) {
+      const total = Math.min(
+        fromHost.active + fromHost.pinned,
+        SessionHostComponent.QA_PROJECTION_MAX_ACTIVE,
+      );
+      return Math.max(1, total);
+    }
+    return 1;
+  });
+  /**
+   * Host-Navigator: Anzahl der gerade in der Liste sichtbaren Fragen.
+   */
+  readonly qaProjectionQueuePageCount = computed(() => this.qaNavigableStageQuestions().length);
+  /**
+   * Position im Listen-Navigator (0-basiert).
+   */
+  readonly projectionQaNavDisplayIndex = computed(() => {
+    const navigable = this.qaNavigableStageQuestions();
+    if (navigable.length === 0) {
+      return 0;
+    }
+    const navId = this.qaListNavQuestionId();
+    if (!navId) {
+      return 0;
+    }
+    const index = navigable.findIndex((question) => question.id === navId);
+    return index >= 0 ? index : 0;
+  });
+  /**
+   * Fragen-IDs mit Bühnen-Badge: aktueller Listen-Hero plus die nächsten zwei
+   * in der sichtbaren Listenreihenfolge.
+   */
+  readonly qaPresenterStageQuestionIds = computed(() => {
+    const ids = new Set<string>();
+    if (!this.projectionNavigationIsQaQuestions() || this.session()?.presenterSurface === 'ended') {
+      return ids;
+    }
+    const stageIds = new Set(this.qaProjectionStageQuestions().map((question) => question.id));
+    if (stageIds.size === 0) {
+      return ids;
+    }
+    const navigable = this.qaNavigableStageQuestions();
+    const pageIndex = this.projectionQaNavDisplayIndex();
+    for (const question of navigable.slice(
+      pageIndex,
+      pageIndex + 1 + SessionHostComponent.QA_PROJECTION_QUEUE_VISIBLE,
+    )) {
+      if (stageIds.has(question.id)) {
+        ids.add(question.id);
+      }
+    }
+    return ids;
+  });
+  /**
+   * Hero = aktuelle Position im Listen-Navigator (Live: nur Bühnenfragen).
+   */
+  readonly qaPresenterHeroQuestionId = computed(() => {
+    const navigable = this.qaNavigableStageQuestions();
+    if (navigable.length === 0) {
+      return null;
+    }
+    if (!this.projectionNavigationIsQaQuestions()) {
+      return (
+        navigable.find((question) => question.status === 'PINNED')?.id ?? navigable[0]?.id ?? null
+      );
+    }
+    return navigable[this.projectionQaNavDisplayIndex()]?.id ?? null;
+  });
+  readonly qaPresenterStageBadgeLabel = $localize`:@@sessionQa.badgeOnPresenter:Aktuell in der Präsentation`;
+  readonly projectionPageDisplayCount = computed(() => {
+    const pageCount = this.session()?.presenterPage?.count ?? 1;
+    if (!this.projectionNavigationIsQaQuestions()) {
+      return pageCount;
+    }
+    return Math.max(1, this.qaProjectionQueuePageCount());
+  });
   readonly showProjectionPageNavigation = computed(() => {
     const session = this.session();
     const page = session?.presenterPage;
-    if (!page || session?.presenterSurface === 'ended') return false;
+    if (!page) return false;
+    if (this.projectionNavigationIsQaQuestions()) {
+      if (this.qaNavigableStageQuestions().length === 0) {
+        return false;
+      }
+      return (
+        this.projectionPageDisplayCount() > 1 ||
+        this.projectionControlsVisible() ||
+        this.presenterWindowOpen() ||
+        !this.showPresenterViewButton() ||
+        session?.presenterSurface === 'ended'
+      );
+    }
+    if (session?.presenterSurface === 'ended') return false;
     return page.count > 1 || this.projectionControlsVisible() || !this.showPresenterViewButton();
   });
-  async changeProjectionPage(delta: -1 | 1): Promise<void> {
-    const page = this.session()?.presenterPage;
+  private async syncPresenterToStageQuestionId(questionId: string): Promise<void> {
     if (
-      !page ||
-      this.projectionPagePending() ||
-      (delta < 0 && page.index === 0) ||
-      (delta > 0 && page.index >= page.count - 1)
-    )
+      !this.projectionNavigationIsQaQuestions() ||
+      this.session()?.presenterSurface === 'ended' ||
+      this.projectionPagePending()
+    ) {
       return;
+    }
+    const page = this.session()?.presenterPage;
+    if (!page || !this.code) {
+      return;
+    }
+    const stage = this.qaProjectionStageQuestions();
+    const stageIndex = stage.findIndex((question) => question.id === questionId);
+    if (stageIndex < 0) {
+      return;
+    }
+    if (stageIndex === page.index && page.count >= this.qaProjectionFullStagePageCount()) {
+      return;
+    }
     this.projectionPagePending.set(true);
     this.projectionPageError.set('');
     try {
+      const fullCount = Math.max(page.count, this.qaProjectionFullStagePageCount(), stageIndex + 1);
+      if (page.count < fullCount) {
+        await this.syncQaProjectionPageCount(fullCount);
+      }
+      const current = this.session()?.presenterPage;
+      if (!current) {
+        return;
+      }
       const result = await trpc.session.setPresenterSurface.mutate(
         {
           code: this.code,
-          page: { context: page.context, delta },
+          page: {
+            context: current.context,
+            index: stageIndex,
+            count: Math.max(current.count, fullCount, stageIndex + 1),
+          },
         },
         { signal: AbortSignal.timeout(10000) },
       );
-      this.session.update((current) =>
-        current?.presenterPage?.context === page.context
-          ? { ...current, presenterPage: result.presenterPage }
-          : current,
+      this.session.update((session) =>
+        session?.presenterPage?.context === current.context
+          ? { ...session, presenterPage: result.presenterPage }
+          : session,
       );
+      this.projectionControlsVisible.set(true);
+    } catch {
+      this.projectionPageError.set(
+        $localize`:@@sessionHost.projectionQaPageError:Fragen konnten nicht gewechselt werden. Bitte erneut versuchen.`,
+      );
+    } finally {
+      this.projectionPagePending.set(false);
+    }
+  }
+
+  /**
+   * Nach Suche/Sortierung/präsentierbarem Filter: erstes Navigationsergebnis = Host- und Presenter-Hero.
+   * Verwaltungsfilter (Pending/Archiv) lösen nur den Listen-Cursor und lassen den Beamer unberührt.
+   */
+  private async resetQaNavigableHeroToFirstAndSyncPresenter(): Promise<void> {
+    if (this.qaShowPendingOnly() || this.qaShowArchivedOnly()) {
+      this.qaListNavQuestionId.set(null);
+      return;
+    }
+    // Such-/Pin-/Autor-Kontext vor dem Hero-Sync an die Presenter-Bühne publizieren.
+    await this.publishQaPresenterSortMode(this.qaSortMode());
+    const first = this.qaNavigableStageQuestions()[0] ?? null;
+    this.qaListNavQuestionId.set(first?.id ?? null);
+    if (first) {
+      await this.syncPresenterToStageQuestionId(first.id);
+    }
+  }
+
+  async changeProjectionPage(delta: -1 | 1): Promise<void> {
+    const page = this.session()?.presenterPage;
+    if (!page || this.projectionPagePending() || this.qaListNavFadeBusy()) {
+      return;
+    }
+    if (this.projectionNavigationIsQaQuestions()) {
+      const navigable = this.qaNavigableStageQuestions();
+      const navIndex = this.projectionQaNavDisplayIndex();
+      const nextNavIndex = navIndex + delta;
+      if (nextNavIndex < 0 || nextNavIndex >= navigable.length) {
+        return;
+      }
+      const nextQuestion = navigable[nextNavIndex];
+      if (!nextQuestion) {
+        return;
+      }
+      const liveProjection = this.session()?.presenterSurface !== 'ended';
+      const stage = this.qaProjectionStageQuestions();
+      const stageIndex = stage.findIndex((question) => question.id === nextQuestion.id);
+      // Live: Cursor/Hero nur auf Bühnenfragen — sonst Host/Beamer-Widerspruch.
+      if (liveProjection && stageIndex < 0) {
+        return;
+      }
+      await this.playQaListNavFade(nextQuestion.id);
+      this.projectionControlsVisible.set(true);
+      if (!liveProjection || stageIndex < 0) {
+        return;
+      }
+      await this.syncPresenterToStageQuestionId(nextQuestion.id);
+      return;
+    }
+    const displayCount = this.projectionPageDisplayCount();
+    if ((delta < 0 && page.index === 0) || (delta > 0 && page.index >= displayCount - 1)) {
+      return;
+    }
+    this.projectionPagePending.set(true);
+    this.projectionPageError.set('');
+    try {
+      const current = this.session()?.presenterPage;
+      if (!current) {
+        return;
+      }
+      const result = await trpc.session.setPresenterSurface.mutate(
+        {
+          code: this.code,
+          page: { context: current.context, delta },
+        },
+        { signal: AbortSignal.timeout(10000) },
+      );
+      this.session.update((session) =>
+        session?.presenterPage?.context === current.context
+          ? { ...session, presenterPage: result.presenterPage }
+          : session,
+      );
+      this.projectionControlsVisible.set(true);
     } catch {
       this.projectionPageError.set(
         $localize`:@@sessionHost.projectionPageError:Seite konnte nicht gewechselt werden. Bitte erneut versuchen.`,
@@ -5857,12 +6394,43 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     }
   }
 
+  private async syncQaProjectionPageCount(count: number): Promise<void> {
+    const page = this.session()?.presenterPage;
+    if (!page || !this.code || page.count === count || this.qaProjectionPageSyncInFlight) {
+      return;
+    }
+    this.qaProjectionPageSyncInFlight = true;
+    try {
+      const result = await trpc.session.setPresenterSurface.mutate(
+        {
+          code: this.code,
+          page: { context: page.context, count },
+        },
+        { signal: AbortSignal.timeout(10000) },
+      );
+      this.session.update((session) =>
+        session?.presenterPage?.context === page.context
+          ? { ...session, presenterPage: result.presenterPage }
+          : session,
+      );
+      if (count > 1) {
+        this.projectionControlsVisible.set(true);
+      }
+    } catch {
+      // Presenter-Poll und erneuter Host-Sync holen die Seitenzahl nach.
+    } finally {
+      this.qaProjectionPageSyncInFlight = false;
+    }
+  }
+
   private async launchPresenterViewWindow(): Promise<Window | null> {
     if (this.presenterWindowOpenInFlight) {
       return null;
     }
     this.presenterWindowOpenInFlight = true;
     try {
+      // Sortierung vor dem Öffnen publizieren, damit presentProjection denselben Modus nutzt.
+      await this.publishQaPresenterSortMode(this.qaSortMode(), { force: true });
       const opened = await openPresenterViewWindow(
         this.document.defaultView,
         this.code,
@@ -9559,27 +10127,33 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     }
   }
 
-  async clearQaAuthorFilter(): Promise<void> {
+  async clearQaAuthorFilter(options?: { readonly scrollToTop?: boolean }): Promise<void> {
     if (this.qaSelectedAuthorNickname() === null) {
       return;
     }
     this.clearQaAuthorSelection();
     this.releaseQaChromeIfUnfiltered();
+    this.qaListNavQuestionId.set(null);
     this.ensureQaSubscription();
     await this.refreshQaQuestions({ replaceStale: true });
-    this.scrollQaListToTop();
+    await this.resetQaNavigableHeroToFirstAndSyncPresenter();
+    if (options?.scrollToTop !== false) {
+      this.scrollQaListToTop();
+    }
   }
 
   private async applyQaAuthorFilter(nickname: string): Promise<void> {
     this.captureUnfilteredQaChrome();
     this.preserveQaToolsFocusBeforeRemoval('#session-participant-directory-content');
     this.qaSelectedAuthorNickname.set(nickname);
+    this.qaListNavQuestionId.set(null);
     this.participantDirectoryOpen.set(false);
     if (this.activeChannel() !== 'qa') {
       await this.selectChannel('qa');
     }
     this.ensureQaSubscription();
     await this.refreshQaQuestions({ replaceStale: true });
+    await this.resetQaNavigableHeroToFirstAndSyncPresenter();
     this.scrollQaListToTop();
   }
 
@@ -9627,7 +10201,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       case 'PINNED':
         return $localize`:@@sessionQa.statusPinnedTooltip:Angepinnt: Diese Frage hebst du hervor. Sie gilt als »Wird gerade besprochen«.`;
       case 'ARCHIVED':
-        return $localize`:@@sessionQa.statusArchivedTooltip:Archiviert: Diese Frage ist als beantwortet markiert und bleibt nachlesbar.`;
+        return $localize`:@@sessionQa.statusArchivedTooltip:Archiviert: Diese Frage ist als beantwortet markiert und liegt im Archiv.`;
       default:
         return '';
     }
@@ -9648,7 +10222,9 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   }
 
   qaArchivedSummaryTooltip(): string {
-    return $localize`:@@sessionQa.summaryArchivedTooltip:Archiviert: Diese Fragen sind als beantwortet markiert und bleiben nachlesbar.`;
+    return this.qaShowArchivedOnly()
+      ? $localize`:@@sessionQa.summaryArchivedTooltipShowAll:Alle Fragen anzeigen.`
+      : $localize`:@@sessionQa.summaryArchivedTooltip:Archiviert: Diese Fragen sind als beantwortet markiert und liegen im Archiv. Zum Öffnen auswählen.`;
   }
 
   qaPinnedSummaryAria(): string {
@@ -9707,7 +10283,10 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   }
 
   qaArchivedSummaryAria(): string {
-    return $localize`:@@sessionQa.summaryArchivedAria:${this.formatCount(this.qaArchivedCount())}:count: archivierte Fragen`;
+    const count = this.formatCount(this.qaArchivedCount());
+    return this.qaShowArchivedOnly()
+      ? $localize`:@@sessionQa.summaryArchivedAriaShowAll:${count}:count: archivierte Fragen. Alle Fragen anzeigen`
+      : $localize`:@@sessionQa.summaryArchivedAria:${count}:count: archivierte Fragen. Fragen im Archiv anzeigen`;
   }
 
   qaStatusIcon(status: QaQuestionDTO['status']): string {
@@ -9749,6 +10328,28 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       const allIds = new Set(this.qaQuestions().map((q) => q.id));
       this.qaSeenQuestionIds.set(allIds);
     }
+  }
+
+  /** Nach Sortier-/Filterwechsel: Listenanfang und Such-/Sortier-/Filterleiste im Viewport. */
+  private scrollHostQaAfterListCriteriaChange(): void {
+    // Sofort, falls die Liste noch gemountet ist (z. B. Sortierung ohne replaceStale).
+    this.scrollQaListToTop();
+    if (this.destroyRef.destroyed) return;
+    afterNextRender(
+      () => {
+        if (this.destroyRef.destroyed) return;
+        // Nach replaceStale ist der Listen-Container oft erst hier wieder da.
+        this.scrollQaListToTop();
+        const host = this.hostElement.nativeElement as HTMLElement;
+        const tools =
+          (host.querySelector('.session-qa-tools') as HTMLElement | null) ??
+          (host.querySelector('#qa-tools-toggle') as HTMLElement | null);
+        if (tools) {
+          scrollIntoAppMain(tools, { block: 'start' });
+        }
+      },
+      { injector: this.injector },
+    );
   }
 
   private scrollHostTargetIntoView(targetRef: ElementRef<HTMLElement> | undefined): void {
@@ -9868,7 +10469,9 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   ): string {
     switch (action) {
       case 'APPROVE':
-        return $localize`:@@sessionQa.actionApprove:Freigeben`;
+        return status === 'ARCHIVED'
+          ? $localize`:@@sessionQa.actionUnarchive:Zurück aus dem Archiv`
+          : $localize`:@@sessionQa.actionApprove:Freigeben`;
       case 'PIN':
         return $localize`:@@sessionQa.actionPin:Hervorheben`;
       case 'UNPIN':
@@ -9882,18 +10485,23 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     }
   }
 
-  qaActionIcon(action: 'APPROVE' | 'PIN' | 'UNPIN' | 'ARCHIVE' | 'DELETE'): string {
+  qaActionIcon(
+    action: 'APPROVE' | 'PIN' | 'UNPIN' | 'ARCHIVE' | 'DELETE',
+    status?: QaQuestionDTO['status'],
+  ): string {
     switch (action) {
       case 'APPROVE':
-        return 'check';
+        // `unarchive` fehlt im selbst gehosteten Icon-Subset → `outbox`.
+        return status === 'ARCHIVED' ? 'outbox' : 'check';
       case 'PIN':
         return 'push_pin';
       case 'UNPIN':
-        return 'push_pin';
+        // `keep_off` fehlt im Subset; `undo` = Hervorhebung zurücknehmen.
+        return 'undo';
       case 'ARCHIVE':
         return 'archive';
       case 'DELETE':
-        return 'delete_outline';
+        return status === 'DELETED' ? 'delete' : 'delete_outline';
     }
   }
 
@@ -9930,6 +10538,57 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     return this.qaHighlightedQuestionIds().has(questionId);
   }
 
+  isQaQuestionOnPresenterStage(questionId: string): boolean {
+    if (this.session()?.presenterSurface === 'ended') {
+      return false;
+    }
+    return this.qaPresenterStageQuestionIds().has(questionId);
+  }
+
+  /** Volle Hero-Fläche nur für die aktuelle Presenter-Hero-Frage (Navigator-Cursor). */
+  isQaPresenterHeroCard(questionId: string): boolean {
+    return this.qaPresenterHeroQuestionId() === questionId;
+  }
+
+  /** Ob die Karte gerade die Navigator-Aus-/Einblendung in Phase `phase` spielt. */
+  isQaListNavFading(questionId: string, phase: 'out' | 'in'): boolean {
+    return this.qaListNavFadePhase() === phase && this.qaListNavFadeCardId() === questionId;
+  }
+
+  private async playQaListNavFade(nextQuestionId: string): Promise<void> {
+    const reduceMotion =
+      typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduceMotion) {
+      this.qaListNavFadePhase.set('idle');
+      this.qaListNavFadeCardId.set(null);
+      this.qaListNavQuestionId.set(nextQuestionId);
+      this.scrollToQaTop();
+      return;
+    }
+
+    const playId = ++this.qaListNavFadePlayId;
+    const currentId = this.qaListNavQuestionId();
+    if (currentId && currentId !== nextQuestionId) {
+      this.qaListNavFadeCardId.set(currentId);
+      this.qaListNavFadePhase.set('out');
+      await new Promise<void>((resolve) => setTimeout(resolve, 320));
+      if (playId !== this.qaListNavFadePlayId) {
+        return;
+      }
+    }
+
+    this.qaListNavQuestionId.set(nextQuestionId);
+    this.qaListNavFadeCardId.set(nextQuestionId);
+    this.qaListNavFadePhase.set('in');
+    this.scrollToQaTop();
+    await new Promise<void>((resolve) => setTimeout(resolve, 420));
+    if (playId !== this.qaListNavFadePlayId) {
+      return;
+    }
+    this.qaListNavFadePhase.set('idle');
+    this.qaListNavFadeCardId.set(null);
+  }
+
   isQaCompassFocused(questionId: string): boolean {
     return this.qaCompassFocusQuestionIds().has(questionId);
   }
@@ -9956,6 +10615,20 @@ export class SessionHostComponent implements OnInit, OnDestroy {
 
   qaQuestionScore(question: QaQuestionDTO): number {
     return question.score ?? question.upvoteCount;
+  }
+
+  qaPositiveVoteCount(question: QaQuestionDTO): number {
+    return question.positiveVoteCount ?? 0;
+  }
+
+  qaNegativeVoteCount(question: QaQuestionDTO): number {
+    return question.negativeVoteCount ?? 0;
+  }
+
+  qaVotesBreakdownAriaLabel(question: QaQuestionDTO): string {
+    const up = this.formatCount(this.qaPositiveVoteCount(question));
+    const down = this.formatCount(this.qaNegativeVoteCount(question));
+    return $localize`:@@sessionQa.votesBreakdownAria:${up}:up: dafür, ${down}:down: dagegen`;
   }
 
   private compareQaForumSort(left: QaQuestionDTO, right: QaQuestionDTO): number {
@@ -10051,15 +10724,18 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     mode: QaQuestionSortMode,
     options?: { readonly scrollToTop?: boolean },
   ): Promise<void> {
-    if (this.qaSortMode() === mode) {
+    // mat-button-toggle-group kann beim Re-Render kurz `undefined` emittieren.
+    if (!QaQuestionSortModeEnum.safeParse(mode).success || this.qaSortMode() === mode) {
       return;
     }
 
     this.qaSortMode.set(mode);
+    this.publishQaPresenterSortMode(mode);
     this.ensureQaSubscription();
     await this.refreshQaQuestions();
+    await this.resetQaNavigableHeroToFirstAndSyncPresenter();
     if (options?.scrollToTop !== false) {
-      this.scrollQaListToTop();
+      this.scrollHostQaAfterListCriteriaChange();
     }
 
     if (untracked(() => this.qaWordCloudEffectiveAnalysisVariant() === 'SEMANTIC')) {
@@ -10082,6 +10758,24 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     }
 
     await this.requestQaWordCloudLemmaSmoothing();
+  }
+
+  openQaSortHelp(event: Event, kind: 'BEST' | 'CONTROVERSIAL'): void {
+    event.preventDefault();
+    event.stopPropagation();
+    void this.openQaSortHelpDialog(kind);
+  }
+
+  private async openQaSortHelpDialog(kind: 'BEST' | 'CONTROVERSIAL'): Promise<void> {
+    const { QaSortHelpDialogComponent } =
+      await import('../../../shared/qa-sort-help-dialog/qa-sort-help-dialog.component');
+    this.dialog.open(QaSortHelpDialogComponent, {
+      panelClass: 'qa-sort-help-dialog-panel',
+      autoFocus: 'dialog',
+      width: 'min(40rem, calc(100vw - 2rem))',
+      maxWidth: '100vw',
+      data: { kind },
+    });
   }
 
   setQaWordCloudAnalysisVariant(variant: WordCloudAnalysisVariant): void {
@@ -10778,8 +11472,22 @@ export class SessionHostComponent implements OnInit, OnDestroy {
         surface,
       });
       this.session.update((session) =>
-        session ? { ...session, presenterSurface: result.presenterSurface } : session,
+        session
+          ? {
+              ...session,
+              presenterSurface: result.presenterSurface,
+              // Backend setzt die Seitenposition beim Surface-Wechsel zurück (Index 0).
+              ...(result.presenterPage ? { presenterPage: result.presenterPage } : {}),
+            }
+          : session,
       );
+      if (surface === 'ended') {
+        this.projectionPageError.set('');
+        // Q&A-Navigator und Hero-Rahmen bleiben als Host-Bearbeitungshilfe aktiv.
+        if (!this.projectionNavigationIsQaQuestions()) {
+          this.projectionControlsVisible.set(false);
+        }
+      }
       return true;
     } catch {
       // Die lokale Wortwolkenansicht bleibt bedienbar, auch wenn die Projektion nicht synchronisiert.
@@ -10884,6 +11592,41 @@ export class SessionHostComponent implements OnInit, OnDestroy {
         });
       } catch {
         this.lastQaWordCloudProjectionKey = null;
+      }
+    });
+  }
+
+  private publishQaPresenterSortMode(
+    sortMode: QaQuestionSortMode,
+    options?: { readonly force?: boolean; readonly skipStageRefresh?: boolean },
+  ): Promise<void> {
+    if (!this.code) {
+      return Promise.resolve();
+    }
+    const search = this.qaSearch();
+    const pinnedOnly = this.qaShowPinnedOnly();
+    const authorNickname = this.qaSelectedAuthorNickname();
+    const stageViewKey = `${sortMode}\u0001${search}\u0001${pinnedOnly ? '1' : '0'}\u0001${authorNickname ?? ''}`;
+    if (!options?.force && stageViewKey === this.lastQaPresenterStageViewKey) {
+      return Promise.resolve();
+    }
+    this.lastQaPresenterStageViewKey = stageViewKey;
+    return this.enqueuePresenterProjectionSync(async () => {
+      try {
+        await trpc.qa.setPresenterSortMode.mutate({
+          code: this.code.toUpperCase(),
+          sortMode,
+          search,
+          pinnedOnly,
+          ...(authorNickname ? { authorNickname } : {}),
+        });
+        // Refresh nicht in der Sync-Queue awaiten: sonst blockiert z. B. endPresentationView,
+        // wenn presentProjection noch hängt. Self-Heal nutzt skipStageRefresh gegen Loops.
+        if (!options?.skipStageRefresh && this.projectionNavigationIsQaQuestions()) {
+          void this.refreshQaPresenterStageQuestions();
+        }
+      } catch {
+        this.lastQaPresenterStageViewKey = null;
       }
     });
   }
@@ -11046,9 +11789,10 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     const sortMode = this.qaSortMode();
     const statuses = this.qaListStatuses();
     const search = this.qaSearch();
+    const authorNickname = this.qaSelectedAuthorNickname();
     const pageSize = this.qaListPageSize();
     const subscriptionKey = sessionId
-      ? `${sessionId}:${sortMode}:${statuses.join(',')}:${search}:${pageSize}`
+      ? `${sessionId}:${sortMode}:${statuses.join(',')}:${search}:${authorNickname ?? ''}:${pageSize}`
       : null;
     if (!sessionId || !qaEnabled) {
       this.qaSub?.unsubscribe();
@@ -11070,6 +11814,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
         pageSize,
         statuses,
         search: search || undefined,
+        ...(authorNickname ? { authorNickname } : {}),
       },
       {
         onData: (data) => {
@@ -11082,6 +11827,8 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       },
     );
     this.qaSubscriptionKey = subscriptionKey;
+    // Default BEST ohne Moduswechsel sonst nie publiziert → Presenter bleibt auf stalem Map-Wert.
+    void this.publishQaPresenterSortMode(sortMode);
   }
 
   private handleQaQuestionsInvalidation(data: QaQuestionsInvalidationDTO): void {
@@ -11613,13 +12360,63 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     this.qaListNextCursor.set(snapshot.nextCursor ?? null);
     this.qaListRankingRevision.set(snapshot.rankingRevision ?? null);
     this.dismissQaSteeringCallout();
+    if (this.projectionNavigationIsQaQuestions()) {
+      void this.refreshQaPresenterStageQuestions();
+    }
     return true;
+  }
+
+  /** Ungefilterte Bühnenliste — gleiche Quelle wie Presenter (`qa.presentProjection`). */
+  private async refreshQaPresenterStageQuestions(): Promise<void> {
+    const sessionId = this.session()?.id;
+    if (!sessionId || !this.projectionNavigationIsQaQuestions()) {
+      this.qaPresenterStageRefreshGeneration += 1;
+      this.qaPresenterStageOrderedQuestions.set(null);
+      return;
+    }
+    const generation = ++this.qaPresenterStageRefreshGeneration;
+    try {
+      const snapshot: QaQuestionsListDTO | QaQuestionDTO[] = await trpc.qa.presentProjection.query({
+        sessionId,
+      });
+      if (generation !== this.qaPresenterStageRefreshGeneration) {
+        return;
+      }
+      if (!this.projectionNavigationIsQaQuestions() || this.session()?.id !== sessionId) {
+        return;
+      }
+      const questions = Array.isArray(snapshot) ? snapshot : snapshot.questions;
+      const visible = questions.filter(
+        (question) => question.status === 'PINNED' || question.status === 'ACTIVE',
+      );
+      this.qaPresenterStageOrderedQuestions.set([
+        ...visible.filter((question) => question.status === 'PINNED'),
+        ...visible.filter((question) => question.status === 'ACTIVE'),
+      ]);
+      // Self-Heal: Backend-Restart leert die ephemeral Map → Presenter fällt auf Default.
+      // skipStageRefresh: sonst publish→refresh→publish-Endlosschleife, solange der
+      // Snapshot noch den alten Modus liefert (ephemeral Map / Stub in Specs).
+      if (
+        !Array.isArray(snapshot) &&
+        snapshot.sortMode &&
+        snapshot.sortMode !== this.qaSortMode()
+      ) {
+        void this.publishQaPresenterSortMode(this.qaSortMode(), {
+          force: true,
+          skipStageRefresh: true,
+        });
+      }
+    } catch {
+      // Letzten Snapshot behalten; Meta-Poll und WS aktualisieren erneut.
+    }
   }
 
   private closeHostPostProcessing(): void {
     const wasAlreadyEnded = this.postProcessingEnded();
     this.postProcessingEnded.set(true);
     this.qaQuestions.set([]);
+    this.qaPresenterStageRefreshGeneration += 1;
+    this.qaPresenterStageOrderedQuestions.set(null);
     this.qaListTotalCount.set(0);
     this.qaListPendingCount.set(null);
     this.qaListSessionPendingCount.set(null);
@@ -11653,6 +12450,9 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     }
     if (this.qaShowPendingOnly()) {
       return ['PENDING'];
+    }
+    if (this.qaShowArchivedOnly()) {
+      return ['ARCHIVED'];
     }
     return ['PENDING', 'ACTIVE', 'PINNED', 'ARCHIVED'];
   }
@@ -11756,45 +12556,87 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     this.clearQaAuthorSelection();
     this.releaseQaChromeIfUnfiltered();
     this.qaShowPinnedOnly.set(false);
+    this.qaShowArchivedOnly.set(false);
     this.qaShowPendingOnly.set(true);
     this.ensureQaSubscription();
     await this.refreshQaQuestions({ replaceStale: true });
-    this.scrollQaListToTop();
+    this.scrollHostQaAfterListCriteriaChange();
     // No delayed focus: the existing failure callout owns error and retry focus.
   }
 
-  async setQaPinnedFilter(pinnedOnly: boolean): Promise<void> {
+  async setQaPinnedFilter(
+    pinnedOnly: boolean,
+    options?: { readonly scrollToTop?: boolean },
+  ): Promise<void> {
     if (this.qaShowPinnedOnly() === pinnedOnly) return;
     this.preserveQaToolsFocusBeforeRemoval(
-      '[data-testid="qa-clear-pinned"], [data-testid="qa-clear-pending"]',
+      '[data-testid="qa-clear-pinned"], [data-testid="qa-clear-pending"], [data-testid="qa-clear-archived"]',
     );
     this.qaShowPinnedOnly.set(pinnedOnly);
     if (pinnedOnly) {
       this.qaShowPendingOnly.set(false);
+      this.qaShowArchivedOnly.set(false);
     }
     this.ensureQaSubscription();
     await this.refreshQaQuestions({ replaceStale: true });
-    this.scrollQaListToTop();
+    await this.resetQaNavigableHeroToFirstAndSyncPresenter();
+    if (options?.scrollToTop !== false) {
+      this.scrollHostQaAfterListCriteriaChange();
+    }
   }
 
-  async setQaPendingFilter(pendingOnly: boolean): Promise<void> {
+  async setQaPendingFilter(
+    pendingOnly: boolean,
+    options?: { readonly scrollToTop?: boolean },
+  ): Promise<void> {
     if (this.qaShowPendingOnly() === pendingOnly) return;
     this.preserveQaToolsFocusBeforeRemoval(
-      '[data-testid="qa-clear-pending"], [data-testid="qa-clear-pinned"]',
+      '[data-testid="qa-clear-pending"], [data-testid="qa-clear-pinned"], [data-testid="qa-clear-archived"]',
     );
     this.qaShowPendingOnly.set(pendingOnly);
     if (pendingOnly) {
       this.qaShowPinnedOnly.set(false);
+      this.qaShowArchivedOnly.set(false);
     }
     this.ensureQaSubscription();
     await this.refreshQaQuestions({ replaceStale: true });
-    this.scrollQaListToTop();
+    // Verwaltungsansicht: Listen-Cursor lösen, Beamer unverändert.
+    // Beim Verlassen: Effects stellen den Cursor aus presenterPage wieder her.
+    this.qaListNavQuestionId.set(null);
+    if (options?.scrollToTop !== false) {
+      this.scrollHostQaAfterListCriteriaChange();
+    }
+  }
+
+  async setQaArchivedFilter(
+    archivedOnly: boolean,
+    options?: { readonly scrollToTop?: boolean },
+  ): Promise<void> {
+    if (this.qaShowArchivedOnly() === archivedOnly) return;
+    this.preserveQaToolsFocusBeforeRemoval(
+      '[data-testid="qa-clear-archived"], [data-testid="qa-clear-pinned"], [data-testid="qa-clear-pending"]',
+    );
+    this.qaShowArchivedOnly.set(archivedOnly);
+    if (archivedOnly) {
+      this.qaShowPinnedOnly.set(false);
+      this.qaShowPendingOnly.set(false);
+    }
+    this.ensureQaSubscription();
+    await this.refreshQaQuestions({ replaceStale: true });
+    this.qaListNavQuestionId.set(null);
+    if (options?.scrollToTop !== false) {
+      this.scrollHostQaAfterListCriteriaChange();
+    }
   }
 
   async toggleQaPendingFilterFromSummary(): Promise<void> {
     await this.setQaPendingFilter(!this.qaShowPendingOnly());
     // The summary stays outside the disclosure. Never focus a hidden filter or
     // steal focus after a delayed list response.
+  }
+
+  async toggleQaArchivedFilterFromSummary(): Promise<void> {
+    await this.setQaArchivedFilter(!this.qaShowArchivedOnly());
   }
 
   onQaSearchInput(value: string): void {
@@ -11809,6 +12651,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
         this.captureUnfilteredQaChrome();
       }
       this.qaSearch.set(search);
+      this.qaListNavQuestionId.set(null);
       if (!search) {
         this.releaseQaChromeIfUnfiltered();
       }
@@ -11817,7 +12660,8 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       this.resetQaListPageNavigation();
       this.qaListNextCursor.set(null);
       const refiningSearch = Boolean(previousSearch && search);
-      void this.refreshQaQuestions().then(() => {
+      void this.refreshQaQuestions().then(async () => {
+        await this.resetQaNavigableHeroToFirstAndSyncPresenter();
         if (!refiningSearch) {
           this.scrollQaListToTop();
         }
@@ -11836,11 +12680,15 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     this.qaSearchDraft.set('');
     if (this.qaSearch() === '') return;
     this.qaSearch.set('');
+    this.qaListNavQuestionId.set(null);
     this.releaseQaChromeIfUnfiltered();
     this.ensureQaSubscription();
     this.resetQaListPageNavigation();
     this.qaListNextCursor.set(null);
-    void this.refreshQaQuestions().then(() => this.scrollQaListToTop());
+    void this.refreshQaQuestions().then(async () => {
+      await this.resetQaNavigableHeroToFirstAndSyncPresenter();
+      this.scrollQaListToTop();
+    });
   }
 
   async loadMoreQaQuestions(): Promise<void> {
@@ -11924,7 +12772,8 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       this.qaQuestions.set([]);
       this.qaListTotalCount.set(0);
       this.qaListPendingCount.set(null);
-      this.qaListSessionPendingCount.set(null);
+      // Session-Pending für »Fragen prüfen« behalten — sonst flackert der CTA
+      // während replaceStale weg, bevor der neue Snapshot ankommt.
       this.qaHostStatusCounts.set(null);
       this.qaOldestPendingCreatedAt.set(null);
       this.qaListNextCursor.set(null);
@@ -12888,6 +13737,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     if (pending.has(questionId)) {
       return;
     }
+    const questionBefore = this.qaQuestions().find((entry) => entry.id === questionId);
     pending.add(questionId);
     this.qaPendingQuestionIds.set(pending);
     this.qaInfo.set(null);
@@ -12901,7 +13751,9 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       await this.refreshQaQuestions();
       this.qaInfo.set(
         action === 'APPROVE'
-          ? $localize`:@@sessionQa.moderationApproved:Frage freigegeben.`
+          ? questionBefore?.status === 'ARCHIVED'
+            ? $localize`:@@sessionQa.moderationUnarchived:Frage aus dem Archiv geholt.`
+            : $localize`:@@sessionQa.moderationApproved:Frage freigegeben.`
           : action === 'PIN'
             ? $localize`:@@sessionQa.moderationPinned:Frage hervorgehoben.`
             : action === 'ARCHIVE'

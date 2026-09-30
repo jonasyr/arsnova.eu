@@ -5,6 +5,7 @@ import { ActivatedRoute, convertToParamMap, provideRouter, Router } from '@angul
 import { By } from '@angular/platform-browser';
 import { FeedbackVoteComponent } from '../../feedback/feedback-vote.component';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { MatDialog } from '@angular/material/dialog';
 import type { QaQuestionDTO } from '@arsnova/shared-types';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -4833,14 +4834,14 @@ describe('SessionVoteComponent', { timeout: 30_000 }, () => {
     expect(text).toContain('Umstritten');
     expect(text).toContain('Zeit');
     expect(text).toContain('Fragen durchsuchen');
-    expect(text).toContain('Hervorgehobene Fragen stehen zuerst.');
-    expect(fixture.componentInstance.qaSortMode()).toBe('TOP');
+    expect(text).toContain('viel Zustimmung und genug Stimmen');
+    expect(fixture.componentInstance.qaSortMode()).toBe('BEST');
     expect(qaQuestionsUpdatedSubscribeMock).toHaveBeenCalledWith(
       expect.objectContaining({
         sessionId: '6a8edced-5f8f-4cfa-9176-454fac9570ad',
         participantId: '11111111-1111-4111-8111-111111111111',
         pageSize: 100,
-        sort: 'TOP',
+        sort: 'BEST',
       }),
       expect.any(Object),
     );
@@ -4855,9 +4856,9 @@ describe('SessionVoteComponent', { timeout: 30_000 }, () => {
       value: scrollIntoView,
     });
     try {
-      await fixture.componentInstance.setQaSortMode('TOP');
+      await fixture.componentInstance.setQaSortMode('BEST');
       await fixture.componentInstance.setQaSortMode(null as unknown as 'BEST');
-      expect(fixture.componentInstance.qaSortMode()).toBe('TOP');
+      expect(fixture.componentInstance.qaSortMode()).toBe('BEST');
       expect(qaListQueryMock).not.toHaveBeenCalled();
       qaListQueryMock.mockResolvedValue({
         questions: [
@@ -4880,13 +4881,13 @@ describe('SessionVoteComponent', { timeout: 30_000 }, () => {
         endedAt: null,
         postProcessingEndsAt: null,
         totalCount: 2,
-        rankingRevision: '1:BEST:',
+        rankingRevision: '1:TOP:',
       });
-      await fixture.componentInstance.setQaSortMode('BEST');
+      await fixture.componentInstance.setQaSortMode('TOP');
       fixture.detectChanges();
-      expect(fixture.componentInstance.qaSortMode()).toBe('BEST');
+      expect(fixture.componentInstance.qaSortMode()).toBe('TOP');
       expect(fixture.nativeElement.textContent as string).toContain(
-        'viel Zustimmung und genug Stimmen',
+        'Hervorgehobene Fragen stehen zuerst.',
       );
       expect(fixture.componentInstance.qaQuestions().map((question) => question.id)).toEqual([
         'question-2',
@@ -4895,7 +4896,7 @@ describe('SessionVoteComponent', { timeout: 30_000 }, () => {
         sessionId: '6a8edced-5f8f-4cfa-9176-454fac9570ad',
         participantId: '11111111-1111-4111-8111-111111111111',
         pageSize: 100,
-        sort: 'BEST',
+        sort: 'TOP',
       });
       expect(qaUnsubscribes[0]).toHaveBeenCalled();
       expect(qaQuestionsUpdatedSubscribeMock).toHaveBeenCalledWith(
@@ -4903,12 +4904,17 @@ describe('SessionVoteComponent', { timeout: 30_000 }, () => {
           sessionId: '6a8edced-5f8f-4cfa-9176-454fac9570ad',
           participantId: '11111111-1111-4111-8111-111111111111',
           pageSize: 100,
-          sort: 'BEST',
+          sort: 'TOP',
         }),
         expect.any(Object),
       );
       expect(snackBarOpenMock).not.toHaveBeenCalled();
       expect(scrollIntoView).not.toHaveBeenCalled();
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector(
+          '.session-qa-list .session-qa-card[data-qa-id="question-2"]',
+        ),
+      ).toBeTruthy();
 
       qaListQueryMock.mockClear();
       qaListQueryMock.mockResolvedValue({
@@ -4946,6 +4952,19 @@ describe('SessionVoteComponent', { timeout: 30_000 }, () => {
         }),
         expect.any(Object),
       );
+
+      const dialogOpen = vi.spyOn(TestBed.inject(MatDialog), 'open').mockReturnValue({
+        afterClosed: () => ({ subscribe: vi.fn() }),
+      } as never);
+      await fixture.componentInstance['openQaSortHelpDialog']('CONTROVERSIAL');
+      expect(dialogOpen).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.objectContaining({
+          data: { kind: 'CONTROVERSIAL' },
+          panelClass: 'qa-sort-help-dialog-panel',
+        }),
+      );
+      dialogOpen.mockRestore();
 
       qaListQueryMock.mockClear();
       qaListQueryMock.mockResolvedValue({
@@ -5704,6 +5723,37 @@ describe('SessionVoteComponent', { timeout: 30_000 }, () => {
     expect(toolbarFixedBlock).toContain('var(--app-service-status-banner-gap, 0px)');
     expect(toolbarFixedStickyTop).toBe('var(--host-mobile-toolbar-gap, 0.5rem)');
     expect(toolbarFixedStickyTop).not.toContain('4rem');
+  });
+
+  it('hebt die präsentierte Q&A-Frage nur per Primary-Rand hervor', () => {
+    const voteStyles = readFileSync(
+      resolve(process.cwd(), 'src/app/features/session/session-vote/session-vote.component.scss'),
+      'utf8',
+    );
+    const globalStyles = readFileSync(resolve(process.cwd(), 'src/styles.scss'), 'utf8');
+    const playfulStyles = readFileSync(
+      resolve(process.cwd(), 'src/styles/playful-inner-chrome.scss'),
+      'utf8',
+    );
+
+    expect(voteStyles).toMatch(
+      /\.session-qa-card--pinned \{[^}]*border:\s*1\.5px solid var\(--mat-sys-primary\)/,
+    );
+    expect(voteStyles).not.toMatch(
+      /\.session-qa-card--pinned \{[^}]*background:\s*var\(--mat-sys-primary-container\)/,
+    );
+    expect(voteStyles).not.toMatch(
+      /\.session-qa-card--pinned \{[^}]*color:\s*var\(--mat-sys-on-primary-container\)/,
+    );
+    expect(globalStyles).not.toMatch(
+      /\.session-qa-card--pinned \.markdown-body[\s\S]*?color:\s*var\(--mat-sys-on-primary-container\)/,
+    );
+    expect(playfulStyles).not.toContain('@mixin app-playful-qa-hero-card-light');
+    expect(playfulStyles).not.toContain('@mixin app-playful-qa-hero-card-dark');
+    expect(playfulStyles).toContain('html.preset-playful.dark');
+    expect(playfulStyles).toMatch(
+      /\.vote-page \.session-qa-card\.session-qa-card--pinned \{[\s\S]*?border:\s*1\.5px solid var\(--mat-sys-primary\)/,
+    );
   });
 
   it('hält Vote-Tokens und Timer-Styles ohne ::ng-deep / 999px', () => {
@@ -7818,6 +7868,194 @@ describe('SessionVoteComponent', { timeout: 30_000 }, () => {
     fixture.destroy();
   });
 
+  it('zeigt Zustimmung und Umstritten-Labels in der Teilnehmer-Q&A-Liste', async () => {
+    getInfoQueryMock.mockResolvedValue({
+      id: '6a8edced-5f8f-4cfa-9176-454fac9570ad',
+      serverTime: MOCK_SERVER_TIME,
+      code: 'ABC123',
+      type: 'QUIZ',
+      status: 'ACTIVE',
+      quizName: 'Team-Quiz',
+      title: null,
+      participantCount: 6,
+      channels: {
+        quiz: { enabled: true },
+        qa: { enabled: true, open: true, title: 'Fragen aus dem Publikum', moderationMode: false },
+        quickFeedback: { enabled: false, open: false },
+      },
+    });
+
+    const fixture = TestBed.createComponent(SessionVoteComponent);
+    fixture.detectChanges();
+    await flushComponentAfterStable(fixture, 50);
+    const component = fixture.componentInstance;
+    (
+      component as unknown as {
+        applyQaQuestionsSnapshot(snapshot: unknown[]): boolean;
+      }
+    ).applyQaQuestionsSnapshot([
+      {
+        id: '11111111-1111-4111-8111-111111111111',
+        text: 'Klare Mehrheit',
+        upvoteCount: 8,
+        positiveVoteCount: 8,
+        negativeVoteCount: 1,
+        bestScore: 0.72,
+        controversyScore: 0.2,
+        isControversial: false,
+        status: 'ACTIVE',
+        createdAt: '2026-03-13T12:00:00.000Z',
+        myVote: null,
+        isOwn: false,
+        hasUpvoted: false,
+      },
+      {
+        id: '22222222-2222-4222-8222-222222222222',
+        text: 'Polarisierte Frage',
+        upvoteCount: 5,
+        positiveVoteCount: 5,
+        negativeVoteCount: 5,
+        bestScore: 0.35,
+        controversyScore: 0.81,
+        isControversial: true,
+        status: 'ACTIVE',
+        createdAt: '2026-03-13T12:01:00.000Z',
+        myVote: null,
+        isOwn: false,
+        hasUpvoted: false,
+      },
+    ]);
+    component.activeChannel.set('qa');
+    component.qaSortMode.set('BEST');
+    fixture.detectChanges();
+
+    const bestCard = fixture.nativeElement.querySelector(
+      '.session-qa-card[data-qa-id="11111111-1111-4111-8111-111111111111"]',
+    ) as HTMLElement | null;
+    expect(bestCard?.textContent).toContain('Zustimmung');
+    expect(bestCard?.textContent).toContain('72 %');
+    expect(bestCard?.querySelector('.session-qa-card__badge--controversial')).toBeNull();
+    expect(bestCard?.querySelector('.session-qa-card__badge--controversy-pending')).toBeNull();
+    expect(bestCard?.querySelector('.session-qa-card__badge--controversy-onesided')).toBeNull();
+
+    const controversialCard = fixture.nativeElement.querySelector(
+      '.session-qa-card[data-qa-id="22222222-2222-4222-8222-222222222222"]',
+    ) as HTMLElement | null;
+    expect(controversialCard?.querySelector('.session-qa-card__badge--controversial')).toBeNull();
+    expect(controversialCard?.textContent).toContain('Zustimmung');
+
+    (
+      component as unknown as {
+        applyQaQuestionsSnapshot(snapshot: unknown[]): boolean;
+      }
+    ).applyQaQuestionsSnapshot([
+      {
+        id: '33333333-3333-4333-8333-333333333333',
+        text: 'Unter T trotz Score',
+        upvoteCount: 0,
+        positiveVoteCount: 2,
+        negativeVoteCount: 2,
+        controversyScore: 0.8,
+        isControversial: false,
+        controversyInsufficientVotes: true,
+        status: 'ACTIVE',
+        createdAt: '2026-03-13T12:02:00.000Z',
+        myVote: null,
+        isOwn: false,
+        hasUpvoted: false,
+      },
+      {
+        id: '44444444-4444-4444-8444-444444444444',
+        text: 'Schwache Kontroverse über T',
+        upvoteCount: 16,
+        positiveVoteCount: 18,
+        negativeVoteCount: 2,
+        controversyScore: 0.13,
+        isControversial: false,
+        controversyInsufficientVotes: false,
+        status: 'ACTIVE',
+        createdAt: '2026-03-13T12:03:00.000Z',
+        myVote: null,
+        isOwn: false,
+        hasUpvoted: false,
+      },
+      {
+        id: '55555555-5555-4555-8555-555555555555',
+        text: 'Einseitig viele Stimmen',
+        upvoteCount: 10,
+        positiveVoteCount: 10,
+        negativeVoteCount: 0,
+        controversyScore: 0,
+        isControversial: false,
+        controversyInsufficientVotes: false,
+        status: 'ACTIVE',
+        createdAt: '2026-03-13T12:04:00.000Z',
+        myVote: null,
+        isOwn: false,
+        hasUpvoted: false,
+      },
+      {
+        id: '22222222-2222-4222-8222-222222222222',
+        text: 'Polarisierte Frage',
+        upvoteCount: 5,
+        positiveVoteCount: 5,
+        negativeVoteCount: 5,
+        bestScore: 0.35,
+        controversyScore: 0.81,
+        isControversial: true,
+        controversyInsufficientVotes: false,
+        status: 'ACTIVE',
+        createdAt: '2026-03-13T12:01:00.000Z',
+        myVote: null,
+        isOwn: false,
+        hasUpvoted: false,
+      },
+    ]);
+    component.qaSortMode.set('CONTROVERSIAL');
+    fixture.detectChanges();
+    const underTCard = fixture.nativeElement.querySelector(
+      '.session-qa-card[data-qa-id="33333333-3333-4333-8333-333333333333"]',
+    ) as HTMLElement | null;
+    expect(underTCard?.querySelector('.session-qa-card__badge--controversial')).toBeNull();
+    expect(
+      underTCard?.querySelector('.session-qa-card__badge--controversy-pending')?.textContent,
+    ).toContain('Zu wenige Stimmen');
+    expect(
+      underTCard
+        ?.querySelector('.session-qa-card__badge--controversy-pending')
+        ?.getAttribute('aria-label'),
+    ).toContain('belastbare Einordnung');
+
+    const weakCard = fixture.nativeElement.querySelector(
+      '.session-qa-card[data-qa-id="44444444-4444-4444-8444-444444444444"]',
+    ) as HTMLElement | null;
+    expect(weakCard?.querySelector('.session-qa-card__badge--controversial')).toBeNull();
+    expect(weakCard?.querySelector('.session-qa-card__badge--controversy-pending')).toBeNull();
+    expect(
+      weakCard?.querySelector('.session-qa-card__badge--controversy-onesided')?.textContent,
+    ).toContain('Einseitig');
+
+    const onesidedCard = fixture.nativeElement.querySelector(
+      '.session-qa-card[data-qa-id="55555555-5555-4555-8555-555555555555"]',
+    ) as HTMLElement | null;
+    expect(
+      onesidedCard?.querySelector('.session-qa-card__badge--controversy-onesided')?.textContent,
+    ).toContain('Einseitig');
+
+    const polarCard = fixture.nativeElement.querySelector(
+      '.session-qa-card[data-qa-id="22222222-2222-4222-8222-222222222222"]',
+    ) as HTMLElement | null;
+    expect(
+      polarCard?.querySelector('.session-qa-card__badge--controversial')?.textContent,
+    ).toContain('Umstritten');
+
+    expect(underTCard?.textContent).not.toContain('Geteilte Reaktionen');
+    expect(onesidedCard?.textContent).not.toContain('Geteilte Reaktionen');
+    expect(weakCard?.textContent).not.toContain('Geteilte Reaktionen');
+    expect(polarCard?.textContent).toContain('Geteilte Reaktionen');
+    fixture.destroy();
+  });
+
   it('zeigt Freigabe- und Hervorhebungsstatus in der Teilnehmer-Q&A-Liste', async () => {
     getInfoQueryMock.mockResolvedValue({
       id: '6a8edced-5f8f-4cfa-9176-454fac9570ad',
@@ -7879,12 +8117,81 @@ describe('SessionVoteComponent', { timeout: 30_000 }, () => {
     fixture.detectChanges();
 
     const text = fixture.nativeElement.textContent ?? '';
-    expect(text).toContain('Freigegeben');
-    expect(text).toContain('Wird gerade besprochen');
+    const statusLabels = Array.from(
+      fixture.nativeElement.querySelectorAll('.session-qa-card__status') as NodeListOf<HTMLElement>,
+    ).map((el) => (el.textContent ?? '').replace(/\s+/g, ' ').trim());
+    expect(statusLabels).not.toContain('Freigegeben');
+    expect(statusLabels.some((label) => label.includes('Wird gerade besprochen'))).toBe(true);
+    expect(
+      statusLabels.some((label) =>
+        label.includes('Wartet auf Freigabe – momentan nur für dich und die Moderation sichtbar.'),
+      ),
+    ).toBe(true);
+    const pinnedStatus = Array.from(
+      fixture.nativeElement.querySelectorAll(
+        '.session-qa-card__status--pinned',
+      ) as NodeListOf<HTMLElement>,
+    ).find((el) =>
+      (el.closest('.session-qa-card')?.textContent ?? '').includes('Hervorgehobene Frage'),
+    );
+    expect(pinnedStatus).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.session-qa-card--pinned')).toBeNull();
     expect(text).toContain(
       'Wartet auf Freigabe – momentan nur für dich und die Moderation sichtbar.',
     );
+    expect(text).not.toContain('Von dir');
     expect(text).not.toContain('Sessionweit noch');
+    fixture.destroy();
+  });
+
+  it('setzt in der Teilnehmeransicht kein Presenter-Hero über den lokalen Listenindex', async () => {
+    getInfoQueryMock.mockResolvedValue({
+      id: '6a8edced-5f8f-4cfa-9176-454fac9570ad',
+      serverTime: MOCK_SERVER_TIME,
+      code: 'ABC123',
+      type: 'QUIZ',
+      status: 'ACTIVE',
+      quizName: 'Team-Quiz',
+      title: null,
+      participantCount: 6,
+      preferredChannel: 'qa',
+      presenterSurface: 'default',
+      presenterPage: { context: 'qa-questions', index: 1, count: 3 },
+      channels: {
+        quiz: { enabled: true },
+        qa: { enabled: true, open: true, title: 'Fragen', moderationMode: false },
+        quickFeedback: { enabled: false, open: false },
+      },
+    });
+
+    const fixture = TestBed.createComponent(SessionVoteComponent);
+    fixture.detectChanges();
+    await flushComponentAfterStable(fixture, 50);
+    const component = fixture.componentInstance;
+    (
+      component as unknown as {
+        applyQaQuestionsSnapshot(snapshot: unknown[]): boolean;
+      }
+    ).applyQaQuestionsSnapshot([
+      {
+        id: 'active-only-match',
+        text: 'Nur Suchtreffer',
+        upvoteCount: 3,
+        status: 'ACTIVE',
+        createdAt: '2026-03-13T12:01:00.000Z',
+        myVote: null,
+        isOwn: false,
+        hasUpvoted: false,
+      },
+    ]);
+    component.activeChannel.set('qa');
+    component.qaSearch.set('Suchtreffer');
+    fixture.detectChanges();
+
+    // presenterPage.index=1 bezieht sich auf die Beamer-Bühne, nicht auf diese lokale Teilmenge.
+    expect(component.qaPresenterHeroQuestionId()).toBeNull();
+    expect(component.isQaPresenterHeroCard('active-only-match')).toBe(false);
+    expect(fixture.nativeElement.querySelector('.session-qa-card--pinned')).toBeNull();
     fixture.destroy();
   });
 
@@ -7982,7 +8289,7 @@ describe('SessionVoteComponent', { timeout: 30_000 }, () => {
       sessionId: '6a8edced-5f8f-4cfa-9176-454fac9570ad',
       participantId: '11111111-1111-4111-8111-111111111111',
       pageSize: 100,
-      sort: 'TOP',
+      sort: 'BEST',
       cursor: 'page-two',
     });
     expect(component.qaQuestions()).toHaveLength(1);
@@ -9455,7 +9762,7 @@ describe('SessionVoteComponent', { timeout: 30_000 }, () => {
       fixture.destroy();
     });
 
-    it('bewahrt Suche und Sortierung beim Einklappen und setzt sie gemeinsam zurück', async () => {
+    it('bewahrt Suche und Sortierung beim Einklappen der Q&A-Werkzeuge', async () => {
       const { fixture, c } = await setup();
       const host = fixture.nativeElement as HTMLElement;
       const details = host.querySelector<HTMLDetailsElement>('.session-qa-tools')!;
@@ -9469,12 +9776,6 @@ describe('SessionVoteComponent', { timeout: 30_000 }, () => {
       fixture.detectChanges();
       expect(c.qaSearch()).toBe('Prüfung');
       expect(c.qaSortMode()).toBe('TIME');
-      expect(host.querySelector('.session-qa-tools-status')?.textContent).toContain('Prüfung');
-      c.resetQaTools();
-      fixture.detectChanges();
-      expect(c.qaSearchDraft()).toBe('');
-      expect(c.qaSearch()).toBe('');
-      expect(c.qaSortMode()).toBe('TOP');
       expect(host.querySelector('.session-qa-tools-status')).toBeNull();
       fixture.destroy();
     });

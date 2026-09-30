@@ -17,6 +17,19 @@ describe('renderMarkdownWithKatex', () => {
     expect(result.katexError).toBeNull();
   });
 
+  it('rendert LaTeX-Inline- und Block-Delimiters \\(…\\) und \\[…\\]', () => {
+    const inline = renderMarkdownWithKatex(String.raw`Liste: \(p\) und \(\hat{p}=p/N\)`);
+    expect(inline.katexError).toBeNull();
+    expect(inline.html).toContain('katex');
+    expect(inline.html).not.toContain('\\(');
+    expect(inline.html.match(/class="katex"/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
+
+    const block = renderMarkdownWithKatex(String.raw`Formel: \[\operatorname{BestScore}=1\]`);
+    expect(block.katexError).toBeNull();
+    expect(block.html).toContain('katex-display');
+    expect(block.html).not.toContain('\\[');
+  });
+
   it('toleriert Leerzeichen vor schließenden Emphasis-Delimitern wie **Freue **', () => {
     const result = renderMarkdownWithKatex('**Freue **');
     expect(result.html).toContain('<strong>Freue</strong>');
@@ -59,11 +72,22 @@ describe('renderMarkdownWithKatex', () => {
     expect(withEscape.html).toContain('2. Transkription');
   });
 
-  it('stellt Q&A-Schwärzungsplatzhalter als sichtbare Spanne dar statt als Markdown-Link', () => {
-    const result = renderMarkdownWithKatex('Hallo [geschwärzt] Welt');
-    expect(result.html).toContain('class="qa-redacted-passage"');
-    expect(result.html).toContain('[geschwärzt]');
-    expect(result.html).not.toMatch(/<a\b[^>]*>\[geschwärzt\]<\/a>/);
+  it('stellt Q&A-Schwärzungen als dunkle Zeichen-Balken dar statt als lesbaren String oder Markdown-Link', () => {
+    const legacy = renderMarkdownWithKatex('Hallo [geschwärzt] Welt');
+    expect(legacy.html).toContain('class="qa-redacted-passage"');
+    expect(legacy.html).toContain('class="qa-redacted-char"');
+    expect(legacy.html).not.toContain('[geschwärzt]');
+    expect(legacy.html).not.toMatch(/<a\b[^>]*>\[geschwärzt\]<\/a>/);
+    expect(legacy.html.match(/class="qa-redacted-char"/g)?.length).toBe(
+      Array.from('[geschwärzt]').length,
+    );
+    expect(legacy.html.match(/\u25A0/g)?.length).toBe(Array.from('[geschwärzt]').length);
+
+    const blocks = renderMarkdownWithKatex(`Hallo ${'\u2588'.repeat(5)} Welt`);
+    expect(blocks.html).toContain('class="qa-redacted-passage"');
+    expect(blocks.html.match(/class="qa-redacted-char"/g)?.length).toBe(5);
+    expect(blocks.html.match(/\u25A0/g)?.length).toBe(5);
+    expect(blocks.html).not.toContain('\u2588');
   });
 
   it('bewahrt führende Zahlen in Ordering-/Kurzlabels (kein Strip von „9. November“)', () => {

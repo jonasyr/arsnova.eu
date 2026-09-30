@@ -9,6 +9,7 @@ import {
   GetQaQuestionsInputSchema,
   GetQaSummaryRuntimeInputSchema,
   ModerateQaQuestionInputSchema,
+  QA_LIST_PAGE_SIZE_OPTIONS,
   QA_MAX_QUESTIONS_PER_PARTICIPANT,
   QA_MAX_QUESTIONS_PER_SESSION,
   QaNlpRuntimeDTOSchema,
@@ -23,6 +24,8 @@ import {
   ReleasePendingQaQuestionsInputSchema,
   ReleasePendingQaQuestionsOutputSchema,
   RequestQaSummaryInputSchema,
+  SetQaPresenterSortModeInputSchema,
+  SetQaPresenterSortModeOutputSchema,
   SubmitQaQuestionInputSchema,
   SubmitQaQuestionOutputSchema,
   ToggleQaModerationInputSchema,
@@ -44,6 +47,12 @@ import {
   invalidateQaSummaryForSession,
   requestQaSummary,
 } from '../lib/qaSummaryQueue';
+import { resolveQaPresenterStageView, setQaPresenterStageView } from '../lib/qaPresenterSortMode';
+import {
+  isQaControversialLabel,
+  isQaControversyInsufficientVotes,
+  resolveQaControversyThreshold,
+} from '../lib/qaControversy';
 import {
   buildSessionRetentionTimeline,
   isSessionEffectivelyFinished,
@@ -109,6 +118,7 @@ type QaQuestionVoteStats = {
   bestScore?: number;
   controversyScore?: number;
   isControversial?: boolean;
+  controversyInsufficientVotes?: boolean;
 };
 
 type QaQuestionSortMode = z.infer<typeof GetQaQuestionsInputSchema>['sort'];
@@ -171,6 +181,7 @@ function buildQaQuestionsSnapshot(
     | 'sessionQuestionCount'
     | 'sessionRemaining'
     | 'quota'
+    | 'sortMode'
   > = {},
 ) {
   const expiresAt =
@@ -501,6 +512,9 @@ function mapQaQuestion(
     ...(includeVoteMetrics && voteStats?.isControversial !== undefined
       ? { isControversial: voteStats.isControversial }
       : {}),
+    ...(includeVoteMetrics && voteStats?.controversyInsufficientVotes !== undefined
+      ? { controversyInsufficientVotes: voteStats.controversyInsufficientVotes }
+      : {}),
     status: question.status,
     createdAt:
       question.createdAt instanceof Date
@@ -790,6 +804,8 @@ async function buildQaQuestionPayloadFromDb(options: {
   sessionId: string;
   participantId?: string;
   moderatorView?: boolean;
+  /** Presenter/Beamer: Wilson-/Controversy-Scores in der DTO-Ausgabe. */
+  includeVoteMetrics?: boolean;
   sortMode: QaQuestionSortMode;
   participantCountForControversy?: number;
   includeAuthorNickname?: boolean;
@@ -820,8 +836,9 @@ async function buildQaQuestionPayloadFromDb(options: {
   }
   const offset = cursor?.offset ?? 0;
   const moderatorView = options.moderatorView === true;
+  const includeVoteMetrics = moderatorView || options.includeVoteMetrics === true;
   const participantCount = options.participantCountForControversy ?? 0;
-  const controversyThreshold = Math.max(1, participantCount * 0.1);
+  const controversyThreshold = resolveQaControversyThreshold(participantCount);
   const controversyThresholdSql = Prisma.sql`${controversyThreshold}::DOUBLE PRECISION`;
   const canSharePublicRanking =
     !moderatorView &&
@@ -845,15 +862,15 @@ async function buildQaQuestionPayloadFromDb(options: {
     ? Prisma.empty
     : options.participantId && !shareRankingLoad
       ? Prisma.sql`AND (
-          question."status" IN ('ACTIVE', 'PINNED', 'ARCHIVED')
+          question."status" IN ('ACTIVE', 'PINNED')
           OR (
             question."status" = 'PENDING'
             AND question."participantId" = ${options.participantId}
           )
         )`
-      : Prisma.sql`AND question."status" IN ('ACTIVE', 'PINNED', 'ARCHIVED')`;
+      : Prisma.sql`AND question."status" IN ('ACTIVE', 'PINNED')`;
   const statusFilter =
-    moderatorView && options.statuses && options.statuses.length > 0
+    options.statuses && options.statuses.length > 0
       ? Prisma.sql`AND question."status"::TEXT IN (${Prisma.join(options.statuses)})`
       : Prisma.empty;
   const searchFilter = search
@@ -880,40 +897,19 @@ async function buildQaQuestionPayloadFromDb(options: {
     options.participantId && !shareRankingLoad
       ? Prisma.sql`own_vote."direction"`
       : Prisma.sql`NULL::"QaVoteDirection"`;
-  const metricFirstRanking =
-    moderatorView ||
-    options.sortMode === 'BEST' ||
-    options.sortMode === 'CONTROVERSIAL' ||
-    options.sortMode === 'TIME';
-  // Host: PENDING zuerst, damit Moderationsbedarf nicht hinter großen ACTIVE-Seiten verschwindet.
-  // Host-TOP: PINNED vor ACTIVE (sonst begräbt upvoteCount angepinnte Fragen ohne Stimmen).
-  // Host BEST/CONTROVERSIAL/TIME: PINNED und ACTIVE teilen sich den Metrik-Bucket nach PENDING.
+  // Host: PINNED (Presenter-Hero) zuerst und markiert; danach PENDING, damit
+  // Moderationsbedarf nicht hinter großen ACTIVE-Seiten verschwindet.
+  // Innerhalb ACTIVE bzw. PINNED gilt weiterhin die gewählte Metrik.
   // Teilnehmer: freigegebene/angepinnte vor PENDING (eigene PENDING bleiben sichtbar).
   const statusBucket = moderatorView
-    ? options.sortMode === 'TOP'
-      ? Prisma.sql`CASE question."status"
-          WHEN 'PENDING' THEN 0
-          WHEN 'PINNED' THEN 1
+    ? Prisma.sql`CASE question."status"
+          WHEN 'PINNED' THEN 0
+          WHEN 'PENDING' THEN 1
           WHEN 'ACTIVE' THEN 2
           WHEN 'ARCHIVED' THEN 3
           ELSE 4
         END`
-      : Prisma.sql`CASE question."status"
-          WHEN 'PENDING' THEN 0
-          WHEN 'PINNED' THEN 1
-          WHEN 'ACTIVE' THEN 1
-          WHEN 'ARCHIVED' THEN 2
-          ELSE 3
-        END`
-    : metricFirstRanking
-      ? Prisma.sql`CASE question."status"
-          WHEN 'PINNED' THEN 0
-          WHEN 'ACTIVE' THEN 0
-          WHEN 'PENDING' THEN 1
-          WHEN 'ARCHIVED' THEN 2
-          ELSE 3
-        END`
-      : Prisma.sql`CASE question."status"
+    : Prisma.sql`CASE question."status"
           WHEN 'PINNED' THEN 0
           WHEN 'ACTIVE' THEN 1
           WHEN 'PENDING' THEN 2
@@ -945,7 +941,7 @@ async function buildQaQuestionPayloadFromDb(options: {
       ? Prisma.sql`COUNT(*) OVER() AS "totalCount"`
       : Prisma.sql`${options.totalCountHint}::BIGINT AS "totalCount"`;
   const needsScoreMetrics =
-    moderatorView || options.sortMode === 'BEST' || options.sortMode === 'CONTROVERSIAL';
+    includeVoteMetrics || options.sortMode === 'BEST' || options.sortMode === 'CONTROVERSIAL';
   const scoreSelect = needsScoreMetrics
     ? Prisma.sql`
         CASE
@@ -1130,6 +1126,11 @@ async function buildQaQuestionPayloadFromDb(options: {
     const voteCount = positiveVoteCount + negativeVoteCount;
     const bestScore = Number(row.bestScore);
     const controversyScore = Number(row.controversyScore);
+    const isControversial = isQaControversialLabel({
+      controversyScore,
+      voteCount,
+      controversyThreshold,
+    });
     return mapQaQuestion(
       {
         ...row,
@@ -1151,9 +1152,14 @@ async function buildQaQuestionPayloadFromDb(options: {
         voteCount,
         bestScore,
         controversyScore,
-        isControversial: controversyScore > 0.5 && voteCount >= Math.max(1, controversyThreshold),
+        isControversial,
+        controversyInsufficientVotes: isQaControversyInsufficientVotes({
+          voteCount,
+          controversyThreshold,
+          isControversial,
+        }),
       },
-      moderatorView,
+      moderatorView || includeVoteMetrics,
       moderatorView,
     );
   });
@@ -1280,18 +1286,15 @@ export const qaRouter = router({
         });
       }
 
-      const participantCountForControversy =
-        input.moderatorView === true || sortMode === 'CONTROVERSIAL'
-          ? await prisma.participant.count({
-              where: { sessionId: session.id },
-            })
-          : undefined;
+      const participantCountForControversy = await prisma.participant.count({
+        where: { sessionId: session.id },
+      });
       const includeAuthorNickname = session.onboardingAnonymousMode !== true;
       const authorNickname = input.moderatorView
         ? input.authorNickname?.trim() || undefined
         : undefined;
       const rankingRevision = `${session.qaRankingRevision}:${sortMode}:${
-        sortMode === 'CONTROVERSIAL' ? (participantCountForControversy ?? 0) : ''
+        sortMode === 'CONTROVERSIAL' ? participantCountForControversy : ''
       }`;
       const pendingCountWithoutModeration =
         session.qaModerationMode === false
@@ -1314,6 +1317,8 @@ export const qaRouter = router({
           sessionId: session.id,
           participantId: input.participantId,
           moderatorView: input.moderatorView,
+          // Zustimmung/Umstritten auch für Teilnehmende (Vote-UI-Labels).
+          includeVoteMetrics: true,
           sortMode,
           participantCountForControversy,
           includeAuthorNickname,
@@ -1408,6 +1413,47 @@ export const qaRouter = router({
       });
     }),
 
+  /**
+   * Host publiziert die aktuelle Q&A-Sortierung für die Presenter-Projektion.
+   * Der Beitragskanal darf geschlossen sein; nur beendete Sessions sind gesperrt.
+   */
+  setPresenterSortMode: hostProcedure
+    .input(SetQaPresenterSortModeInputSchema)
+    .output(SetQaPresenterSortModeOutputSchema)
+    .mutation(async ({ input }) => {
+      const code = input.code.toUpperCase();
+      const session = await prisma.session.findUnique({
+        where: { code },
+        select: {
+          status: true,
+          type: true,
+          qaEnabled: true,
+        },
+      });
+      if (!session) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Session nicht gefunden.' });
+      }
+      if (session.status === 'FINISHED') {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Beendete Sessions können nicht mehr verändert werden.',
+        });
+      }
+      if (!isQaEnabled(session)) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Fragen sind in dieser Session nicht aktiviert.',
+        });
+      }
+      const stageView = setQaPresenterStageView(code, {
+        sortMode: input.sortMode,
+        search: input.search,
+        pinnedOnly: input.pinnedOnly,
+        authorNickname: input.authorNickname ?? null,
+      });
+      return stageView;
+    }),
+
   presentProjection: publicProcedure
     .input(GetQaPresentProjectionInputSchema)
     .output(QaQuestionsListDTOSchema)
@@ -1416,6 +1462,7 @@ export const qaRouter = router({
         where: { id: input.sessionId },
         select: {
           id: true,
+          code: true,
           status: true,
           endedAt: true,
           expiresAt: true,
@@ -1449,27 +1496,37 @@ export const qaRouter = router({
           : session.qaOpen === false
             ? 'CHANNEL_CLOSED'
             : 'ACTIVE';
-      const rankingRevision = `${session.qaRankingRevision}:`;
-      const pendingCountWithoutModeration =
-        session.qaModerationMode === false
-          ? await loadQaPendingCount(session.id, session.qaRankingRevision)
-          : undefined;
+      const stageView = resolveQaPresenterStageView(session.code);
+      const sortMode: QaQuestionSortMode = stageView.sortMode;
+      const participantCountForControversy = await prisma.participant.count({
+        where: { sessionId: session.id },
+      });
+      const rankingRevision = `${session.qaRankingRevision}:${sortMode}:${stageView.search}:${stageView.pinnedOnly ? '1' : '0'}:${stageView.authorNickname ?? ''}:${participantCountForControversy}`;
+      // Eine Seite à Forum-Maximum: ACTIVE+PINNED vollständig bis 500 (DTO-Cap).
+      // Früher pageSize 100 → Host-Navigator und Presenter-Warteschlange divergierten.
+      const presentProjectionPageSize =
+        QA_LIST_PAGE_SIZE_OPTIONS[QA_LIST_PAGE_SIZE_OPTIONS.length - 1]!;
+      const statuses: Array<'ACTIVE' | 'PINNED'> = stageView.pinnedOnly
+        ? ['PINNED']
+        : ['ACTIVE', 'PINNED'];
       const page = await buildQaQuestionPayloadFromDb({
         sessionId: session.id,
         moderatorView: false,
-        sortMode: 'TOP',
+        includeVoteMetrics: true,
+        sortMode,
+        participantCountForControversy,
         includeAuthorNickname: session.onboardingAnonymousMode !== true,
-        pageSize: 100,
+        pageSize: presentProjectionPageSize,
+        statuses,
         rankingRevision,
-        totalCountHint:
-          session.qaModerationMode === false && pendingCountWithoutModeration === 0
-            ? session.qaQuestionCount
-            : undefined,
+        ...(stageView.search ? { search: stageView.search } : {}),
+        ...(stageView.authorNickname ? { authorNickname: stageView.authorNickname } : {}),
       });
       return buildQaQuestionsSnapshot(session, page.questions, state, serverNow, {
         rankingRevision,
-        nextCursor: page.nextCursor,
+        nextCursor: null,
         totalCount: page.totalCount,
+        sortMode,
       });
     }),
 

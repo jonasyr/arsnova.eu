@@ -27,6 +27,7 @@ import { MatIcon } from '@angular/material/icon';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { MatDialog } from '@angular/material/dialog';
 import { refreshTrpcWsBinding, trpc } from '../../../core/trpc.client';
 import {
   resolveConfidenceLabelHigh,
@@ -481,6 +482,7 @@ export class SessionVoteComponent implements OnInit, OnDestroy {
   private readonly injector = inject(Injector);
   private readonly destroyRef = inject(DestroyRef);
   private readonly snackBar = inject(MatSnackBar);
+  private readonly dialog = inject(MatDialog);
   private readonly localeId = inject(LOCALE_ID);
   readonly contextualFeedbackOffer = inject(ContextualFeedbackOfferService);
   private statusSub: Unsubscribable | null = null;
@@ -525,15 +527,15 @@ export class SessionVoteComponent implements OnInit, OnDestroy {
   readonly qaSearchDraft = signal('');
   readonly qaSearch = signal('');
   private qaSearchTimer: ReturnType<typeof setTimeout> | null = null;
-  readonly qaSortMode = signal<QaQuestionSortMode>('TOP');
+  readonly qaSortMode = signal<QaQuestionSortMode>('BEST');
   readonly qaSortHint = computed(() => {
     switch (this.qaSortMode()) {
       case 'BEST':
-        return $localize`:@@sessionQa.sortHintBest:Zeigt Fragen mit viel Zustimmung und genug Stimmen zuerst. Hervorgehobene Fragen sind markiert, aber nicht vorgezogen.`;
+        return $localize`:@@sessionQa.sortHintBest:Zeigt Fragen mit viel Zustimmung und genug Stimmen zuerst. Hervorgehobene Fragen erscheinen zuerst und sind markiert.`;
       case 'CONTROVERSIAL':
-        return $localize`:@@sessionQa.sortHintControversial:Zeigt Fragen mit gemischter Reaktion zuerst. Hervorgehobene Fragen sind markiert, aber nicht vorgezogen.`;
+        return $localize`:@@sessionQa.sortHintControversial:Zeigt Fragen mit gemischter Reaktion zuerst. Hervorgehobene Fragen erscheinen zuerst und sind markiert.`;
       case 'TIME':
-        return $localize`:@@sessionQa.sortHintTime:Zeigt die neuesten Fragen zuerst. Hervorgehobene Fragen sind markiert, aber nicht vorgezogen.`;
+        return $localize`:@@sessionQa.sortHintTime:Zeigt die neuesten Fragen zuerst. Hervorgehobene Fragen erscheinen zuerst und sind markiert.`;
       default:
         return $localize`:@@sessionQa.sortHintTopVote:Hervorgehobene Fragen stehen zuerst. Danach kommen die mit den meisten Stimmen.`;
     }
@@ -860,6 +862,13 @@ export class SessionVoteComponent implements OnInit, OnDestroy {
       selectedNickname !== null && this.qaQuestionAuthorNickname(question) === selectedNickname
     );
   }
+
+  /** Presenter-Hero nur mit identischer Bühnenliste — Index auf die lokale Vote-Liste wäre falsch. */
+  isQaPresenterHeroCard(_questionId: string): boolean {
+    return false;
+  }
+
+  readonly qaPresenterHeroQuestionId = computed(() => null as string | null);
 
   @HostListener('document:keydown', ['$event'])
   onDocumentKeydownClearQaAuthorSelection(event: KeyboardEvent): void {
@@ -1505,6 +1514,14 @@ export class SessionVoteComponent implements OnInit, OnDestroy {
     const up = this.formatCount(this.qaPositiveVoteCount(question));
     const down = this.formatCount(this.qaNegativeVoteCount(question));
     return $localize`:@@sessionQa.votesBreakdownAria:${up}:up: dafür, ${down}:down: dagegen`;
+  }
+
+  formatQaPercent(value: number | undefined): string {
+    if (!Number.isFinite(value)) {
+      return '0 %';
+    }
+
+    return `${formatNumber((value ?? 0) * 100, this.localeId, '1.0-0')} %`;
   }
 
   private patchSessionChannels(channels: SessionChannelsDTO): void {
@@ -2975,12 +2992,13 @@ export class SessionVoteComponent implements OnInit, OnDestroy {
       case 'PINNED':
         return $localize`:@@sessionQa.statusPinned:Wird gerade besprochen`;
       case 'ACTIVE':
-        return $localize`:@@sessionQa.statusActive:Freigegeben`;
+        // Freigegebene Fragen brauchen kein Statuslabel — sichtbar heißt freigegeben.
+        return '';
       case 'PENDING':
-        if (isOwn) {
-          return $localize`:@@sessionVote.qaStatusPendingOwn:Wartet auf Freigabe – momentan nur für dich und die Moderation sichtbar.`;
+        if (!isOwn) {
+          return '';
         }
-        return $localize`:@@sessionQa.statusPending:Wartet auf Freigabe`;
+        return $localize`:@@sessionVote.qaStatusPendingOwn:Wartet auf Freigabe – momentan nur für dich und die Moderation sichtbar.`;
       case 'ARCHIVED':
         return $localize`:@@sessionQa.statusArchived:Beantwortet`;
       case 'DELETED':
@@ -4094,6 +4112,8 @@ export class SessionVoteComponent implements OnInit, OnDestroy {
           pausedFromStatus?: 'QUESTION_OPEN' | 'ACTIVE' | null;
           channels?: SessionChannelsDTO;
           preferredChannel?: SessionLiveChannel;
+          presenterSurface?: SessionInfoDTO['presenterSurface'];
+          presenterPage?: SessionInfoDTO['presenterPage'];
           serverTime?: string;
           serverNow?: string;
           expiresAt?: string;
@@ -4168,6 +4188,15 @@ export class SessionVoteComponent implements OnInit, OnDestroy {
             this.patchPreferredChannel(data.preferredChannel);
             this.applyPreferredChannelIfChanged(data.preferredChannel);
             channelStateChanged = true;
+          }
+          if (data.presenterSurface !== undefined || data.presenterPage !== undefined) {
+            this.sessionSettings.update((settings) => ({
+              ...settings,
+              ...(data.presenterSurface !== undefined
+                ? { presenterSurface: data.presenterSurface }
+                : {}),
+              ...(data.presenterPage !== undefined ? { presenterPage: data.presenterPage } : {}),
+            }));
           }
           if (channelStateChanged) {
             this.ensureActiveChannel();
@@ -4837,40 +4866,6 @@ export class SessionVoteComponent implements OnInit, OnDestroy {
     };
   }
 
-  qaActiveSortLabel(): string {
-    switch (this.qaSortMode()) {
-      case 'BEST':
-        return $localize`:@@sessionQa.sortBest:Beste Fragen`;
-      case 'CONTROVERSIAL':
-        return $localize`:@@sessionQa.sortControversial:Umstritten`;
-      case 'TIME':
-        return $localize`:@@sessionQa.sortTime:Zeit`;
-      default:
-        return $localize`:@@sessionQa.sortTop:Meist unterstützt`;
-    }
-  }
-
-  readonly qaToolsActive = computed(
-    () =>
-      !!this.qaSearchDraft() || this.qaSortMode() !== 'TOP' || !!this.qaSelectedAuthorNickname(),
-  );
-
-  resetQaTools(): void {
-    const summary = (this.el.nativeElement as HTMLElement).querySelector<HTMLElement>(
-      '#qa-tools-summary',
-    );
-    if (summary && summary.getClientRects().length > 0) summary.focus();
-    if (this.qaSearchTimer) clearTimeout(this.qaSearchTimer);
-    this.qaSearchTimer = null;
-    this.qaSearchDraft.set('');
-    this.qaSearch.set('');
-    this.qaSortMode.set('TOP');
-    this.qaSelectedAuthorNickname.set(null);
-    this.resetQaListPageNavigation();
-    this.ensureQaSubscription();
-    void this.refreshQaQuestions({ notify: false, requireDeadline: false, animate: false });
-  }
-
   onQaToolsToggle(details: HTMLDetailsElement): void {
     if (
       !details.open &&
@@ -4908,16 +4903,23 @@ export class SessionVoteComponent implements OnInit, OnDestroy {
       this.qaSearchTimer = null;
     }
     this.qaSearchDraft.set('');
-    if (this.qaSearch() === '') {
-      return;
+    if (this.qaSearch() !== '') {
+      this.qaSearch.set('');
+      this.resetQaListPageNavigation();
+      void this.refreshQaQuestions({
+        notify: false,
+        requireDeadline: false,
+        animate: false,
+      });
     }
-    this.qaSearch.set('');
-    this.resetQaListPageNavigation();
-    void this.refreshQaQuestions({
-      notify: false,
-      requireDeadline: false,
-      animate: false,
-    });
+    const summary = (this.el.nativeElement as HTMLElement).querySelector(
+      '#qa-tools-summary',
+    ) as HTMLElement | null;
+    try {
+      summary?.focus({ preventScroll: true });
+    } catch {
+      /* Fokus darf den Clear-Pfad nicht blockieren */
+    }
   }
 
   async setQaSortMode(mode: QaQuestionSortMode): Promise<void> {
@@ -4938,11 +4940,32 @@ export class SessionVoteComponent implements OnInit, OnDestroy {
     afterNextRender(
       () => {
         const host = this.el.nativeElement as HTMLElement;
+        const tools =
+          (host.querySelector('.session-qa-tools') as HTMLElement | null) ??
+          (host.querySelector('#qa-tools-summary') as HTMLElement | null);
         const heading = host.querySelector('#vote-qa-heading') as HTMLElement | null;
-        scrollIntoAppMain(heading, { block: 'start' });
+        scrollIntoAppMain(tools ?? heading, { block: 'start' });
       },
       { injector: this.injector },
     );
+  }
+
+  openQaSortHelp(event: Event, kind: 'BEST' | 'CONTROVERSIAL'): void {
+    event.preventDefault();
+    event.stopPropagation();
+    void this.openQaSortHelpDialog(kind);
+  }
+
+  private async openQaSortHelpDialog(kind: 'BEST' | 'CONTROVERSIAL'): Promise<void> {
+    const { QaSortHelpDialogComponent } =
+      await import('../../../shared/qa-sort-help-dialog/qa-sort-help-dialog.component');
+    this.dialog.open(QaSortHelpDialogComponent, {
+      panelClass: 'qa-sort-help-dialog-panel',
+      autoFocus: 'dialog',
+      width: 'min(40rem, calc(100vw - 2rem))',
+      maxWidth: '100vw',
+      data: { kind },
+    });
   }
 
   private countOwnQuestionsFromList(
