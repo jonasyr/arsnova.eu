@@ -1,3 +1,31 @@
+import { randomUUID } from 'node:crypto';
+import { getRedis } from '../redis';
+import { logger } from './logger';
+
+const INSTANCE_ID = randomUUID();
+const WS_INSTANCE_KEY_PREFIX = 'ws:telemetry:instance:';
+/** Bounded Registry lebender Instanzen (Score = Unix-Expiry), vermeidet Keyspace-SCAN. */
+const WS_INSTANCE_REGISTRY_KEY = 'ws:telemetry:registry';
+const WS_INSTANCE_TTL_SECONDS = 20;
+const WS_PUBLISH_INTERVAL_MS = 5_000;
+
+type ClusterLiveMetrics = {
+  available: boolean;
+  trpcOpen: number;
+  yjsOpen: number;
+  trpcOpenedLastMinute: number;
+  trpcClosedLastMinute: number;
+  yjsOpenedLastMinute: number;
+  yjsClosedLastMinute: number;
+  rejectsLastMinute: number;
+  rateLimitedMessagesLastMinute: number;
+  lastSuccessfulReadAt: string | null;
+};
+
+let publishTimer: NodeJS.Timeout | null = null;
+let publishWarned = false;
+let readClusterWarned = false;
+
 let trpcConnectionsActive = 0;
 let trpcConnectionLimit = 1;
 let trpcBoundConnectionsActive = 0;
@@ -46,6 +74,10 @@ const trpcPayloadRejected = new RollingCounter();
 const trpcRateLimitedMessages = new RollingCounter();
 const trpcSessionCapRejected = new RollingCounter();
 const trpcParticipantCapRejected = new RollingCounter();
+const trpcOpened = new RollingCounter();
+const trpcClosed = new RollingCounter();
+const yjsOpened = new RollingCounter();
+const yjsClosed = new RollingCounter();
 const yjsRejectedUpgrades = new RollingCounter();
 export const YJS_UPGRADE_REJECTION_REASONS = [
   'globalRate',
@@ -82,10 +114,12 @@ export function configureTrpcWebSocketTelemetry(limits: {
 
 export function recordTrpcWebSocketConnected(): void {
   trpcConnectionsActive += 1;
+  trpcOpened.increment();
 }
 
 export function recordTrpcWebSocketDisconnected(): void {
   trpcConnectionsActive = Math.max(0, trpcConnectionsActive - 1);
+  trpcClosed.increment();
 }
 
 export function recordTrpcWebSocketRejectedUpgrade(): void {
@@ -126,11 +160,13 @@ export function configureYjsWebSocketTelemetry(limits: {
 
 export function recordYjsWebSocketConnected(room: string): void {
   yjsConnectionsActive += 1;
+  yjsOpened.increment();
   yjsRoomConnections.set(room, (yjsRoomConnections.get(room) ?? 0) + 1);
 }
 
 export function recordYjsWebSocketDisconnected(room: string): void {
   yjsConnectionsActive = Math.max(0, yjsConnectionsActive - 1);
+  yjsClosed.increment();
   const remaining = Math.max(0, (yjsRoomConnections.get(room) ?? 0) - 1);
   if (remaining === 0) yjsRoomConnections.delete(room);
   else yjsRoomConnections.set(room, remaining);
@@ -176,6 +212,8 @@ export function getWebSocketTelemetrySnapshot(): {
   trpcRejectedUpgradesLastMinute: number;
   trpcPayloadRejectedLastMinute: number;
   trpcRateLimitedMessagesLastMinute: number;
+  trpcOpenedLastMinute: number;
+  trpcClosedLastMinute: number;
   yjsConnectionsActive: number;
   yjsRoomsActive: number;
   yjsConnectionLimit: number;
@@ -188,6 +226,8 @@ export function getWebSocketTelemetrySnapshot(): {
   yjsDocumentRejectedLastMinute: number;
   yjsAwarenessRejectedLastMinute: number;
   yjsOutboundRejectedLastMinute: number;
+  yjsOpenedLastMinute: number;
+  yjsClosedLastMinute: number;
 } {
   return {
     trpcConnectionsActive,
@@ -200,6 +240,8 @@ export function getWebSocketTelemetrySnapshot(): {
     trpcRejectedUpgradesLastMinute: trpcRejectedUpgrades.sum(),
     trpcPayloadRejectedLastMinute: trpcPayloadRejected.sum(),
     trpcRateLimitedMessagesLastMinute: trpcRateLimitedMessages.sum(),
+    trpcOpenedLastMinute: trpcOpened.sum(),
+    trpcClosedLastMinute: trpcClosed.sum(),
     yjsConnectionsActive,
     yjsRoomsActive: yjsRoomConnections.size,
     yjsConnectionLimit,
@@ -217,7 +259,231 @@ export function getWebSocketTelemetrySnapshot(): {
     yjsDocumentRejectedLastMinute: yjsDocumentRejected.sum(),
     yjsAwarenessRejectedLastMinute: yjsAwarenessRejected.sum(),
     yjsOutboundRejectedLastMinute: yjsOutboundRejected.sum(),
+    yjsOpenedLastMinute: yjsOpened.sum(),
+    yjsClosedLastMinute: yjsClosed.sum(),
   };
+}
+
+function localRejectsAndRateLimits(snapshot: ReturnType<typeof getWebSocketTelemetrySnapshot>): {
+  rejectsLastMinute: number;
+  rateLimitedMessagesLastMinute: number;
+} {
+  const rejectsLastMinute =
+    snapshot.trpcRejectedUpgradesLastMinute +
+    snapshot.trpcPayloadRejectedLastMinute +
+    snapshot.trpcSessionCapRejectedLastMinute +
+    snapshot.trpcParticipantCapRejectedLastMinute +
+    snapshot.yjsRejectedUpgradesLastMinute +
+    snapshot.yjsPayloadRejectedLastMinute +
+    snapshot.yjsProtocolErrorsLastMinute +
+    snapshot.yjsDocumentRejectedLastMinute +
+    snapshot.yjsAwarenessRejectedLastMinute +
+    snapshot.yjsOutboundRejectedLastMinute;
+  const rateLimitedMessagesLastMinute =
+    snapshot.trpcRateLimitedMessagesLastMinute + snapshot.yjsRateLimitedMessagesLastMinute;
+  return { rejectsLastMinute, rateLimitedMessagesLastMinute };
+}
+
+/** Publiziert Prozess-Snapshot nach Redis (TTL); abgestürzte Instanzen verschwinden. */
+export async function publishInstanceWebSocketTelemetry(): Promise<void> {
+  if (process.env['NODE_ENV'] === 'test') return;
+  try {
+    const snapshot = getWebSocketTelemetrySnapshot();
+    const { rejectsLastMinute, rateLimitedMessagesLastMinute } =
+      localRejectsAndRateLimits(snapshot);
+    const payload = JSON.stringify({
+      trpcOpen: snapshot.trpcConnectionsActive,
+      yjsOpen: snapshot.yjsConnectionsActive,
+      trpcOpenedLastMinute: snapshot.trpcOpenedLastMinute,
+      trpcClosedLastMinute: snapshot.trpcClosedLastMinute,
+      yjsOpenedLastMinute: snapshot.yjsOpenedLastMinute,
+      yjsClosedLastMinute: snapshot.yjsClosedLastMinute,
+      rejectsLastMinute,
+      rateLimitedMessagesLastMinute,
+      updatedAt: Date.now(),
+    });
+    const redis = getRedis();
+    const key = `${WS_INSTANCE_KEY_PREFIX}${INSTANCE_ID}`;
+    const expiresAt = Math.floor(Date.now() / 1000) + WS_INSTANCE_TTL_SECONDS;
+    const pipeline = redis.multi();
+    pipeline.set(key, payload, 'EX', WS_INSTANCE_TTL_SECONDS);
+    pipeline.zadd(WS_INSTANCE_REGISTRY_KEY, expiresAt, INSTANCE_ID);
+    pipeline.zremrangebyscore(WS_INSTANCE_REGISTRY_KEY, '-inf', Math.floor(Date.now() / 1000));
+    await pipeline.exec();
+  } catch (error) {
+    if (!publishWarned) {
+      publishWarned = true;
+      logger.warn(
+        'websocketTelemetry.publish: Redis nicht erreichbar, Cluster-Snapshot übersprungen.',
+        error,
+      );
+    }
+  }
+}
+
+export function startWebSocketTelemetryClusterPublisher(): void {
+  if (process.env['NODE_ENV'] === 'test' || publishTimer) return;
+  void publishInstanceWebSocketTelemetry();
+  publishTimer = setInterval(() => {
+    void publishInstanceWebSocketTelemetry();
+  }, WS_PUBLISH_INTERVAL_MS);
+  publishTimer.unref();
+}
+
+export async function stopWebSocketTelemetryClusterPublisher(): Promise<void> {
+  if (publishTimer) {
+    clearInterval(publishTimer);
+    publishTimer = null;
+  }
+  if (process.env['NODE_ENV'] === 'test') return;
+  try {
+    const redis = getRedis();
+    const pipeline = redis.multi();
+    pipeline.del(`${WS_INSTANCE_KEY_PREFIX}${INSTANCE_ID}`);
+    pipeline.zrem(WS_INSTANCE_REGISTRY_KEY, INSTANCE_ID);
+    await pipeline.exec();
+  } catch {
+    // Shutdown: best effort
+  }
+}
+
+/**
+ * Summiert Live-Kennzahlen aller Instanzen mit gültigem Redis-TTL-Snapshot.
+ * Ohne lesbare Clusterdaten: unavailable (keine prozesslokalen Werte als Plattformtotal).
+ */
+export async function readClusterLiveConnectionMetrics(
+  nowMs: number = Date.now(),
+): Promise<ClusterLiveMetrics> {
+  if (process.env['NODE_ENV'] === 'test') {
+    const snapshot = getWebSocketTelemetrySnapshot();
+    const { rejectsLastMinute, rateLimitedMessagesLastMinute } =
+      localRejectsAndRateLimits(snapshot);
+    return {
+      available: true,
+      trpcOpen: snapshot.trpcConnectionsActive,
+      yjsOpen: snapshot.yjsConnectionsActive,
+      trpcOpenedLastMinute: snapshot.trpcOpenedLastMinute,
+      trpcClosedLastMinute: snapshot.trpcClosedLastMinute,
+      yjsOpenedLastMinute: snapshot.yjsOpenedLastMinute,
+      yjsClosedLastMinute: snapshot.yjsClosedLastMinute,
+      rejectsLastMinute,
+      rateLimitedMessagesLastMinute,
+      lastSuccessfulReadAt: new Date(nowMs).toISOString(),
+    };
+  }
+
+  try {
+    const redis = getRedis();
+    const nowSec = Math.floor(nowMs / 1000);
+    await redis.zremrangebyscore(WS_INSTANCE_REGISTRY_KEY, '-inf', nowSec);
+    const instanceIds = await redis.zrange(WS_INSTANCE_REGISTRY_KEY, 0, -1);
+    let keys = instanceIds.map((id) => `${WS_INSTANCE_KEY_PREFIX}${id}`);
+
+    if (keys.length === 0) {
+      // Mindestens den lokalen Snapshot publizieren und erneut lesen.
+      await publishInstanceWebSocketTelemetry();
+      const localKey = `${WS_INSTANCE_KEY_PREFIX}${INSTANCE_ID}`;
+      const localRaw = await redis.get(localKey);
+      if (!localRaw) {
+        return {
+          available: false,
+          trpcOpen: 0,
+          yjsOpen: 0,
+          trpcOpenedLastMinute: 0,
+          trpcClosedLastMinute: 0,
+          yjsOpenedLastMinute: 0,
+          yjsClosedLastMinute: 0,
+          rejectsLastMinute: 0,
+          rateLimitedMessagesLastMinute: 0,
+          lastSuccessfulReadAt: null,
+        };
+      }
+      keys = [localKey];
+    }
+
+    const values = await redis.mget(...keys);
+    let trpcOpen = 0;
+    let yjsOpen = 0;
+    let trpcOpenedLastMinute = 0;
+    let trpcClosedLastMinute = 0;
+    let yjsOpenedLastMinute = 0;
+    let yjsClosedLastMinute = 0;
+    let rejectsLastMinute = 0;
+    let rateLimitedMessagesLastMinute = 0;
+    let sawAny = false;
+
+    for (const raw of values) {
+      if (!raw) continue;
+      try {
+        const parsed = JSON.parse(raw) as Partial<ClusterLiveMetrics> & { updatedAt?: number };
+        if (
+          typeof parsed.updatedAt === 'number' &&
+          nowMs - parsed.updatedAt > WS_INSTANCE_TTL_SECONDS * 1000
+        ) {
+          continue;
+        }
+        sawAny = true;
+        trpcOpen += Number(parsed.trpcOpen) || 0;
+        yjsOpen += Number(parsed.yjsOpen) || 0;
+        trpcOpenedLastMinute += Number(parsed.trpcOpenedLastMinute) || 0;
+        trpcClosedLastMinute += Number(parsed.trpcClosedLastMinute) || 0;
+        yjsOpenedLastMinute += Number(parsed.yjsOpenedLastMinute) || 0;
+        yjsClosedLastMinute += Number(parsed.yjsClosedLastMinute) || 0;
+        rejectsLastMinute += Number(parsed.rejectsLastMinute) || 0;
+        rateLimitedMessagesLastMinute += Number(parsed.rateLimitedMessagesLastMinute) || 0;
+      } catch {
+        // Ungültigen Snapshot ignorieren
+      }
+    }
+
+    if (!sawAny) {
+      return {
+        available: false,
+        trpcOpen: 0,
+        yjsOpen: 0,
+        trpcOpenedLastMinute: 0,
+        trpcClosedLastMinute: 0,
+        yjsOpenedLastMinute: 0,
+        yjsClosedLastMinute: 0,
+        rejectsLastMinute: 0,
+        rateLimitedMessagesLastMinute: 0,
+        lastSuccessfulReadAt: null,
+      };
+    }
+
+    return {
+      available: true,
+      trpcOpen,
+      yjsOpen,
+      trpcOpenedLastMinute,
+      trpcClosedLastMinute,
+      yjsOpenedLastMinute,
+      yjsClosedLastMinute,
+      rejectsLastMinute,
+      rateLimitedMessagesLastMinute,
+      lastSuccessfulReadAt: new Date(nowMs).toISOString(),
+    };
+  } catch (error) {
+    if (!readClusterWarned) {
+      readClusterWarned = true;
+      logger.warn(
+        'websocketTelemetry.readCluster: Redis nicht erreichbar, Live-Verbindungen unavailable.',
+        error,
+      );
+    }
+    return {
+      available: false,
+      trpcOpen: 0,
+      yjsOpen: 0,
+      trpcOpenedLastMinute: 0,
+      trpcClosedLastMinute: 0,
+      yjsOpenedLastMinute: 0,
+      yjsClosedLastMinute: 0,
+      rejectsLastMinute: 0,
+      rateLimitedMessagesLastMinute: 0,
+      lastSuccessfulReadAt: null,
+    };
+  }
 }
 
 export function resetWebSocketTelemetryForTests(): void {
@@ -231,6 +497,10 @@ export function resetWebSocketTelemetryForTests(): void {
   trpcRateLimitedMessages.reset();
   trpcSessionCapRejected.reset();
   trpcParticipantCapRejected.reset();
+  trpcOpened.reset();
+  trpcClosed.reset();
+  yjsOpened.reset();
+  yjsClosed.reset();
   yjsConnectionsActive = 0;
   yjsConnectionLimit = 1;
   yjsPerRoomConnectionLimit = 1;
@@ -243,4 +513,10 @@ export function resetWebSocketTelemetryForTests(): void {
   yjsDocumentRejected.reset();
   yjsAwarenessRejected.reset();
   yjsOutboundRejected.reset();
+  if (publishTimer) {
+    clearInterval(publishTimer);
+    publishTimer = null;
+  }
+  publishWarned = false;
+  readClusterWarned = false;
 }

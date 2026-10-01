@@ -1,8 +1,27 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const redisMocks = vi.hoisted(() => ({
+  scan: vi.fn(),
+  mget: vi.fn(),
+  set: vi.fn(),
+  get: vi.fn(),
+  del: vi.fn(),
+  zrange: vi.fn(),
+  zremrangebyscore: vi.fn(),
+  zadd: vi.fn(),
+  zrem: vi.fn(),
+  multi: vi.fn(),
+}));
+
+vi.mock('../redis', () => ({
+  getRedis: () => redisMocks,
+}));
+
 import {
   configureTrpcWebSocketTelemetry,
   configureYjsWebSocketTelemetry,
   getWebSocketTelemetrySnapshot,
+  readClusterLiveConnectionMetrics,
   recordTrpcWebSocketBindingConnected,
   recordTrpcWebSocketBindingDisconnected,
   recordTrpcWebSocketConnected,
@@ -62,6 +81,8 @@ describe('websocketTelemetry', () => {
       trpcRejectedUpgradesLastMinute: 1,
       trpcPayloadRejectedLastMinute: 1,
       trpcRateLimitedMessagesLastMinute: 1,
+      trpcOpenedLastMinute: 2,
+      trpcClosedLastMinute: 1,
     });
   });
 
@@ -103,6 +124,8 @@ describe('websocketTelemetry', () => {
       yjsDocumentRejectedLastMinute: 1,
       yjsAwarenessRejectedLastMinute: 1,
       yjsOutboundRejectedLastMinute: 1,
+      yjsOpenedLastMinute: 3,
+      yjsClosedLastMinute: 1,
     });
   });
 
@@ -116,5 +139,52 @@ describe('websocketTelemetry', () => {
 
     now = 70_000;
     expect(getWebSocketTelemetrySnapshot().yjsProtocolErrorsLastMinute).toBe(0);
+  });
+
+  it('aggregiert Live-Verbindungen über Instanz-Registry ohne Keyspace-SCAN', async () => {
+    vi.stubEnv('NODE_ENV', 'development');
+    redisMocks.zremrangebyscore.mockResolvedValue(0);
+    redisMocks.zrange.mockResolvedValue(['a', 'b']);
+    redisMocks.mget.mockResolvedValue([
+      JSON.stringify({
+        trpcOpen: 10,
+        yjsOpen: 2,
+        trpcOpenedLastMinute: 3,
+        trpcClosedLastMinute: 1,
+        yjsOpenedLastMinute: 1,
+        yjsClosedLastMinute: 0,
+        rejectsLastMinute: 4,
+        rateLimitedMessagesLastMinute: 2,
+        updatedAt: Date.now(),
+      }),
+      JSON.stringify({
+        trpcOpen: 5,
+        yjsOpen: 1,
+        trpcOpenedLastMinute: 2,
+        trpcClosedLastMinute: 2,
+        yjsOpenedLastMinute: 0,
+        yjsClosedLastMinute: 1,
+        rejectsLastMinute: 1,
+        rateLimitedMessagesLastMinute: 1,
+        updatedAt: Date.now(),
+      }),
+    ]);
+
+    const cluster = await readClusterLiveConnectionMetrics();
+    expect(redisMocks.scan).not.toHaveBeenCalled();
+    expect(redisMocks.zrange).toHaveBeenCalledWith('ws:telemetry:registry', 0, -1);
+    expect(redisMocks.mget).toHaveBeenCalledWith(
+      'ws:telemetry:instance:a',
+      'ws:telemetry:instance:b',
+    );
+    expect(cluster).toMatchObject({
+      available: true,
+      trpcOpen: 15,
+      yjsOpen: 3,
+      trpcOpenedLastMinute: 5,
+      rejectsLastMinute: 5,
+      rateLimitedMessagesLastMinute: 3,
+    });
+    vi.unstubAllEnvs();
   });
 });

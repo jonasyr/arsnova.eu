@@ -4643,31 +4643,279 @@ export type HealthCheckResponse = z.infer<typeof HealthCheckResponseSchema>;
 export const DailyHighscoreEntrySchema = z.object({
   /** UTC-Tag als ISO-8601 Datum (`YYYY-MM-DD`). */
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  /** Tagesrekord der größten einzelnen Session dieses UTC-Tags. */
-  count: z.number().int().min(0),
-  /** ISO-8601: UTC-Zeitpunkt, als sich der Tagesrekord zuletzt erhöht hat; bei aufgefüllten Lückentagen null. */
+  /**
+   * Join-basierter Tagesrekord der größten einzelnen Session dieses UTC-Tags
+   * (kumulative Session-Teilnehmerzahl, an diesem UTC-Tag aktualisiert).
+   * `null` = kein Messwert für diesen Tag (Lücke), nie als 0 erfinden.
+   */
+  count: z.number().int().min(0).nullable(),
+  /** ISO-8601: UTC-Zeitpunkt, als sich der Tagesrekord zuletzt erhöht hat; bei Lückentagen null. */
   updatedAt: z.string().datetime().nullable(),
 });
 export type DailyHighscoreEntry = z.infer<typeof DailyHighscoreEntrySchema>;
 
-/** Deskriptive Statistik über alle täglichen Highscores im betrachteten Zeitraum. */
+/** Deskriptive Statistik über gemessene Tagesrekorde im Anzeigefenster. */
 export const DailyHighscoresStatisticsSchema = z.object({
-  /** Median der Tagesrekorde. */
-  median: z.number().int().min(0),
-  /** Standardabweichung der Tagesrekorde. */
-  standardDeviation: z.number().min(0),
-  /** Maximum der Tagesrekorde im Zeitraum. */
-  max: z.number().int().min(0),
+  /** Anzahl gemessener Tage mit positivem Join-Tagesrekord (Lücken/0 zählen nicht). */
+  sampleSize: z.number().int().min(0),
+  /**
+   * Median der gemessenen Tagesrekorde (lineare Interpolation, gerundet).
+   * `null` ohne Messwerte — nie 0 erfinden.
+   */
+  median: z.number().int().min(0).nullable(),
+  /**
+   * Interquartilsabstand Q3−Q1 (robustes Streumaß für schiefe Peak-Verteilungen).
+   * `null` wenn weniger als zwei Messwerte.
+   */
+  iqr: z.number().int().min(0).nullable(),
+  /**
+   * Maximum im dargestellten Fenster (nur gemessene Tage).
+   * `null` ohne Messwerte.
+   */
+  max: z.number().int().min(0).nullable(),
 });
 export type DailyHighscoresStatistics = z.infer<typeof DailyHighscoresStatisticsSchema>;
 
-/** DTO: Server-Auslastung für die Startseite (Story 0.4) */
+/** Öffentlicher Betriebszustand: Messausfall nie als „stable“/grün. */
+export const PublicServiceStatusSchema = z.enum(['stable', 'limited', 'critical', 'unknown']);
+export type PublicServiceStatus = z.infer<typeof PublicServiceStatusSchema>;
+
+/** Zustand einer öffentlichen Abhängigkeit (API/DB/Redis/Live). */
+export const DependencyHealthStatusSchema = z.enum(['ok', 'degraded', 'unavailable', 'unknown']);
+export type DependencyHealthStatus = z.infer<typeof DependencyHealthStatusSchema>;
+
+export const PublicDependenciesStatusSchema = z.object({
+  api: DependencyHealthStatusSchema,
+  database: DependencyHealthStatusSchema,
+  redis: DependencyHealthStatusSchema,
+  live: DependencyHealthStatusSchema,
+});
+export type PublicDependenciesStatus = z.infer<typeof PublicDependenciesStatusSchema>;
+
+/** Qualitätsstichprobe einer Kernaktion (öffentlich, aggregiert, ohne Rohdaten). */
+export const CoreActionQualitySchema = z.object({
+  samples: z.number().int().min(0),
+  /** Anteil technischer Fehler in Prozent; null ohne Stichprobe. */
+  errorRatePercent: z.number().min(0).nullable(),
+  p95Ms: z.number().int().min(0).nullable(),
+  p99Ms: z.number().int().min(0).nullable(),
+  coverage: z.enum(['AVAILABLE', 'INSUFFICIENT_SAMPLE', 'UNAVAILABLE']),
+});
+export type CoreActionQuality = z.infer<typeof CoreActionQualitySchema>;
+
+export const PublicCoreActionsQualitySchema = z.object({
+  join: CoreActionQualitySchema,
+  vote: CoreActionQualitySchema,
+  qaRead: CoreActionQualitySchema,
+  qaSubmit: CoreActionQualitySchema,
+  qaRate: CoreActionQualitySchema,
+});
+export type PublicCoreActionsQuality = z.infer<typeof PublicCoreActionsQualitySchema>;
+
+/** Messzustand für öffentliche Betriebsmetriken (nie 0 als gesund vortäuschen). */
+export const PublicMeasurementStateSchema = z.enum(['AVAILABLE', 'WARMING_UP', 'UNAVAILABLE']);
+export type PublicMeasurementState = z.infer<typeof PublicMeasurementStateSchema>;
+
+export const PublicTrafficErrorClassesSchema = z.object({
+  /** Interne Serverfehler (z. B. INTERNAL_SERVER_ERROR, TIMEOUT). */
+  server: z.number().int().min(0),
+  /** Überlastungs-/Rate-Limit-Ablehnungen (TOO_MANY_REQUESTS). */
+  rateLimit: z.number().int().min(0),
+  /** Fachliche/clientseitige Fehler — verschlechtern den Gesundheitszustand nicht. */
+  client: z.number().int().min(0),
+});
+export type PublicTrafficErrorClasses = z.infer<typeof PublicTrafficErrorClassesSchema>;
+
+export const PublicTrafficGroupIdSchema = z.enum([
+  'sessionJoin',
+  'quizFeedback',
+  'qa',
+  'presenter',
+  'opsReporting',
+]);
+export type PublicTrafficGroupId = z.infer<typeof PublicTrafficGroupIdSchema>;
+
+export const PublicTrafficGroupSampleSchema = z.object({
+  id: PublicTrafficGroupIdSchema,
+  requestsLastMinute: z.number().int().min(0).nullable(),
+});
+export type PublicTrafficGroupSample = z.infer<typeof PublicTrafficGroupSampleSchema>;
+
+/**
+ * Serververkehr und Qualität — RPS niemals isoliert;
+ * immer gemeinsam mit Fehlerrate, Latenz und Messabdeckung.
+ */
+export const PublicTrafficQualitySchema = z.object({
+  measurementState: PublicMeasurementStateSchema,
+  windowSeconds: z.literal(60),
+  bucketSeconds: z.literal(10),
+  /** Beobachtetes Fenster in Sekunden (bei Anlauf < 60). */
+  observedWindowSeconds: z.number().int().min(0).max(60).nullable(),
+  windowComplete: z.boolean().nullable(),
+  /** Durchschnitt API-Anfragen/s über das beobachtete Fenster; null bei Messausfall. */
+  avgRps: z.number().min(0).nullable(),
+  /** Spitzenwert/s = max(Bucket-Count / 10) im Fenster; null bei Messausfall. */
+  peakRps: z.number().min(0).nullable(),
+  sampleSize: z.number().int().min(0).nullable(),
+  /**
+   * Gesundheitsrelevante Fehlerrate in % (Server + Rate-Limit) /
+   * alle überwachten Anfragen. null bei Messausfall.
+   */
+  errorRatePercent: z.number().min(0).nullable(),
+  errorClasses: PublicTrafficErrorClassesSchema.nullable(),
+  p95LatencyMs: z.number().int().min(0).nullable(),
+  p99LatencyMs: z.number().int().min(0).nullable(),
+  /** Fehlgeschlagene Requests gehen in die Latenzverteilung ein. */
+  latencyIncludesFailedRequests: z.literal(true),
+  /** true bei zu kleiner Stichprobe — UI zeigt „noch nicht genügend Messwerte“. */
+  insufficientLatencySample: z.boolean(),
+  monitoredProcedures: z.number().int().min(0),
+  definedProcedures: z.number().int().min(0),
+  groups: z.array(PublicTrafficGroupSampleSchema).nullable(),
+  lastSuccessfulReadAt: z.string().datetime().nullable(),
+});
+export type PublicTrafficQuality = z.infer<typeof PublicTrafficQualitySchema>;
+
+/**
+ * Live-Verbindungen (getrennt von HTTP-/tRPC-RPS).
+ * Offene Verbindungen beweisen keine erfolgreiche Nachrichtenzustellung.
+ */
+export const PublicLiveConnectionsSchema = z.object({
+  measurementState: PublicMeasurementStateSchema,
+  /** Offene tRPC-WebSocket-Verbindungen über alle Backend-Instanzen (Redis-TTL-Aggregate). */
+  trpcOpen: z.number().int().min(0).nullable(),
+  /** Offene Yjs-Verbindungen über alle Backend-Instanzen (Redis-TTL-Aggregate). */
+  yjsOpen: z.number().int().min(0).nullable(),
+  trpcOpenedLastMinute: z.number().int().min(0).nullable(),
+  trpcClosedLastMinute: z.number().int().min(0).nullable(),
+  yjsOpenedLastMinute: z.number().int().min(0).nullable(),
+  yjsClosedLastMinute: z.number().int().min(0).nullable(),
+  rejectsLastMinute: z.number().int().min(0).nullable(),
+  rateLimitedMessagesLastMinute: z.number().int().min(0).nullable(),
+  /**
+   * Reconnects sind ohne Client-Identität nicht zuverlässig trennbar — immer null.
+   */
+  reconnectsLastMinute: z.null(),
+  /**
+   * Nachrichtenrate Ende-zu-Ende ist hier nicht belastbar gemessen — immer null.
+   */
+  messagesPerSecond: z.null(),
+  lastSuccessfulReadAt: z.string().datetime().nullable(),
+  /** Explizite Einschränkung: Zustellung/E2E-Latenz werden nicht gemessen. */
+  deliveryNotMeasured: z.literal(true),
+});
+export type PublicLiveConnections = z.infer<typeof PublicLiveConnectionsSchema>;
+
+/**
+ * Öffentliche Nutzungskennzahlen (Issue #483).
+ * Fehlende purge-sichere Aggregate bleiben `null` und werden nie als 0 erfunden.
+ */
+export const UsagePeriodKindSchema = z.enum(['LAST_30_DAYS', 'CURRENT_SEMESTER', 'CUSTOM']);
+export type UsagePeriodKind = z.infer<typeof UsagePeriodKindSchema>;
+
+export const UsagePeriodInputSchema = z
+  .object({
+    kind: UsagePeriodKindSchema.default('LAST_30_DAYS'),
+    /** Nur bei CUSTOM: UTC-Datum `YYYY-MM-DD`. */
+    from: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(),
+    to: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.kind === 'CUSTOM' && (!value.from || !value.to)) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'CUSTOM requires from and to',
+        path: ['from'],
+      });
+    }
+  });
+export type UsagePeriodInput = z.infer<typeof UsagePeriodInputSchema>;
+
+export const UsageDailySeriesEntrySchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  sessionsUsed: z.number().int().min(0).nullable(),
+  sessionParticipations: z.number().int().min(0).nullable(),
+  quizAnswers: z.number().int().min(0).nullable(),
+  qaQuestionsAccepted: z.number().int().min(0).nullable(),
+});
+export type UsageDailySeriesEntry = z.infer<typeof UsageDailySeriesEntrySchema>;
+
+export const UsageSizeClassIdSchema = z.enum(['XS', 'S', 'M', 'L', 'XL']);
+export type UsageSizeClassId = z.infer<typeof UsageSizeClassIdSchema>;
+
+export const UsageSizeDistributionSchema = z.object({
+  sampleSize: z.number().int().min(0),
+  median: z.number().int().min(0).nullable(),
+  quartile1: z.number().int().min(0).nullable(),
+  quartile3: z.number().int().min(0).nullable(),
+  classes: z.array(
+    z.object({
+      id: UsageSizeClassIdSchema,
+      label: z.string().min(1),
+      count: z.number().int().min(0),
+    }),
+  ),
+});
+export type UsageSizeDistribution = z.infer<typeof UsageSizeDistributionSchema>;
+
+export const PublicUsageStatsSchema = z.object({
+  timezone: z.literal('UTC'),
+  periodKind: UsagePeriodKindSchema,
+  periodFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  periodTo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  trackingStartedAt: z.string().datetime().nullable(),
+  lastAggregatedAt: z.string().datetime().nullable(),
+  historyComplete: z.boolean(),
+  sessionsUsed: z.number().int().min(0).nullable(),
+  sessionParticipations: z.number().int().min(0).nullable(),
+  quizAnswers: z.number().int().min(0).nullable(),
+  qaQuestionsAccepted: z.number().int().min(0).nullable(),
+  qaRatingActions: z.number().int().min(0).nullable(),
+  sessionsByFunction: z
+    .object({
+      /** Nur Teilnahme, noch keine Quiz-/Q&A-Interaktion. */
+      joinOnly: z.number().int().min(0),
+      quizOnly: z.number().int().min(0),
+      qaOnly: z.number().int().min(0),
+      combined: z.number().int().min(0),
+    })
+    .nullable(),
+  dailySeries: z.array(UsageDailySeriesEntrySchema),
+  /** Monatssummen (UTC, aus dailySeries); fehlende Historie bleibt null-fähig pro Feld. */
+  monthlySeries: z.array(
+    z.object({
+      yearMonth: z.string().regex(/^\d{4}-\d{2}$/),
+      sessionsUsed: z.number().int().min(0).nullable(),
+      sessionParticipations: z.number().int().min(0).nullable(),
+      quizAnswers: z.number().int().min(0).nullable(),
+      qaQuestionsAccepted: z.number().int().min(0).nullable(),
+    }),
+  ),
+  sizeDistribution: UsageSizeDistributionSchema.nullable(),
+  qaQuestionsTotalLifetime: z.number().int().min(0),
+  completedSessionsLifetime: z.number().int().min(0),
+});
+export type PublicUsageStats = z.infer<typeof PublicUsageStatsSchema>;
+
+/** DTO: Betrieb & Nutzung (öffentlich, Issue #483 / Story 0.4) */
 export const ServerStatsDTOSchema = z.object({
-  /** Alle noch nicht beendeten Sessions. */
+  /**
+   * Aktuell nutzbare Sessions: `expiresAt` in der Zukunft und nicht host-beendet;
+   * einschließlich `FINISHED` mit noch joinbarem Q&A.
+   */
   openSessions: z.number(),
-  /** Offene Sessions mit mindestens 5 aktiven Teilnehmenden in den letzten 3 Minuten. */
+  /**
+   * Aktive Quiz-/Live-Sessions: nutzbare Sessions mit Status ≠ FINISHED und ≥5 Presence.
+   * FINISHED mit offenem Q&A zählt nur unter nutzbaren Sessions / aktiven Q&A-Sessions.
+   */
   activeSessions: z.number(),
-  /** Aktive Teilnahmen über laufende Sessions (letzte 3 Minuten Redis-Presence). */
+  /** Aktive Teilnahmen über nutzbare Sessions (letzte 3 Minuten Redis-Presence). */
   totalParticipants: z.number(),
   /** Abstimmungen der letzten Minute über alle offenen Sessions. */
   votesLastMinute: z.number(),
@@ -4675,22 +4923,43 @@ export const ServerStatsDTOSchema = z.object({
   sessionTransitionsLastMinute: z.number(),
   /** Sessions mit aktivem Countdown im aktuellen Zeitfenster. */
   activeCountdownSessions: z.number(),
-  /** Kumulativ: Anzahl Session-Zeilen mit Status FINISHED (lebenslang in dieser DB). */
+  /** Kumulativ: monotone abgeschlossene Sessions (`PlatformStatistic.completedSessionsTotal`). */
   completedSessions: z.number(),
   activeBlitzRounds: z.number(),
   /** Höchste je in einer Session registrierte Teilnehmerzahl (Joins, plattformweit). */
   maxParticipantsSingleSession: z.number().int().min(0),
-  /** Verlauf der Session-Tagesrekorde der letzten 100 UTC-Tage in chronologischer Reihenfolge. */
+  /** Verlauf der Join-basierten Tagesrekorde der letzten 100 UTC-Tage; Lücken als null. */
   dailyHighscores: z.array(DailyHighscoreEntrySchema).length(100),
-  /** Deskriptive Statistik über die täglichen Highscores. */
+  /** Deskriptive Statistik über die gemessenen täglichen Highscores. */
   dailyHighscoresStatistics: DailyHighscoresStatisticsSchema,
   /** ISO-8601: Serverzeitpunkt, als sich der Rekord zuletzt erhöhte (`PlatformStatistic.updatedAt`), sonst null — nicht Session-Start/-Ende. */
   maxParticipantsStatisticUpdatedAt: z.string().datetime().nullable(),
-  /** Betriebsstatus (SLO-nah) für den Footer. */
-  serviceStatus: z.enum(['stable', 'limited', 'critical']),
-  /** Lastindikator für Diagnose im Detaildialog. */
+  /** Betriebsstatus (SLO-nah) für Footer und Bereich Betrieb; nie grün bei Messausfall. */
+  serviceStatus: PublicServiceStatusSchema,
+  /** Lastindikator (Aktivitätsscore, keine CPU-/Kapazitätsmessung). */
   loadStatus: z.enum(['healthy', 'busy', 'overloaded']),
-  /** Aktive, offene Q&A-Sessions mit mindestens fünf eindeutigen Presence-Identitäten. */
+  /** Getrennte Abhängigkeitszustände für den Bereich Betrieb. */
+  dependencies: PublicDependenciesStatusSchema,
+  /** Qualitätsstichproben der Kernaktionen Beitritt, Vote, Q&A. */
+  coreActionsQuality: PublicCoreActionsQualitySchema,
+  /**
+   * Serververkehr und Qualität (RPS, Fehlerrate, p95/p99) über dasselbe 60s-Fenster.
+   * null-Felder bei Messausfall — nie als 0/stabil interpretieren.
+   */
+  trafficQuality: PublicTrafficQualitySchema,
+  /**
+   * Live-Verbindungen (tRPC-WS / Yjs), getrennt vom HTTP-/tRPC-RPS.
+   * Pro Serverprozess; Zustellung wird nicht gemessen.
+   */
+  liveConnections: PublicLiveConnectionsSchema,
+  /** SLO-Stichprobengröße der letzten Minute; null wenn Telemetrie nicht lesbar. */
+  sloSampleSizeLastMinute: z.number().int().min(0).nullable(),
+  /** false bei DB-/Redis-/Telemetrieausfall — UI darf nicht grün fallbacken. */
+  measurementAvailable: z.boolean(),
+  /**
+   * Nutzbare Q&A-Sessions (inkl. `FINISHED` mit offenem Q&A) mit mindestens fünf
+   * eindeutigen Presence-Identitäten; null bei Presence-Messlücke.
+   */
   activeQaSessions: z.number().int().min(0).nullable(),
   /** Erstmalig persistierte Q&A-Fragen im 60-Sekunden-Fenster. */
   qaQuestionsLastMinute: z.number().int().min(0).nullable(),
@@ -4703,6 +4972,8 @@ export const ServerStatsDTOSchema = z.object({
   qaStatisticsTrackingStartedAt: z.string().datetime().nullable(),
   qaStatisticsProjectedAt: z.string().datetime().nullable(),
   maxQaQuestionsStatisticUpdatedAt: z.string().datetime().nullable(),
+  /** Öffentliche Nutzungskennzahlen (Bereich Nutzung). */
+  usage: PublicUsageStatsSchema,
   /** Einheitlicher serverseitiger Abschlusszeitpunkt dieses Statistik-Snapshots. */
   statsGeneratedAt: z.string().datetime(),
   qaMinuteMetricsStatus: z.enum(['AVAILABLE', 'WARMING_UP', 'UNAVAILABLE']),
@@ -4849,6 +5120,7 @@ export const HealthSecurityStatsDTOSchema = z.object({
   qaApi: z.record(
     z.enum([
       'JOIN_REJOIN',
+      'VOTE',
       'PARTICIPANT_QUERY',
       'QA_PAGE',
       'QA_SUBMIT',
@@ -4902,12 +5174,14 @@ export const HealthSecurityStatsDTOSchema = z.object({
 
 export type HealthSecurityStatsDTO = z.infer<typeof HealthSecurityStatsDTOSchema>;
 
-/** Schlanke Footer-Antwort für den grünen Punkt im App-Footer. */
+/** Schlanke Footer-Antwort für den Status-Dot im App-Footer („Betrieb & Nutzung“). */
 export const FooterStatusDTOSchema = z.object({
-  /** Betriebsstatus (SLO-nah) für den Footer. */
-  serviceStatus: z.enum(['stable', 'limited', 'critical']),
+  /** Betriebsstatus (SLO-nah); `unknown` bei Messausfall — nie stillschweigend grün. */
+  serviceStatus: PublicServiceStatusSchema,
   /** Lastindikator für die Einfärbung bzw. Diagnose. */
   loadStatus: z.enum(['healthy', 'busy', 'overloaded']),
+  /** false wenn Footer-Messung fehlgeschlagen ist. */
+  measurementAvailable: z.boolean(),
 });
 
 export type FooterStatusDTO = z.infer<typeof FooterStatusDTOSchema>;
