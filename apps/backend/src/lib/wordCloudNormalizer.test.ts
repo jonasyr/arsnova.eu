@@ -6,6 +6,7 @@ import { hashWordCloudText } from './wordCloudNormalization';
 import {
   IdentityNormalizer,
   LemmaNormalizer,
+  chunkSpacyNormalizeTexts,
   mapSpacyTokenToWordCloud,
   normalizeWordCloudItems,
 } from './wordCloudNormalizer';
@@ -198,8 +199,8 @@ describe('wordCloudNormalizer', () => {
       locale: 'de' as const,
       modelId: 'de_core_news_sm@3.8.0',
       items: [
-        { id: 'item-1', tokens: [{ text: 'Häuser', lemma: 'Haus', pos: 'NOUN' }] },
-        { id: 'item-2', tokens: [{ text: 'Haus', lemma: 'Haus', pos: 'NOUN' }] },
+        { id: 'item-1::0', tokens: [{ text: 'Häuser', lemma: 'Haus', pos: 'NOUN' }] },
+        { id: 'item-2::0', tokens: [{ text: 'Haus', lemma: 'Haus', pos: 'NOUN' }] },
       ],
     }));
 
@@ -264,7 +265,7 @@ describe('wordCloudNormalizer', () => {
     const sidecar = vi.fn(async () => ({
       locale: 'en' as const,
       modelId: 'en_core_web_sm@3.8.0',
-      items: [{ id: 'a', tokens: [{ text: 'cats', lemma: 'cat', pos: 'NOUN' }] }],
+      items: [{ id: 'a::0', tokens: [{ text: 'cats', lemma: 'cat', pos: 'NOUN' }] }],
     }));
     const tokens = await new LemmaNormalizer('en', sidecar, {
       enabled: true,
@@ -283,8 +284,8 @@ describe('wordCloudNormalizer', () => {
       locale: 'de' as const,
       modelId: 'de_core_news_sm@3.8.0',
       items: [
-        { id: 'item-1', tokens: [{ text: 'Häuser', lemma: 'Haus', pos: 'NOUN' }] },
-        { id: 'item-2', tokens: [{ text: 'Haus', lemma: 'Haus', pos: 'NOUN' }] },
+        { id: 'item-1::0', tokens: [{ text: 'Häuser', lemma: 'Haus', pos: 'NOUN' }] },
+        { id: 'item-2::0', tokens: [{ text: 'Haus', lemma: 'Haus', pos: 'NOUN' }] },
       ],
     }));
     const options = { env: { NLP_ENABLED: 'true' }, sidecar, cache };
@@ -305,7 +306,7 @@ describe('wordCloudNormalizer', () => {
     const sidecar = vi.fn(async () => ({
       locale: 'de' as const,
       modelId: 'de_core_news_sm@3.8.0',
-      items: [{ id: 'item-2', tokens: [{ text: 'Haus', lemma: 'Haus', pos: 'NOUN' }] }],
+      items: [{ id: 'item-2::0', tokens: [{ text: 'Haus', lemma: 'Haus', pos: 'NOUN' }] }],
     }));
 
     const result = await normalizeWordCloudItems(lemmaInput, {
@@ -317,7 +318,7 @@ describe('wordCloudNormalizer', () => {
     expect(sidecar).toHaveBeenCalledOnce();
     expect(sidecar).toHaveBeenCalledWith(
       'de',
-      [{ id: 'item-2', text: 'Haus' }],
+      [{ id: 'item-2::0', text: 'Haus' }],
       expect.objectContaining({ enabled: true }),
     );
     expect(result.cache).toEqual({ textHits: 1, textMisses: 1, sidecarCalled: true });
@@ -341,5 +342,90 @@ describe('wordCloudNormalizer', () => {
     expect(result.cache.sidecarCalled).toBe(true);
     expect(await cache.getText('de', hashWordCloudText('Häuser'))).toBeNull();
     expect(result.tokensByItemId.get('item-1')).toEqual([{ display: 'Häuser', lookup: 'häuser' }]);
+  });
+
+  it('teilt expandierte Segmente in Sidecar-Batches unter dem 500er-Vertrag', () => {
+    const texts = Array.from({ length: 502 }, (_, index) => ({
+      id: `item-${index}::0`,
+      text: 'Haus',
+    }));
+    const batches = chunkSpacyNormalizeTexts(texts, { maxItems: 500 });
+    expect(batches).toHaveLength(2);
+    expect(batches[0]).toHaveLength(500);
+    expect(batches[1]).toHaveLength(2);
+  });
+
+  it('zaehlt Byte-Budgets inkrementell und respektiert Escapes sowie Unicode', () => {
+    const locale = 'de';
+    const emptyBytes = Buffer.byteLength(JSON.stringify({ locale, texts: [] }), 'utf8');
+    const items = [
+      { id: 'a', text: 'Haus' },
+      { id: 'b', text: 'x"y\\z' },
+      { id: 'c', text: 'Ä😊' },
+    ];
+    const itemBytes = items.map((item) => Buffer.byteLength(JSON.stringify(item), 'utf8'));
+    const firstTwoBytes =
+      emptyBytes + itemBytes[0]! + itemBytes[1]! + 1; /* Komma zwischen zwei Items */
+    const batches = chunkSpacyNormalizeTexts(items, {
+      locale,
+      maxItems: 10,
+      maxRequestBytes: firstTwoBytes,
+    });
+    expect(batches).toHaveLength(2);
+    expect(batches[0]).toEqual([items[0], items[1]]);
+    expect(batches[1]).toEqual([items[2]]);
+    expect(Buffer.byteLength(JSON.stringify({ locale, texts: batches[0] }), 'utf8')).toBe(
+      firstTwoBytes,
+    );
+  });
+
+  it('bleibt bei 500 Items ohne quadratische Serialisierung unter 100 ms', () => {
+    const texts = Array.from({ length: 500 }, (_, index) => ({
+      id: `item-${index}`,
+      text: 'x'.repeat(1000),
+    }));
+    const started = performance.now();
+    const batches = chunkSpacyNormalizeTexts(texts, { maxItems: 500 });
+    const elapsed = performance.now() - started;
+    expect(batches).toHaveLength(1);
+    expect(batches[0]).toHaveLength(500);
+    expect(elapsed).toBeLessThan(100);
+  });
+
+  it('sendet bei >500 expandierten Segmenten mehrere Sidecar-Requests', async () => {
+    const items = Array.from({ length: 251 }, (_, index) => ({
+      id: `item-${index}`,
+      text: 'Eins\n\nZwei',
+      weight: 1,
+    }));
+    const sidecar = vi.fn(
+      async (
+        _locale: 'de' | 'en' | 'fr' | 'es',
+        texts: readonly { id: string; text: string }[],
+      ) => ({
+        locale: 'de' as const,
+        modelId: 'de_core_news_sm@3.8.0',
+        items: texts.map((text) => ({
+          id: text.id,
+          tokens: [{ text: text.text, lemma: text.text, pos: 'NOUN' }],
+        })),
+      }),
+    );
+
+    const tokens = await new LemmaNormalizer('de', sidecar, {
+      enabled: true,
+      socketPath: '/run/spacy/nlp.sock',
+      timeoutMs: 1000,
+      cacheTtlSeconds: 1800,
+    }).normalize(items);
+
+    expect(sidecar.mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(sidecar.mock.calls.every((call) => call[1].length <= 500)).toBe(true);
+    expect(tokens.get('item-0')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ display: 'Eins' }),
+        expect.objectContaining({ display: 'Zwei' }),
+      ]),
+    );
   });
 });

@@ -4,6 +4,7 @@
   "private": true,
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "sideEffects": false,
   "scripts": {
     "build": "tsc && node scripts/fix-esm-imports.mjs",
     "test": "vitest run",
@@ -11,6 +12,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "marked": "^18.0.14",
     "zod": "^4.0.0"
   },
   "devDependencies": {

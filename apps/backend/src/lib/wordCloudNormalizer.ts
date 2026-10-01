@@ -1,5 +1,6 @@
 import {
   createWordCloudLemmaFallback,
+  prepareWordCloudAnalysisText,
   resolveWordCloudLemmaApplication,
   type AnalyzeWordCloudInput,
   type WordCloudAnalysisSourceItem,
@@ -9,10 +10,16 @@ import {
 } from '@arsnova/shared-types';
 import { resolveNlpSidecarConfig } from './nlpSidecarConfig';
 import * as spacyClient from './spacyClient';
-import { SpacyClientError, type SpacyNormalizeToken } from './spacyClient';
+import {
+  SpacyClientError,
+  SPACY_MAX_ITEMS,
+  SPACY_MAX_REQUEST_BYTES,
+  type SpacyNormalizeToken,
+} from './spacyClient';
 import {
   tokenizeWordCloudText,
   toWordCloudLookupToken,
+  WORD_CLOUD_SEGMENT_BREAK_TOKEN,
   type WordCloudRawToken,
 } from './wordCloudAnalysis';
 import { getWordCloudAnalysisCache, type WordCloudAnalysisCache } from './wordCloudAnalysisCache';
@@ -87,12 +94,30 @@ export class LemmaNormalizer implements WordCloudNormalizer {
   async normalize(
     items: readonly WordCloudAnalysisSourceItem[],
   ): Promise<ReadonlyMap<string, readonly WordCloudRawToken[]>> {
-    const response = await this.sidecar(
-      this.locale,
-      items.map((item) => ({ id: item.id, text: item.text })),
-      this.config,
-    );
-    return mapSidecarTokens(response.items);
+    const expanded: Array<{ id: string; text: string }> = [];
+    const segmentCounts = new Map<string, number>();
+
+    for (const item of items) {
+      const segments = prepareWordCloudAnalysisText(item.text).segments;
+      segmentCounts.set(item.id, segments.length);
+      segments.forEach((text, index) => {
+        expanded.push({ id: `${item.id}::${index}`, text });
+      });
+    }
+
+    if (expanded.length === 0) {
+      return new Map(items.map((item) => [item.id, []]));
+    }
+
+    const sidecarItems: Array<{
+      readonly id: string;
+      readonly tokens: readonly SpacyNormalizeToken[];
+    }> = [];
+    for (const batch of chunkSpacyNormalizeTexts(expanded)) {
+      const response = await this.sidecar(this.locale, batch, this.config);
+      sidecarItems.push(...response.items);
+    }
+    return mergeSegmentSidecarTokens(items, segmentCounts, sidecarItems);
   }
 }
 
@@ -250,6 +275,93 @@ function mapSidecarTokens(
       ),
     ]),
   );
+}
+
+function mergeSegmentSidecarTokens(
+  items: readonly WordCloudAnalysisSourceItem[],
+  segmentCounts: ReadonlyMap<string, number>,
+  sidecarItems: ReadonlyArray<{
+    readonly id: string;
+    readonly tokens: readonly SpacyNormalizeToken[];
+  }>,
+): ReadonlyMap<string, readonly WordCloudRawToken[]> {
+  const byExpandedId = mapSidecarTokens(sidecarItems);
+  const result = new Map<string, readonly WordCloudRawToken[]>();
+
+  for (const item of items) {
+    const count = segmentCounts.get(item.id) ?? 0;
+    if (count === 0) {
+      result.set(item.id, []);
+      continue;
+    }
+    const merged: WordCloudRawToken[] = [];
+    for (let index = 0; index < count; index += 1) {
+      const part = byExpandedId.get(`${item.id}::${index}`) ?? [];
+      merged.push(...part);
+      if (index < count - 1) {
+        merged.push({
+          display: WORD_CLOUD_SEGMENT_BREAK_TOKEN,
+          lookup: WORD_CLOUD_SEGMENT_BREAK_TOKEN,
+        });
+      }
+    }
+    result.set(item.id, merged);
+  }
+
+  return result;
+}
+
+/**
+ * Teilt expandierte Segmente in Sidecar-Batches mit Item- und Byte-Budget.
+ * Respektiert SPACY_MAX_ITEMS und SPACY_MAX_REQUEST_BYTES (JSON-Payload).
+ * Jedes Item wird genau einmal serialisiert; die Hülle wird inkrementell mitgezählt.
+ */
+export function chunkSpacyNormalizeTexts(
+  texts: ReadonlyArray<{ readonly id: string; readonly text: string }>,
+  options: {
+    readonly maxItems?: number;
+    readonly maxRequestBytes?: number;
+    readonly locale?: string;
+  } = {},
+): Array<Array<{ id: string; text: string }>> {
+  const maxItems = options.maxItems ?? SPACY_MAX_ITEMS;
+  const maxRequestBytes = options.maxRequestBytes ?? SPACY_MAX_REQUEST_BYTES;
+  const locale = options.locale ?? 'de';
+  const emptyPayloadBytes = Buffer.byteLength(JSON.stringify({ locale, texts: [] }), 'utf8');
+  const batches: Array<Array<{ id: string; text: string }>> = [];
+  let current: Array<{ id: string; text: string }> = [];
+  let currentItemBytes = 0;
+
+  const payloadBytesFor = (itemCount: number, itemBytesSum: number): number =>
+    emptyPayloadBytes + itemBytesSum + Math.max(0, itemCount - 1);
+
+  for (const item of texts) {
+    const itemBytes = Buffer.byteLength(JSON.stringify(item), 'utf8');
+    const nextCount = current.length + 1;
+    const nextItemBytes = currentItemBytes + itemBytes;
+    const nextPayloadBytes = payloadBytesFor(nextCount, nextItemBytes);
+
+    if (current.length > 0 && (nextCount > maxItems || nextPayloadBytes > maxRequestBytes)) {
+      batches.push(current);
+      current = [item];
+      currentItemBytes = itemBytes;
+      if (payloadBytesFor(1, itemBytes) > maxRequestBytes) {
+        throw new SpacyClientError('UNAVAILABLE');
+      }
+      continue;
+    }
+
+    if (current.length === 0 && payloadBytesFor(1, itemBytes) > maxRequestBytes) {
+      throw new SpacyClientError('UNAVAILABLE');
+    }
+
+    current.push(item);
+    currentItemBytes = nextItemBytes;
+  }
+  if (current.length > 0) {
+    batches.push(current);
+  }
+  return batches;
 }
 
 function isNominalizedInfinitive(token: SpacyNormalizeToken, next?: SpacyNormalizeToken): boolean {

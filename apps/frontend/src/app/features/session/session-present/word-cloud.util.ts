@@ -1,5 +1,23 @@
 import { deu, eng, fra, ita, spa } from 'stopword';
+import {
+  prepareWordCloudAnalysisText,
+  WORD_CLOUD_ANALYSIS_TEXT_VERSION,
+} from '@arsnova/shared-types/word-cloud-analysis-text';
 import type { SupportedLocale } from '../../../core/locale-from-path';
+import {
+  getQaWordCloudQuestionWeight,
+  getWordCloudWeightFromNormalizedMetric,
+  getWordCloudWeightFromUpvotes,
+  QA_WORD_CLOUD_NORMALIZED_WEIGHT_CAP,
+} from './word-cloud-weight.util';
+
+export { WORD_CLOUD_ANALYSIS_TEXT_VERSION };
+export {
+  getQaWordCloudQuestionWeight,
+  getWordCloudWeightFromNormalizedMetric,
+  getWordCloudWeightFromUpvotes,
+  QA_WORD_CLOUD_NORMALIZED_WEIGHT_CAP,
+};
 
 export type WordCloudAnalysisMode = 'default' | 'qa';
 const WORD_CLOUD_LOCALES: readonly SupportedLocale[] = ['de', 'en', 'fr', 'it', 'es'];
@@ -63,7 +81,6 @@ const NUMBER_TOKEN_PATTERN = /^-?\d+(?:[.,]\d+)*$/;
 const TOKEN_PATTERN = /-?\d+(?:[.,]\d+)*|[\p{L}\p{N}-]+/gu;
 const DECIMAL_SEPARATOR_SPACING_PATTERN = /(\d)\s*([.,])\s*(?=\d)/g;
 const COMBINING_MARK_PATTERN = /\p{M}+/gu;
-const NORMALIZED_METRIC_WEIGHT_SCALE = 40;
 
 const GERMAN_GROUPING_RULES: readonly GroupingRule[] = [
   {
@@ -396,10 +413,12 @@ export function aggregateWeightedWords(
 ): WordAggregate[] {
   const buckets = new Map<string, AggregateBucket>();
   const stopwordContext = createWordCloudStopwordContext(stopwords, locale, analysisMode);
-  const groupedSources = sources.map((source) => ({
-    weight: normalizeWeight(source.weight),
-    groupings: [...collectResponseGroupings(source.text, stopwordContext).values()],
-  }));
+  const groupedSources = sources
+    .map((source) => ({
+      weight: normalizeWeight(source.weight),
+      groupings: [...collectResponseGroupings(source.text, stopwordContext).values()],
+    }))
+    .filter((source) => source.groupings.length > 0);
   const phraseResponseSupport = new Map<string, number>();
   const phraseWeightedSupport = new Map<string, number>();
 
@@ -479,58 +498,6 @@ function resolveAggregateCount(
   return Math.max(1, Math.round(weightedCount * supportDamping));
 }
 
-export function getWordCloudWeightFromUpvotes(upvoteCount: number): number {
-  if (!Number.isFinite(upvoteCount)) {
-    return 1;
-  }
-
-  const normalized = Math.max(0, Math.round(upvoteCount));
-  return 1 + Math.max(0, Math.round(Math.sqrt(normalized)));
-}
-
-export function getWordCloudWeightFromNormalizedMetric(metric: number | null | undefined): number {
-  if (!Number.isFinite(metric)) {
-    return 1;
-  }
-
-  const normalized = Math.max(0, Math.min(1, metric ?? 0));
-  return 1 + Math.max(0, Math.round(normalized * normalized * NORMALIZED_METRIC_WEIGHT_SCALE));
-}
-
-export const QA_WORD_CLOUD_NORMALIZED_WEIGHT_CAP = 28;
-
-export function getQaWordCloudQuestionWeight(
-  question: {
-    readonly upvoteCount: number;
-    readonly score?: number;
-    readonly bestScore?: number;
-    readonly controversyScore?: number;
-  },
-  metric: 'TOP' | 'BEST' | 'CONTROVERSIAL' | 'TIME' | null | undefined,
-): number {
-  const fallback = getWordCloudWeightFromUpvotes(question.score ?? question.upvoteCount);
-  switch (metric) {
-    case 'BEST':
-      return question.bestScore !== undefined
-        ? Math.min(
-            QA_WORD_CLOUD_NORMALIZED_WEIGHT_CAP,
-            Math.max(1, getWordCloudWeightFromNormalizedMetric(question.bestScore)),
-          )
-        : fallback;
-    case 'CONTROVERSIAL':
-      return question.controversyScore !== undefined
-        ? Math.min(
-            QA_WORD_CLOUD_NORMALIZED_WEIGHT_CAP,
-            Math.max(1, getWordCloudWeightFromNormalizedMetric(question.controversyScore)),
-          )
-        : fallback;
-    case 'TIME':
-      return 1;
-    default:
-      return fallback;
-  }
-}
-
 export function normalizeFreeTextResponseForDisplay(value: string): string {
   const collapsed = collapseNumericSeparatorSpacing(value);
   if (isNumericToken(collapsed)) {
@@ -605,25 +572,28 @@ function collectResponseGroupings(
   const effectiveAnalysisMode = isWordCloudStopwordContext(stopwordFilter)
     ? stopwordFilter.analysisMode
     : (analysisMode ?? 'default');
-  const activeStopwordLocales = resolveActiveStopwordLocales(response, stopwordFilter);
-  const tokenGroupings: WordGrouping[] = [];
+  const { segments } = prepareWordCloudAnalysisText(response);
+  const activeStopwordLocales = resolveActiveStopwordLocales(segments, stopwordFilter);
 
-  for (const word of tokenize(response)) {
-    if (!isNumericToken(word) && word.length < MIN_TEXT_TOKEN_LENGTH) continue;
-    if (isStopwordToken(word, stopwordFilter, activeStopwordLocales)) continue;
+  for (const segment of segments) {
+    const segmentGroupings: WordGrouping[] = [];
+    for (const word of tokenizeSegment(segment)) {
+      if (!isNumericToken(word) && word.length < MIN_TEXT_TOKEN_LENGTH) continue;
+      if (isStopwordToken(word, stopwordFilter, activeStopwordLocales)) continue;
 
-    const grouping = getWordGrouping(word, effectiveLocale);
+      const grouping = getWordGrouping(word, effectiveLocale);
 
-    tokenGroupings.push(grouping);
-    if (effectiveAnalysisMode === 'qa' && isNumericToken(word)) {
-      continue;
+      segmentGroupings.push(grouping);
+      if (effectiveAnalysisMode === 'qa' && isNumericToken(word)) {
+        continue;
+      }
+      addResponseGrouping(groupings, grouping);
     }
-    addResponseGrouping(groupings, grouping);
-  }
 
-  if (effectiveAnalysisMode === 'qa') {
-    for (const phrase of buildQaPhraseGroupings(tokenGroupings)) {
-      addResponseGrouping(groupings, phrase);
+    if (effectiveAnalysisMode === 'qa') {
+      for (const phrase of buildQaPhraseGroupings(segmentGroupings)) {
+        addResponseGrouping(groupings, phrase);
+      }
     }
   }
 
@@ -661,9 +631,15 @@ function getOrCreateResponseGroupingBucket(
   return created;
 }
 
-function tokenize(value: string): string[] {
+function tokenizeSegment(value: string): string[] {
   const normalizedInput = collapseNumericSeparatorSpacing(value).toLowerCase();
   return Array.from(normalizedInput.matchAll(TOKEN_PATTERN), (match) => normalizeToken(match[0]!));
+}
+
+/** Alle Segmente eines Beitrags als flache Tokenliste (ohne Phrasen über Grenzen). */
+function tokenizePrepared(value: string): string[] {
+  const { segments } = prepareWordCloudAnalysisText(value);
+  return segments.flatMap((segment) => tokenizeSegment(segment));
 }
 
 function isNumericToken(value: string): boolean {
@@ -714,16 +690,16 @@ function isWordCloudStopwordContext(
 }
 
 function resolveActiveStopwordLocales(
-  response: string,
+  segments: readonly string[],
   stopwordFilter: ReadonlySet<string> | WordCloudStopwordContext,
 ): SupportedLocale[] {
   if (!isWordCloudStopwordContext(stopwordFilter)) {
     return [];
   }
 
-  const textTokens = tokenize(response).filter(
-    (token) => !isNumericToken(token) && token.length >= MIN_TEXT_TOKEN_LENGTH,
-  );
+  const textTokens = segments
+    .flatMap((segment) => tokenizeSegment(segment))
+    .filter((token) => !isNumericToken(token) && token.length >= MIN_TEXT_TOKEN_LENGTH);
   const activeLocales: SupportedLocale[] = [stopwordFilter.primaryLocale];
   if (textTokens.length === 0) {
     return activeLocales;
@@ -826,7 +802,7 @@ function normalizeLookupToken(value: string): string {
 }
 
 function getLookupGroupKey(value: string, locale: SupportedLocale): string {
-  const tokens = tokenize(value).filter(
+  const tokens = tokenizePrepared(value).filter(
     (token) => isNumericToken(token) || token.length >= MIN_TEXT_TOKEN_LENGTH,
   );
   if (tokens.length === 0) {
