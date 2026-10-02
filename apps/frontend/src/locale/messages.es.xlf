@@ -293,10 +293,6 @@
           <context context-type="sourcefile">src/app/features/feedback/feedback-host.component.html</context>
           <context context-type="linenumber">937</context>
         </context-group>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/home/home.component.html</context>
-          <context context-type="linenumber">148</context>
-        </context-group>
       </trans-unit>
       <trans-unit id="1632524115807344357" datatype="html">
         <source>Nochmal versuchen</source>
@@ -439,7 +435,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="errors.sessionCreateRateLimit" datatype="html">
-        <source>Zu viele Session-Erstellungen. Bitte später erneut versuchen.</source>
+        <source>Zu viele Sessions wurden erstellt. Bitte versuche es später erneut.</source>
         <target>Se han creado demasiadas sesiones. Vuelve a intentarlo más tarde.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/core/localize-known-server-message.ts</context>
@@ -463,8 +459,8 @@
         </context-group>
       </trans-unit>
       <trans-unit id="errors.sessionCodeTooManyFailures" datatype="html">
-        <source>Zu viele falsche Codes – kurz warten.</source>
-        <target>Demasiados códigos incorrectos – un momento.</target>
+        <source>Zu viele falsche Codes. Warte kurz und versuche es dann erneut.</source>
+        <target>Demasiados códigos incorrectos. Espera un momento antes de volver a intentarlo.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/core/localize-known-server-message.ts</context>
           <context context-type="linenumber">115</context>
@@ -491,7 +487,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="errors.rateLimitRetryAfter" datatype="html">
-        <source>Bitte in <x id="seconds" equiv-text="retryAfterSeconds"/> Sekunden erneut versuchen.</source>
+        <source>Versuche es bitte in <x id="seconds" equiv-text="retryAfterSeconds"/> Sekunden erneut.</source>
         <target>Vuelve a intentarlo en <x id="seconds" equiv-text="retryAfterSeconds"/> segundos.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/core/localize-known-server-message.ts</context>
@@ -523,7 +519,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="seo.titleQuizList" datatype="html">
-        <source>Meine Quizzes – arsnova.eu</source>
+        <source>Meine Quizze – arsnova.eu</source>
         <target>Mis cuestionarios – arsnova.eu</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/core/seo-route-meta.ts</context>
@@ -563,7 +559,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="seo.descQuizEdit" datatype="html">
-        <source>Fragen und Metadaten eines Quizzes bearbeiten, Vorschau und Upload für die Session vorbereiten.</source>
+        <source>Fragen und Metadaten eines Quiz bearbeiten, Vorschau und Upload für die Session vorbereiten.</source>
         <target>Edite preguntas y metadatos de un cuestionario, prepare una vista previa y cárguelos para la sesión.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/core/seo-route-meta.ts</context>
@@ -627,8 +623,8 @@
         </context-group>
       </trans-unit>
       <trans-unit id="seo.descNewsArchive" datatype="html">
-        <source>Freigegebene Meldungen aus dem News-Archiv: Chronik zu Releases, Hinweisen und Transparenz rund um arsnova.eu.</source>
-        <target>Reportajes publicados del archivo de noticias: Crónica de comunicados, información y transparencia en torno a arsnova.eu.</target>
+        <source>Veröffentlichte Meldungen im News-Archiv: Neuigkeiten zu Versionen, Hinweisen und Transparenz rund um arsnova.eu.</source>
+        <target>Mensajes publicados en el archivo de noticias: novedades sobre versiones, avisos y transparencia de arsnova.eu.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/core/seo-route-meta.ts</context>
           <context context-type="linenumber">128</context>
@@ -940,7 +936,7 @@
       </trans-unit>
       <trans-unit id="sessionReport.confidencePriorityAlert" datatype="html">
         <source>Nachbesprechung empfohlen</source>
-        <target>Se recomienda informar</target>
+        <target>Se recomienda revisar las respuestas</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/core/session-results-report-labels.ts</context>
           <context context-type="linenumber">27</context>
@@ -956,7 +952,7 @@
       </trans-unit>
       <trans-unit id="sessionReport.coverActionWrongTemplate" datatype="html">
         <source>{0} von {1} falsch und sicher</source>
-        <target>{0} de {1} falso y seguro</target>
+        <target>{0} respuestas de {1} incorrectas con un alto grado de confianza</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/core/session-results-report-labels.ts</context>
           <context context-type="linenumber">29</context>
@@ -1156,7 +1152,7 @@
       </trans-unit>
       <trans-unit id="sessionReport.confidencePrioritiesTitle" datatype="html">
         <source>Priorität für die Nachbesprechung</source>
-        <target>Prioridad para el informe</target>
+        <target>Prioridades para la revisión de las respuestas</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/core/session-results-report-labels.ts</context>
           <context context-type="linenumber">54</context>
@@ -1300,7 +1296,7 @@
       </trans-unit>
       <trans-unit id="sessionReport.questionNumber" datatype="html">
         <source>Frage</source>
-        <target>Preguntar</target>
+        <target>Pregunta</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/core/session-results-report-labels.ts</context>
           <context context-type="linenumber">72</context>
@@ -1516,7 +1512,7 @@
       </trans-unit>
       <trans-unit id="sessionReport.confidenceOmissionSignalTemplate" datatype="html">
         <source>{1} Teilnehmende beantworteten die Frage falsch und mit hoher Sicherheit. Häufig übersehen: »{0}« ({2}×).</source>
-        <target>{1} Los participantes respondieron la pregunta de forma incorrecta y con un alto grado de certeza. A menudo se pasa por alto: «{0}» ({2}×).</target>
+        <target>{1} participantes respondieron la pregunta de forma incorrecta y con un alto grado de certeza. A menudo se pasa por alto: «{0}» ({2}×).</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/core/session-results-report-labels.ts</context>
           <context context-type="linenumber">99</context>
@@ -1532,7 +1528,7 @@
       </trans-unit>
       <trans-unit id="sessionReport.confidenceMcCombinedAllOmittedTemplate" datatype="html">
         <source>{0} Teilnehmende beantworteten die Frage falsch und mit hoher Sicherheit. Alle übersahen die richtige Option »{1}«. {2} wählten zusätzlich »{3}«.</source>
-        <target>{0} Los participantes respondieron la pregunta de forma incorrecta y con un alto grado de certeza. Todos omitieron la opción correcta «{1}». {2} también eligió «{3}».</target>
+        <target>{0} participantes respondieron la pregunta de forma incorrecta y con un alto grado de certeza. Todos omitieron la opción correcta «{1}». {2} también eligió «{3}».</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/core/session-results-report-labels.ts</context>
           <context context-type="linenumber">101</context>
@@ -1540,7 +1536,7 @@
       </trans-unit>
       <trans-unit id="sessionReport.confidenceMcCombinedActionTemplate" datatype="html">
         <source>Kläre zuerst, dass »{0}« zur vollständigen Lösung gehört. Stelle anschließend heraus, weshalb »{1}« nicht zutrifft.</source>
-        <target>Primero aclare que «{0}» es parte de la solución completa. Luego explica por qué «{1}» no es cierto.</target>
+        <target>Primero aclara que «{0}» es parte de la solución completa. Luego explica por qué «{1}» no es cierto.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/core/session-results-report-labels.ts</context>
           <context context-type="linenumber">102</context>
@@ -1564,7 +1560,7 @@
       </trans-unit>
       <trans-unit id="sessionReport.confidenceDegenerateAllHighWrongTemplate" datatype="html">
         <source>Antwortsicherheit: Alle {0} Antworten mit hoher Sicherheit</source>
-        <target>Seguridad de las respuestas: todas las {0} respuestas con alta seguridad</target>
+        <target>Confianza en las respuestas: las {0} respuestas se dieron con un alto grado de confianza</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/core/session-results-report-labels.ts</context>
           <context context-type="linenumber">105</context>
@@ -1580,7 +1576,7 @@
       </trans-unit>
       <trans-unit id="sessionReport.confidenceHighWrongGenericTemplate" datatype="html">
         <source>{0} Teilnehmende beantworteten die Frage falsch und mit hoher Sicherheit.</source>
-        <target>{0} Los participantes respondieron la pregunta de forma incorrecta y con un alto grado de certeza.</target>
+        <target>{0} participantes respondieron incorrectamente a la pregunta con un alto grado de confianza.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/core/session-results-report-labels.ts</context>
           <context context-type="linenumber">107</context>
@@ -1588,7 +1584,7 @@
       </trans-unit>
       <trans-unit id="sessionReport.confidenceMasteryZeroNote" datatype="html">
         <source>0 % gefestigt bedeutet nicht 0 % richtige Antworten. Die richtigen Antworten wurden hier überwiegend mit niedriger oder mittlerer Sicherheit gegeben.</source>
-        <target>0% de respuestas correctas no significa 0% de respuestas correctas. Las respuestas correctas aquí se dieron en su mayoría con una certeza baja o media.</target>
+        <target>Un 0 % de conocimiento consolidado no significa un 0 % de respuestas correctas. Las respuestas correctas se dieron en su mayoría con un grado de confianza bajo o medio.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/core/session-results-report-labels.ts</context>
           <context context-type="linenumber">108</context>
@@ -1692,7 +1688,7 @@
       </trans-unit>
       <trans-unit id="sessionReport.numericComparisonMetric" datatype="html">
         <source>Kennzahl</source>
-        <target>Figura clave</target>
+        <target>Indicador</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/core/session-results-report-labels.ts</context>
           <context context-type="linenumber">121</context>
@@ -1780,7 +1776,7 @@
       </trans-unit>
       <trans-unit id="sessionReport.teamRank" datatype="html">
         <source>Rang</source>
-        <target>rango</target>
+        <target>Posición</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/core/session-results-report-labels.ts</context>
           <context context-type="linenumber">132</context>
@@ -1836,7 +1832,7 @@
       </trans-unit>
       <trans-unit id="sessionReport.finalSummaryPriorityTemplate" datatype="html">
         <source>{0} Fragen sollten nachbesprochen werden</source>
-        <target>{0} Se deben informar las preguntas</target>
+        <target>Se recomienda revisar {0} preguntas</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/core/session-results-report-labels.ts</context>
           <context context-type="linenumber">139</context>
@@ -1988,7 +1984,7 @@
       </trans-unit>
       <trans-unit id="sessionReport.bonusRank" datatype="html">
         <source>Rang</source>
-        <target>rango</target>
+        <target>Posición</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/core/session-results-report-labels.ts</context>
           <context context-type="linenumber">158</context>
@@ -2916,7 +2912,7 @@
       </trans-unit>
       <trans-unit id="sessionReport.questionParticipationMissingTemplate" datatype="html">
         <source>{0} Teilnehmende gaben keine Antwort ab.</source>
-        <target>{0} Los participantes no proporcionaron una respuesta.</target>
+        <target>{0} participantes no proporcionaron una respuesta.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/core/session-results-report-labels.ts</context>
           <context context-type="linenumber">269</context>
@@ -3060,7 +3056,7 @@
       </trans-unit>
       <trans-unit id="sessionReport.piGainWrongToCorrectTemplate" datatype="html">
         <source>{0} Teilnehmende wechselten von falsch zu richtig.</source>
-        <target>{0} Los participantes cambiaron de incorrecto a correcto.</target>
+        <target>{0} participantes cambiaron de incorrecto a correcto.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/core/session-results-report-labels.ts</context>
           <context context-type="linenumber">287</context>
@@ -5838,7 +5834,7 @@
       </trans-unit>
       <trans-unit id="productFeedback.area.tech" datatype="html">
         <source>Technik oder Verbindung</source>
-        <target>Tecnología o conexión</target>
+        <target>Problema técnico o de conexión</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/admin/admin-product-feedback-panel.component.ts</context>
           <context context-type="linenumber">313</context>
@@ -5922,7 +5918,7 @@
       </trans-unit>
       <trans-unit id="productFeedback.area.liveControl" datatype="html">
         <source>Live-Session steuern</source>
-        <target>Controlar sesión en vivo</target>
+        <target>Dirigir una sesión en directo</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/admin/admin-product-feedback-panel.component.ts</context>
           <context context-type="linenumber">325</context>
@@ -7950,7 +7946,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="feedback.tempoHelpThreshold" datatype="html">
-        <source>Das Signal erscheint ab drei Aktiven und reagiert mit etwa 15 Sekunden Verzögerung. Kurz abwarten, bevor Sie anpassen.</source>
+        <source>Das Signal erscheint ab drei Aktiven und reagiert mit etwa 15 Sekunden Verzögerung. Warte kurz, bevor du das Tempo anpasst.</source>
         <target>La señal aparece a partir de tres activos y reacciona con unos 15 segundos de retardo. Espera un momento antes de ajustar.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/feedback/feedback-host.component.ts</context>
@@ -8982,7 +8978,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="help.hostPairingBody" datatype="html">
-        <source> Beim Start der Präsentation verbindest du Smartphone oder Tablet per QR. Die Verbindung bestätigst du zuerst am Host-Gerät. Danach bleibt die Präsentation auf dem Beamer, und du gehst frei durch den Raum. Das Gerät steuert die laufende Veranstaltung: Fragen, Ergebnisse, Q&amp;A, Blitzlicht und »Gesamte Session beenden«. Nicht aber: Quiz bearbeiten oder löschen. Die Steuerung kannst du ad hoc einer vertrauenswürdigen Tutor:in, Assistenz oder Moderator:in übergeben.</source>
+        <source> Beim Start der Präsentation verbindest du Smartphone oder Tablet per QR. Die Verbindung bestätigst du zuerst am Host-Gerät. Danach bleibt die Präsentation auf dem Beamer, und du gehst frei durch den Raum. Das Gerät steuert die laufende Veranstaltung: Fragen, Ergebnisse, Q&amp;A, Blitzlicht und »Gesamte Session beenden«. Nicht aber: Quiz bearbeiten oder löschen. Die Steuerung kannst du ad hoc einer vertrauenswürdigen Person aus Tutorium, Assistenz oder Moderation übergeben. </source>
         <target>Al iniciar la presentación conectas un teléfono o tablet por QR. Confirmas primero la conexión en el dispositivo anfitrión. Después la presentación sigue en el proyector y recorres la sala. El dispositivo dirige la sesión en directo: preguntas, resultados, Q&amp;A, Sondeo rápido y «Finalizar toda la sesión». No: editar o borrar cuestionarios. Puedes ceder el control ad hoc a un tutor, una persona de apoyo o un moderador de confianza.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/help/help.component.html</context>
@@ -9050,8 +9046,8 @@
         </context-group>
       </trans-unit>
       <trans-unit id="help.hostModerationBody" datatype="html">
-        <source> Nutze je nach Situation Lesephase, Timer und die Presenter-Ansicht für den Beamer. Öffne sie über den Button in der Host-Ansicht; so bleibt das Host-Token im zweiten Tab erhalten. Alternativ den Host-Tab duplizieren und in der Adresse /present statt /host nutzen. Für Peer Instruction lässt du zuerst abstimmen, startest eine Diskussionsphase und öffnest anschließend eine zweite Abstimmung. Der Vorher-Nachher-Vergleich macht Veränderungen sichtbar.</source>
-        <target> Usa según la situación la fase de lectura, el temporizador y la vista de presentador para el proyector. Ábrela con el botón de la vista de anfitrión para que el token de anfitrión siga disponible en la segunda pestaña. También puedes duplicar la pestaña de anfitrión y usar /present en lugar de /host en la dirección. Para instrucción por pares, vota primero, inicia una fase de debate y abre después una segunda votación. La comparación antes/después hace visibles los cambios. </target>
+        <source> Nutze je nach Situation Lesephase, Timer und die Presenter-Ansicht für den Beamer. Öffne die Presenter-Ansicht über den entsprechenden Button in der Host-Ansicht. Für Peer Instruction lässt du zuerst abstimmen, startest eine Diskussionsphase und öffnest anschließend eine zweite Abstimmung. Der Vorher-Nachher-Vergleich macht Veränderungen sichtbar.</source>
+        <target>Usa según la situación la fase de lectura, el temporizador y la vista de presentador para el proyector. Abre la vista de presentador con el botón correspondiente de la vista de anfitrión. Para la instrucción por pares, realiza primero una votación, inicia una fase de debate y abre después una segunda votación. La comparación antes/después hace visibles los cambios.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/help/help.component.html</context>
           <context context-type="linenumber">250,257</context>
@@ -9075,7 +9071,7 @@
       </trans-unit>
       <trans-unit id="help.hostTimerChoice" datatype="html">
         <source> Teilnehmende können »10× Zeit« oder »Ohne Frist« wählen, wenn »Persönliche Zeit« im Quiz aktiviert ist.</source>
-        <target>Los participantes pueden elegir «Tiempo ×10» o «Sin plazo» cuando la opción «Tiempo personalizado» está activada en el cuestionario.</target>
+        <target>Los participantes pueden elegir «Tiempo ×10» o «Sin plazo» cuando la opción «Tiempo personal» está activada en el cuestionario.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/help/help.component.html</context>
           <context context-type="linenumber">272,275</context>
@@ -9130,8 +9126,8 @@
         </context-group>
       </trans-unit>
       <trans-unit id="help.hostPulseBody" datatype="html">
-        <source> Starte ein Blitzlicht aus der Live-Session oder über »Nur ein Klick« auf der Startseite. Du kannst die Abstimmung pausieren, fortsetzen, zurücksetzen oder als neue Runde starten. Beim Tempo-Feedback ändern Teilnehmende ihre Rückmeldung jederzeit; du siehst nur die aggregierte Tendenz.</source>
-        <target>Inicia un sondeo rápido desde la sesión en directo o mediante «Solo un clic» en la página de inicio. Puedes pausarlo, reanudarlo, reiniciarlo o comenzar una nueva ronda. En la valoración del ritmo, los participantes pueden cambiar su respuesta en cualquier momento; tú solo ves la tendencia agregada.</target>
+        <source> Starte ein Blitzlicht über die Blitzlicht-Karte auf der Startseite oder innerhalb einer Live-Session. Du kannst die Abstimmung pausieren, fortsetzen, zurücksetzen oder als neue Runde starten. Beim Tempo-Feedback ändern Teilnehmende ihre Rückmeldung jederzeit; du siehst nur die aggregierte Tendenz.</source>
+        <target>Inicia un sondeo rápido desde la tarjeta correspondiente de la página de inicio o desde una sesión en directo. Puedes pausarlo, reanudarlo, reiniciarlo o comenzar una nueva ronda. En la valoración del ritmo, los participantes pueden cambiar su respuesta en cualquier momento; tú solo ves la tendencia agregada.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/help/help.component.html</context>
           <context context-type="linenumber">316,321</context>
@@ -9154,7 +9150,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="help.hostLibraryBody" datatype="html">
-        <source> In der Quiz-Sammlung bearbeitest und sortierst du Fragen, prüfst die Vorschau und importierst oder exportierst Quizze als JSON. Über »Sammlung teilen« erzeugst du einen Sync-Link, mit dem andere Geräte dieselbe Sammlung nutzen können. Mit »Teilen beenden« setzt du eine ausprobierte Freigabe zurück; deine Quizzes bleiben auf diesem Gerät. Auf der Startseite fügst du unter »Geteilte Sammlung nutzen« einen empfangenen Link ein. KI-Vorlagen unterstützen dich beim Erstellen und Prüfen von Quizzen, ohne dass Inhalte an arsnova.eu gesendet werden. Beim Session-Start konfigurierst du unter anderem Stil, Rangliste, Sound, Teams, Nicknamen, Timer und Bonus-Codes.</source>
+        <source> In der Quiz-Sammlung bearbeitest und sortierst du Fragen, prüfst die Vorschau und importierst oder exportierst Quizze als JSON. Über »Sammlung teilen« erzeugst du einen Sync-Link, mit dem andere Geräte dieselbe Sammlung nutzen können. Mit »Teilen beenden« setzt du eine ausprobierte Freigabe zurück; deine Quizze bleiben auf diesem Gerät. Auf der Startseite fügst du unter »Geteilte Sammlung nutzen« einen empfangenen Link ein. KI-Vorlagen unterstützen dich beim Erstellen und Prüfen von Quizzen, ohne dass Inhalte an arsnova.eu gesendet werden. Beim Session-Start konfigurierst du unter anderem Stil, Rangliste, Sound, Teams, Nicknamen, Timer und Bonus-Codes. </source>
         <target>En la colección de cuestionarios puedes editar y reordenar preguntas, comprobar la vista previa e importar o exportar cuestionarios en formato JSON. «Compartir la colección» crea un enlace de sync para que otros dispositivos usen la misma colección. Con «Dejar de compartir» restableces un enlace de prueba; tus cuestionarios se quedan en este dispositivo. En la página de inicio, «Usar una colección compartida» sirve para pegar un enlace recibido. Las plantillas de IA te ayudan a crear y revisar cuestionarios sin enviar el contenido a arsnova.eu. Al iniciar una sesión, configura opciones como el estilo, la clasificación, el sonido, los equipos, los alias, el temporizador y los códigos de bonificación.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/help/help.component.html</context>
@@ -9194,8 +9190,8 @@
         </context-group>
       </trans-unit>
       <trans-unit id="help.participantAnswerTimer" datatype="html">
-        <source> Falls angeboten, wählst du unter »Zeit anpassen« »10× Zeit« oder »Ohne Frist«. Mehr Zeit hilft nicht. Nach dem Countdown gibt es nur Mindestpunkte; vorn landest du damit selten.</source>
-        <target>Si está disponible, en «Ajustar tiempo» eliges «Tiempo ×10» o «Sin plazo». Más tiempo no da ventaja. Tras la cuenta atrás solo queda el mínimo de puntos; rara vez quedas arriba.</target>
+        <source> Falls angeboten, wählst du unter »Zeit anpassen« »10× Zeit« oder »Ohne Frist«. Zusätzliche Zeit verschafft keinen Wettbewerbsvorteil: Richtige Antworten nach dem regulären Countdown erhalten nur Mindestpunkte.</source>
+        <target>Si está disponible, elige «Tiempo ×10» o «Sin plazo» en «Ajustar tiempo». El tiempo adicional no proporciona ninguna ventaja competitiva: las respuestas correctas enviadas después de la cuenta atrás habitual solo reciben la puntuación mínima.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/help/help.component.html</context>
           <context context-type="linenumber">410,414</context>
@@ -9386,10 +9382,6 @@
           <context context-type="sourcefile">src/app/features/home/home.component.html</context>
           <context context-type="linenumber">23</context>
         </context-group>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/home/home.component.html</context>
-          <context context-type="linenumber">690,692</context>
-        </context-group>
       </trans-unit>
       <trans-unit id="homeHero.line1Dash" datatype="html">
         <source> –</source>
@@ -9416,7 +9408,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="homeHero.uspAudience" datatype="html">
-        <source> Für Schulen, Unis &amp; Events – bis zu 500 Personen.</source>
+        <source> Für Schulen, Hochschulen &amp; Events – bis zu 500 Personen.</source>
         <target>Para escuelas, universidades y eventos – hasta 500 personas.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/home/home.component.html</context>
@@ -9489,10 +9481,18 @@
       </trans-unit>
       <trans-unit id="home.sessionCodeAria" datatype="html">
         <source>Session-Code, 6 Zeichen</source>
-        <target>Código de sesión o identificador de sesión</target>
+        <target>Código de sesión, 6 caracteres</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/home/home.component.html</context>
           <context context-type="linenumber">139</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="homeJoinCard.connecting" datatype="html">
+        <source>Verbindung wird hergestellt …</source>
+        <target>Conectando…</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/home/home.component.html</context>
+          <context context-type="linenumber">148</context>
         </context-group>
       </trans-unit>
       <trans-unit id="homeJoinCard.joinCta" datatype="html">
@@ -9504,8 +9504,8 @@
         </context-group>
       </trans-unit>
       <trans-unit id="homeHostIntro.eyebrow" datatype="html">
-        <source> Für Lehrende und Vortragende</source>
-        <target>Para docentes y ponentes</target>
+        <source> Für Veranstaltende</source>
+        <target>Para quienes organizan</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/home/home.component.html</context>
           <context context-type="linenumber">182,184</context>
@@ -9537,7 +9537,7 @@
       </trans-unit>
       <trans-unit id="homeScenario.quick" datatype="html">
         <source> Schnell ein Format einsetzen</source>
-        <target>Usar un formato al momento</target>
+        <target>Iniciar un formato al instante</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/home/home.component.html</context>
           <context context-type="linenumber">223,225</context>
@@ -9553,7 +9553,7 @@
       </trans-unit>
       <trans-unit id="homeHostCard.primaryCta" datatype="html">
         <source>Letztes Quiz starten</source>
-        <target>Empezar el ultimo quiz</target>
+        <target>Empezar el último quiz</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/home/home.component.html</context>
           <context context-type="linenumber">269</context>
@@ -9585,7 +9585,7 @@
       </trans-unit>
       <trans-unit id="homeScenario.selectQuiz" datatype="html">
         <source>Quiz auswählen</source>
-        <target>Elegir quiz</target>
+        <target>Elegir un cuestionario</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/home/home.component.html</context>
           <context context-type="linenumber">312</context>
@@ -9593,7 +9593,7 @@
       </trans-unit>
       <trans-unit id="homeHostCard.libraryCta" datatype="html">
         <source>Quiz-Sammlung öffnen</source>
-        <target>Abrir la colección de quizzes</target>
+        <target>Abrir la colección de cuestionarios</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/home/home.component.html</context>
           <context context-type="linenumber">314</context>
@@ -9601,7 +9601,7 @@
       </trans-unit>
       <trans-unit id="homeHostCard.libraryCtaDescription" datatype="html">
         <source>Quizze verwalten</source>
-        <target>Gestionar los quiz</target>
+        <target>Gestionar cuestionarios</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/home/home.component.html</context>
           <context context-type="linenumber">320</context>
@@ -9625,7 +9625,7 @@
       </trans-unit>
       <trans-unit id="homeHostCard.syncLinkLabel" datatype="html">
         <source>Sync-Link</source>
-        <target>Enlace de sync</target>
+        <target>Enlace de sincronización</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/home/home.component.html</context>
           <context context-type="linenumber">349</context>
@@ -9641,7 +9641,7 @@
       </trans-unit>
       <trans-unit id="homeHostCard.syncLinkInputAria" datatype="html">
         <source>Link einer geteilten Sammlung einfügen</source>
-        <target>Pegar el enlace de una colección compartida</target>
+        <target>Pega el enlace de una colección compartida</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/home/home.component.html</context>
           <context context-type="linenumber">366</context>
@@ -9665,7 +9665,7 @@
       </trans-unit>
       <trans-unit id="homeHostCard.syncUnlinkCta" datatype="html">
         <source>Verknüpfung lösen</source>
-        <target>Desconectar</target>
+        <target>Desvincular</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/home/home.component.html</context>
           <context context-type="linenumber">407</context>
@@ -9779,8 +9779,16 @@
           <context context-type="linenumber">682,684</context>
         </context-group>
       </trans-unit>
+      <trans-unit id="homeFeedbackCard.title" datatype="html">
+        <source> Blitzlicht</source>
+        <target>Sondeo rápido</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/home/home.component.html</context>
+          <context context-type="linenumber">690,692</context>
+        </context-group>
+      </trans-unit>
       <trans-unit id="homeScenario.eventFeedback" datatype="html">
-        <source> Stimmung/Tempo erfassen</source>
+        <source> Stimmung oder Tempo erfassen</source>
         <target>Consultar el ánimo o el ritmo</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/home/home.component.html</context>
@@ -9797,7 +9805,7 @@
       </trans-unit>
       <trans-unit id="motd.overlayTitle" datatype="html">
         <source> Aktuelle Meldung</source>
-        <target>noticias actuales</target>
+        <target>Aviso actual</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/home/home.component.html</context>
           <context context-type="linenumber">812,814</context>
@@ -9805,7 +9813,7 @@
       </trans-unit>
       <trans-unit id="motd.overlayCloseAria" datatype="html">
         <source>Meldung schließen</source>
-        <target>Cerrar mensaje</target>
+        <target>Cerrar aviso</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/home/home.component.html</context>
           <context context-type="linenumber">824</context>
@@ -9821,39 +9829,39 @@
       </trans-unit>
       <trans-unit id="motd.thumbGroupAria" datatype="html">
         <source>Bewertung der Meldung</source>
-        <target>Valorar el mensaje</target>
+        <target>Valorar este aviso</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/home/home.component.html</context>
           <context context-type="linenumber">844</context>
         </context-group>
       </trans-unit>
       <trans-unit id="motd.thumbUpTooltip" datatype="html">
-        <source>Hilfreich – erneut tippen zum Zurücknehmen</source>
-        <target>Útil — pulsa de nuevo para quitar tu voto</target>
+        <source>Hilfreich – erneut auswählen, um die Bewertung zurückzunehmen</source>
+        <target>Útil — selecciona de nuevo para retirar la valoración</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/home/home.component.html</context>
           <context context-type="linenumber">854</context>
         </context-group>
       </trans-unit>
       <trans-unit id="motd.thumbUpAria" datatype="html">
-        <source>Hilfreich, erneut tippen zum Zurücknehmen</source>
-        <target>Útil, pulsa de nuevo para quitar tu voto</target>
+        <source>Hilfreich, erneut auswählen, um die Bewertung zurückzunehmen</source>
+        <target>Útil, selecciona de nuevo para retirar la valoración</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/home/home.component.html</context>
           <context context-type="linenumber">856</context>
         </context-group>
       </trans-unit>
       <trans-unit id="motd.thumbDownTooltip" datatype="html">
-        <source>Nicht hilfreich – erneut tippen zum Zurücknehmen</source>
-        <target>No es útil — pulsa de nuevo para quitar tu voto</target>
+        <source>Nicht hilfreich – erneut auswählen, um die Bewertung zurückzunehmen</source>
+        <target>No es útil — selecciona de nuevo para retirar la valoración</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/home/home.component.html</context>
           <context context-type="linenumber">868</context>
         </context-group>
       </trans-unit>
       <trans-unit id="motd.thumbDownAria" datatype="html">
-        <source>Nicht hilfreich, erneut tippen zum Zurücknehmen</source>
-        <target>No es útil, pulsa de nuevo para quitar tu voto</target>
+        <source>Nicht hilfreich, erneut auswählen, um die Bewertung zurückzunehmen</source>
+        <target>No es útil, selecciona de nuevo para retirar la valoración</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/home/home.component.html</context>
           <context context-type="linenumber">870</context>
@@ -9925,7 +9933,7 @@
       </trans-unit>
       <trans-unit id="homeLiveCard.qaQuestionCountMany" datatype="html">
         <source><x id="count" equiv-text="formatLocaleCount(item.questionCount, this.localeId)"/> Fragen</source>
-        <target><x id="count" equiv-text="formatLocaleCount(item.questionCount, this.localeId)"/> Preguntas</target>
+        <target><x id="count" equiv-text="formatLocaleCount(item.questionCount, this.localeId)"/> preguntas</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/home/home.component.ts</context>
           <context context-type="linenumber">657</context>
@@ -9957,7 +9965,7 @@
       </trans-unit>
       <trans-unit id="sessionHost.endGlobalSessionMessage" datatype="html">
         <source>Damit beendest du Quiz, Q&amp;A und Blitzlicht für alle.</source>
-        <target>Esto finalizará el cuestionario, Q&amp;A y el Sondeo rápido para todos.</target>
+        <target>Esto finalizará el cuestionario, Q&amp;A y el sondeo rápido para todos.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/home/home.component.ts</context>
           <context context-type="linenumber">710</context>
@@ -9968,7 +9976,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="homeLiveCard.removeCtaForgetHint" datatype="html">
-        <source>Nur den Schnellzugang zu entfernen lässt das Forum offen. Mit der Wiederherstellungskarte kannst du den Host-Zugang später wiederherstellen.</source>
+        <source>Wenn du nur den Schnellzugang entfernst, bleibt das Forum offen. Mit der Wiederherstellungskarte kannst du den Host-Zugang später wiederherstellen.</source>
         <target>Quitar solo el acceso rápido deja el foro abierto. Más adelante puedes recuperar el acceso de anfitrión con la tarjeta de recuperación.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/home/home.component.ts</context>
@@ -10000,7 +10008,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="homeLiveCard.removeCtaError" datatype="html">
-        <source>Session konnte nicht gelöscht werden. Bitte erneut versuchen.</source>
+        <source>Die Session konnte nicht gelöscht werden. Bitte versuche es erneut.</source>
         <target>No se ha podido eliminar la sesión. Inténtalo de nuevo.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/home/home.component.ts</context>
@@ -10013,7 +10021,7 @@
       </trans-unit>
       <trans-unit id="2862374619655540985" datatype="html">
         <source>gerade eben</source>
-        <target>En este momento</target>
+        <target>ahora mismo</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/home/home.component.ts</context>
           <context context-type="linenumber">1001</context>
@@ -10033,7 +10041,7 @@
       </trans-unit>
       <trans-unit id="3532753318619772032" datatype="html">
         <source>vor <x id="PH" equiv-text="minutes"/> Min.</source>
-        <target>Hace <x id="PH" equiv-text="minutes"/> minutos</target>
+        <target>hace <x id="PH" equiv-text="minutes"/> minutos</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/home/home.component.ts</context>
           <context context-type="linenumber">1003</context>
@@ -10053,7 +10061,7 @@
       </trans-unit>
       <trans-unit id="74432774947660496" datatype="html">
         <source>vor 1 Std.</source>
-        <target>Hace 1 hora</target>
+        <target>hace 1 hora</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/home/home.component.ts</context>
           <context context-type="linenumber">1006</context>
@@ -10073,7 +10081,7 @@
       </trans-unit>
       <trans-unit id="276214048875673948" datatype="html">
         <source>vor <x id="PH" equiv-text="hours"/> Std.</source>
-        <target>Hace <x id="PH" equiv-text="hours"/> horas</target>
+        <target>hace <x id="PH" equiv-text="hours"/> horas</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/home/home.component.ts</context>
           <context context-type="linenumber">1006</context>
@@ -10093,7 +10101,7 @@
       </trans-unit>
       <trans-unit id="5356551916626450286" datatype="html">
         <source>vor 1 Tag</source>
-        <target>Hace 1 día</target>
+        <target>hace 1 día</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/home/home.component.ts</context>
           <context context-type="linenumber">1008</context>
@@ -10113,7 +10121,7 @@
       </trans-unit>
       <trans-unit id="3903113005127984737" datatype="html">
         <source>vor <x id="PH" equiv-text="days"/> Tagen</source>
-        <target>Hace <x id="PH" equiv-text="days"/> días</target>
+        <target>hace <x id="PH" equiv-text="days"/> días</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/home/home.component.ts</context>
           <context context-type="linenumber">1008</context>
@@ -10153,7 +10161,7 @@
       </trans-unit>
       <trans-unit id="homeLiveCard.quickFeedbackCreatedSnack" datatype="html">
         <source>Neue Blitzlicht-Session gestartet.</source>
-        <target>Nueva sesión relámpago iniciada.</target>
+        <target>Nuevo sondeo rápido iniciado.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/home/home.component.ts</context>
           <context context-type="linenumber">1204</context>
@@ -10168,8 +10176,8 @@
         </context-group>
       </trans-unit>
       <trans-unit id="homeHostCard.syncLinkError" datatype="html">
-        <source>Bitte einen gültigen Sync-Link einfügen.</source>
-        <target>Introduce un enlace de sync válido.</target>
+        <source>Füge bitte einen gültigen Sync-Link ein.</source>
+        <target>Introduce un enlace de sincronización válido.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/home/home.component.ts</context>
           <context context-type="linenumber">1278</context>
@@ -10177,7 +10185,7 @@
       </trans-unit>
       <trans-unit id="homeHostCard.syncLinkOwnError" datatype="html">
         <source>Das ist dein eigener Sync-Link. Hier fügst du den Link einer anderen Sammlung ein.</source>
-        <target>Ese es tu propio enlace de sync. Pega aquí el enlace de otra colección.</target>
+        <target>Ese es tu propio enlace de sincronización. Pega aquí el enlace de otra colección.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/home/home.component.ts</context>
           <context context-type="linenumber">1286</context>
@@ -10185,7 +10193,7 @@
       </trans-unit>
       <trans-unit id="homeHostCard.syncUnlinkConfirmPrompt" datatype="html">
         <source>Verknüpfung wirklich lösen? Die aktuelle Quiz-Sammlung bleibt auf diesem Gerät erhalten.</source>
-        <target>¿Desconectar esta colección compartida? Tus cuestionarios se quedan en este dispositivo.</target>
+        <target>¿Desvincular esta colección compartida? Tus cuestionarios se quedan en este dispositivo.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/home/home.component.ts</context>
           <context context-type="linenumber">1307</context>
@@ -10193,14 +10201,14 @@
       </trans-unit>
       <trans-unit id="homeHostCard.syncUnlinkSuccess" datatype="html">
         <source>Verknüpfung gelöst. Die Quiz-Sammlung ist jetzt nur auf diesem Gerät aktiv.</source>
-        <target>Desconectado. La colección ahora solo está activa en este dispositivo.</target>
+        <target>Colección desvinculada. Ahora solo está activa en este dispositivo.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/home/home.component.ts</context>
           <context context-type="linenumber">1315</context>
         </context-group>
       </trans-unit>
       <trans-unit id="homeFeedbackCard.startError" datatype="html">
-        <source>Blitzlicht konnte nicht gestartet werden. Bitte erneut versuchen.</source>
+        <source>Das Blitzlicht konnte nicht gestartet werden. Bitte versuche es erneut.</source>
         <target>No se pudo iniciar el sondeo rápido. Vuelve a intentarlo.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/home/home.component.ts</context>
@@ -10343,8 +10351,8 @@
           <context context-type="linenumber">285</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="333141918113055287" datatype="html">
-        <source>Wird beigetreten…</source>
+      <trans-unit id="1645173415639912207" datatype="html">
+        <source>Beitritt läuft …</source>
         <target>Unión...</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/join/join.component.ts</context>
@@ -10629,7 +10637,7 @@
       </trans-unit>
       <trans-unit id="motd.archiveTitle" datatype="html">
         <source> News-Archiv</source>
-        <target>Archivo News</target>
+        <target>Archivo de noticias</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/news-archive/news-archive-page.component.html</context>
           <context context-type="linenumber">42,44</context>
@@ -10664,8 +10672,8 @@
         </context-group>
       </trans-unit>
       <trans-unit id="motd.archiveEmpty" datatype="html">
-        <source> Keine archivierten Meldungen.</source>
-        <target>No hay mensajes archivados.</target>
+        <source> Noch keine Meldungen im Archiv.</source>
+        <target>Aún no hay mensajes archivados.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/news-archive/news-archive-page.component.html</context>
           <context context-type="linenumber">73,75</context>
@@ -10736,8 +10744,8 @@
         </context-group>
       </trans-unit>
       <trans-unit id="motd.archiveItemFallbackTitle" datatype="html">
-        <source>Archiv-Meldung</source>
-        <target>Archivar mensaje</target>
+        <source>Archivierte Meldung</source>
+        <target>Mensaje archivado</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/news-archive/news-archive-page.component.ts</context>
           <context context-type="linenumber">131</context>
@@ -10752,8 +10760,8 @@
         </context-group>
       </trans-unit>
       <trans-unit id="motd.archiveLoadError" datatype="html">
-        <source>Archiv konnte nicht geladen werden.</source>
-        <target>No se pudo cargar el archivo.</target>
+        <source>Das News-Archiv konnte nicht geladen werden. Bitte versuche es später erneut.</source>
+        <target>No se pudo cargar el archivo de noticias. Inténtalo de nuevo más tarde.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/news-archive/news-archive-page.component.ts</context>
           <context context-type="linenumber">132</context>
@@ -10768,8 +10776,8 @@
         </context-group>
       </trans-unit>
       <trans-unit id="motd.archiveMarkedAllReadSnack" datatype="html">
-        <source>Archiv als gelesen markiert.</source>
-        <target>Archivo marcado como leído.</target>
+        <source>Alle Meldungen wurden als gelesen markiert.</source>
+        <target>Todos los mensajes se marcaron como leídos.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/news-archive/news-archive-page.component.ts</context>
           <context context-type="linenumber">253</context>
@@ -10780,8 +10788,8 @@
         </context-group>
       </trans-unit>
       <trans-unit id="motd.archiveLoadMoreError" datatype="html">
-        <source>Weitere Meldungen konnten nicht geladen werden.</source>
-        <target>No se pudieron cargar más mensajes.</target>
+        <source>Weitere Meldungen konnten nicht geladen werden. Bitte versuche es erneut.</source>
+        <target>No se pudieron cargar más mensajes. Inténtalo de nuevo.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/news-archive/news-archive-page.component.ts</context>
           <context context-type="linenumber">349</context>
@@ -10897,7 +10905,7 @@
       </trans-unit>
       <trans-unit id="productFeedback.area.resultsHost" datatype="html">
         <source>Ergebnisse auswerten</source>
-        <target>Evaluar resultados</target>
+        <target>Analizar los resultados</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/product-feedback/product-feedback-card.component.ts</context>
           <context context-type="linenumber">225</context>
@@ -11072,8 +11080,8 @@
         </context-group>
       </trans-unit>
       <trans-unit id="productFeedback.status.followUpExpired" datatype="html">
-        <source>Die Zeit für die Ergänzung ist abgelaufen. Deine Zwei-Klick-Antwort bleibt gespeichert.</source>
-        <target>El plazo para el suplemento ha expirado. Su respuesta de dos clics permanece guardada.</target>
+        <source>Die Zeit für die Ergänzung ist abgelaufen. Deine Antwort mit zwei Klicks bleibt gespeichert.</source>
+        <target>El plazo para añadir información ha terminado. Tu respuesta de dos clics sigue guardada.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/product-feedback/product-feedback-card.component.ts</context>
           <context context-type="linenumber">612</context>
@@ -11097,7 +11105,7 @@
       </trans-unit>
       <trans-unit id="productFeedback.status.rateLimited" datatype="html">
         <source>Gerade sind viele Rückmeldungen unterwegs. Bitte versuche es gleich noch einmal.</source>
-        <target>Están llegando muchos comentarios en este momento. Inténtelo de nuevo inmediatamente.</target>
+        <target>Están llegando muchos comentarios. Inténtalo de nuevo dentro de un momento.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/product-feedback/product-feedback-card.component.ts</context>
           <context context-type="linenumber">619</context>
@@ -11105,22 +11113,22 @@
       </trans-unit>
       <trans-unit id="productFeedback.status.notAllowed" datatype="html">
         <source>Diese Rückmeldung kann nicht gesendet werden.</source>
-        <target>Estos comentarios no se pueden enviar.</target>
+        <target>Este comentario no se puede enviar.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/product-feedback/product-feedback-card.component.ts</context>
           <context context-type="linenumber">622</context>
         </context-group>
       </trans-unit>
       <trans-unit id="productFeedback.status.claimFailed" datatype="html">
-        <source>Die Frage konnte nicht geladen werden. Bitte versuche es erneut oder schließe sie.</source>
-        <target>No se pudo cargar la pregunta. Inténtalo de nuevo o cierra.</target>
+        <source>Die Frage konnte nicht geladen werden. Bitte versuche es erneut oder schließe die Rückmeldung.</source>
+        <target>No se pudo cargar la pregunta. Inténtalo de nuevo o ciérrala.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/product-feedback/product-feedback-card.component.ts</context>
           <context context-type="linenumber">625</context>
         </context-group>
       </trans-unit>
       <trans-unit id="productFeedback.status.messageRejected" datatype="html">
-        <source>Die Ergänzung konnte nicht gesendet werden. Bitte versuche es erneut oder schließe sie.</source>
+        <source>Die Ergänzung konnte nicht gesendet werden. Bitte versuche es erneut oder schließe die Rückmeldung.</source>
         <target>No se pudo enviar la información adicional. Vuelve a intentarlo o cierra este paso.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/product-feedback/product-feedback-card.component.ts</context>
@@ -11128,8 +11136,8 @@
         </context-group>
       </trans-unit>
       <trans-unit id="productFeedback.status.rejected" datatype="html">
-        <source>Das hat nicht geklappt. Bitte erneut versuchen oder schließen.</source>
-        <target>Eso no funcionó. Inténtalo de nuevo o cierra.</target>
+        <source>Das hat nicht geklappt. Bitte versuche es erneut oder schließe die Rückmeldung.</source>
+        <target>Eso no funcionó. Inténtalo de nuevo o cierra la solicitud.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/product-feedback/product-feedback-card.component.ts</context>
           <context context-type="linenumber">628</context>
@@ -12225,7 +12233,7 @@
       </trans-unit>
       <trans-unit id="quizForm.timerSecondsSuffix" datatype="html">
         <source>Sekunden</source>
-        <target>artículos de segunda clase</target>
+        <target>segundos</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/quiz/quiz-edit/quiz-edit.component.html</context>
           <context context-type="linenumber">282</context>
@@ -12459,8 +12467,8 @@
           <context context-type="linenumber">338</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="1110390562708491750" datatype="html">
-        <source>Anzahl Teams</source>
+      <trans-unit id="115878560539112451" datatype="html">
+        <source>Anzahl der Teams</source>
         <target>Número de equipos</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/quiz/quiz-edit/quiz-edit.component.html</context>
@@ -12472,7 +12480,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="quizForm.teamCountAria" datatype="html">
-        <source>Anzahl Teams</source>
+        <source>Anzahl der Teams</source>
         <target>Número de equipos</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/quiz/quiz-edit/quiz-edit.component.html</context>
@@ -12709,7 +12717,7 @@
       </trans-unit>
       <trans-unit id="quiz.bonusCodesHint" datatype="html">
         <source> Die besten Teilnehmenden erhalten nach dem Quiz einen persönlichen Code, den sie freiwillig bei dir einreichen können.</source>
-        <target>Los mejores participantes recibiran un codigo personal despues del quiz que pueden enviarte voluntariamente.</target>
+        <target>Los mejores participantes recibirán un código personal después del quiz que pueden enviarte voluntariamente.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/quiz/quiz-edit/quiz-edit.component.html</context>
           <context context-type="linenumber">484,487</context>
@@ -12732,7 +12740,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="quizForm.bonusCodeCountAria" datatype="html">
-        <source>Anzahl Bonus-Codes</source>
+        <source>Anzahl der Bonus-Codes</source>
         <target>Número de códigos de bonificación</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/quiz/quiz-edit/quiz-edit.component.html</context>
@@ -12893,7 +12901,7 @@
       </trans-unit>
       <trans-unit id="quiz.edit.questionTimerSectionLegend" datatype="html">
         <source> Zeit für diese Frage</source>
-        <target>Es hora de esta pregunta</target>
+        <target>Tiempo para responder a esta pregunta</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/quiz/quiz-edit/quiz-edit.component.html</context>
           <context context-type="linenumber">640,642</context>
@@ -13021,7 +13029,7 @@
       </trans-unit>
       <trans-unit id="quizEdit.quickFormatAria" datatype="html">
         <source>Schnellformat wählen</source>
-        <target>Elija formato rápido</target>
+        <target>Elige un formato rápido</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/quiz/quiz-edit/quiz-edit.component.html</context>
           <context context-type="linenumber">804</context>
@@ -13157,7 +13165,7 @@
       </trans-unit>
       <trans-unit id="quizEdit.numericEstimateIntervalLeftLabel" datatype="html">
         <source>Linke Grenze L</source>
-        <target>Borde izquierdo L</target>
+        <target>Límite inferior L</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/quiz/quiz-edit/quiz-edit.component.html</context>
           <context context-type="linenumber">895</context>
@@ -13169,7 +13177,7 @@
       </trans-unit>
       <trans-unit id="quizEdit.numericEstimateIntervalRightLabel" datatype="html">
         <source>Rechte Grenze R</source>
-        <target>Borde derecho R</target>
+        <target>Límite superior R</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/quiz/quiz-edit/quiz-edit.component.html</context>
           <context context-type="linenumber">901</context>
@@ -13273,7 +13281,7 @@
       </trans-unit>
       <trans-unit id="quizEdit.numericPreviewTitle" datatype="html">
         <source>Band-Vorschau</source>
-        <target>Vista previa de la banda</target>
+        <target>Vista previa del intervalo de tolerancia</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/quiz/quiz-edit/quiz-edit.component.html</context>
           <context context-type="linenumber">965</context>
@@ -13369,7 +13377,7 @@
       </trans-unit>
       <trans-unit id="quizEdit.matchingRightLabel" datatype="html">
         <source>Rechts</source>
-        <target>Bien</target>
+        <target>Derecha</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/quiz/quiz-edit/quiz-edit.component.html</context>
           <context context-type="linenumber">1098</context>
@@ -13389,7 +13397,7 @@
       </trans-unit>
       <trans-unit id="quizEdit.orderingItemsSection" datatype="html">
         <source> Reihenfolge-Elemente</source>
-        <target>Elementos de orden</target>
+        <target>Elementos para ordenar</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/quiz/quiz-edit/quiz-edit.component.html</context>
           <context context-type="linenumber">1135,1137</context>
@@ -13477,7 +13485,7 @@
       </trans-unit>
       <trans-unit id="quizEdit.categorizationItemsHint" datatype="html">
         <source> 4 bis 12 Elemente mit Zielkategorie.</source>
-        <target>De 4 a 12 artículos con categoría objetivo.</target>
+        <target>De 4 a 12 elementos, cada uno asociado a una categoría de destino.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/quiz/quiz-edit/quiz-edit.component.html</context>
           <context context-type="linenumber">1284,1286</context>
@@ -13797,7 +13805,7 @@
       </trans-unit>
       <trans-unit id="2863483573986908286" datatype="html">
         <source>Frage</source>
-        <target>Preguntar</target>
+        <target>Pregunta</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/quiz/quiz-edit/quiz-edit.component.html</context>
           <context context-type="linenumber">1729</context>
@@ -13861,7 +13869,7 @@
       </trans-unit>
       <trans-unit id="quiz.edit.questionDisabledBadge" datatype="html">
         <source>Deaktiviert</source>
-        <target>Desactivado</target>
+        <target>Desactivada</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/quiz/quiz-edit/quiz-edit.component.html</context>
           <context context-type="linenumber">1917</context>
@@ -14665,7 +14673,7 @@
       </trans-unit>
       <trans-unit id="4290010202262796761" datatype="html">
         <source>Oberstufe</source>
-        <target>Escuela secundaria</target>
+        <target>Bachillerato</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/quiz/quiz-edit/quiz-edit.component.ts</context>
           <context context-type="linenumber">607</context>
@@ -16709,7 +16717,7 @@
       </trans-unit>
       <trans-unit id="quizList.syncImportedSuccessWithTimestamp" datatype="html">
         <source>Quiz-Sammlung erfolgreich synchronisiert. Neuester Stand vom <x id="timestamp" equiv-text="formattedTimestamp"/>.</source>
-        <target>Colección de quizzes sincronizada correctamente. Version más reciente del <x id="timestamp" equiv-text="formattedTimestamp"/>.</target>
+        <target>Colección de quizzes sincronizada correctamente. Versión más reciente del <x id="timestamp" equiv-text="formattedTimestamp"/>.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/quiz/quiz-list/quiz-list.component.ts</context>
           <context context-type="linenumber">1175</context>
@@ -21075,8 +21083,8 @@
           <context context-type="linenumber">1596,1598</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="1952538840507841358" datatype="html">
-        <source> Gleiche Antwort? Prima. Verschiedene Meinung? Überzeugt euch gegenseitig.</source>
+      <trans-unit id="7119915262919086691" datatype="html">
+        <source> Gleiche Antwort? Prima. Unterschiedliche Meinungen? Überzeugt euch gegenseitig. </source>
         <target>¿La misma respuesta? Excelente. ¿Opinión diferente? Convencerse unos a otros.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.html</context>
@@ -21696,7 +21704,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="sessionHost.peerSuggestionSub" datatype="html">
-        <source> Erste Runde noch verborgen, bis du weiter machst.</source>
+        <source> Erste Runde noch verborgen, bis du weitermachst. </source>
         <target>1.ª ronda sigue oculta hasta que decidas.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.html</context>
@@ -28698,7 +28706,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="sessionVote.discussionHintSerious" datatype="html">
-        <source>Gleiche Antwort? Prima. Verschiedene Meinung? Überzeugt euch gegenseitig.</source>
+        <source>Gleiche Antwort? Prima. Unterschiedliche Meinungen? Überzeugt euch gegenseitig.</source>
         <target>¿La misma respuesta? Excelente. ¿Opinión diferente? Convencerse unos a otros.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-vote/session-vote-participant-copy.ts</context>
@@ -29002,7 +29010,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="sessionVote.streakCalloutHeadingSerious" datatype="html">
-        <source>Serie-Bonus</source>
+        <source>Serienbonus</source>
         <target>Bonus por racha</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-vote/session-vote-participant-copy.ts</context>
@@ -29042,7 +29050,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="sessionVote.streakInARowPlayful" datatype="html">
-        <source><x id="count" equiv-text="streakCount"/> richtige in Folge</source>
+        <source><x id="count" equiv-text="streakCount"/> richtige Antworten in Folge</source>
         <target><x id="count" equiv-text="streakCount"/> aciertos seguidos</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-vote/session-vote-participant-copy.ts</context>
@@ -30667,7 +30675,7 @@
       </trans-unit>
       <trans-unit id="sessionVote.numericRequired" datatype="html">
         <source>Bitte gib eine Zahl ein.</source>
-        <target>Por favor ingrese un número.</target>
+        <target>Introduce un número.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-vote/session-vote.component.ts</context>
           <context context-type="linenumber">2834</context>
@@ -30675,7 +30683,7 @@
       </trans-unit>
       <trans-unit id="sessionVote.numericIntegerRequired" datatype="html">
         <source>Bitte gib eine ganze Zahl im unterstützten Format ein.</source>
-        <target>Ingrese un número entero en el formato admitido.</target>
+        <target>Introduce un número entero en el formato admitido.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-vote/session-vote.component.ts</context>
           <context context-type="linenumber">2838</context>
@@ -30691,7 +30699,7 @@
       </trans-unit>
       <trans-unit id="sessionVote.numericInvalid" datatype="html">
         <source>Bitte gib eine gültige Zahl im unterstützten Format ein.</source>
-        <target>Ingrese un número válido en el formato admitido.</target>
+        <target>Introduce un número válido en el formato admitido.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-vote/session-vote.component.ts</context>
           <context context-type="linenumber">2849</context>
@@ -30699,7 +30707,7 @@
       </trans-unit>
       <trans-unit id="sessionVote.numericBelowMin" datatype="html">
         <source>Bitte gib einen Wert von mindestens <x id="min" equiv-text="min"/> ein.</source>
-        <target>Introduzca un valor de al menos <x id="min" equiv-text="min"/>.</target>
+        <target>Introduce un valor de al menos <x id="min" equiv-text="min"/>.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-vote/session-vote.component.ts</context>
           <context context-type="linenumber">2855</context>
@@ -30707,7 +30715,7 @@
       </trans-unit>
       <trans-unit id="sessionVote.numericAboveMax" datatype="html">
         <source>Bitte gib einen Wert von höchstens <x id="max" equiv-text="max"/> ein.</source>
-        <target>Introduzca un valor máximo de <x id="max" equiv-text="max"/>.</target>
+        <target>Introduce un valor de como máximo <x id="max" equiv-text="max"/>.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-vote/session-vote.component.ts</context>
           <context context-type="linenumber">2858</context>
@@ -30851,7 +30859,7 @@
       </trans-unit>
       <trans-unit id="sessionVote.teamRewardTitleWinFin" datatype="html">
         <source>Ihr gewinnt als Team!</source>
-        <target>¡Su equipo gana!</target>
+        <target>¡Vuestro equipo gana!</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-vote/session-vote.component.ts</context>
           <context context-type="linenumber">3132</context>
@@ -30883,7 +30891,7 @@
       </trans-unit>
       <trans-unit id="sessionVote.teamRewardTitleLeading" datatype="html">
         <source>Ihr führt gerade</source>
-        <target>Lideran por ahora</target>
+        <target>Vais en cabeza</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-vote/session-vote.component.ts</context>
           <context context-type="linenumber">3141</context>
@@ -30899,7 +30907,7 @@
       </trans-unit>
       <trans-unit id="sessionVote.teamRewardMsgWinFin" datatype="html">
         <source>Gemeinsam gewonnen: Platz 1 für euch.</source>
-        <target>¡Ganaron juntos: el primer puesto es suyo!</target>
+        <target>¡Habéis ganado juntos: el primer puesto es vuestro!</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-vote/session-vote.component.ts</context>
           <context context-type="linenumber">3161</context>
@@ -30923,7 +30931,7 @@
       </trans-unit>
       <trans-unit id="sessionVote.teamRewardMsgFinishedOther" datatype="html">
         <source>Ihr beendet mit <x id="totalScore" equiv-text="formatLocaleCount(entry.totalScore, getEffectiveLocale())"/> Punkten auf Platz <x id="teamRank" equiv-text="formatLocaleCount(entry.rank, getEffectiveLocale())"/>.</source>
-        <target>Terminas con <x id="totalScore" equiv-text="entry.totalScore"/> puntos en el lugar <x id="teamRank" equiv-text="entry.rank"/>.</target>
+        <target>Termináis con <x id="totalScore" equiv-text="entry.totalScore"/> puntos en la posición <x id="teamRank" equiv-text="entry.rank"/>.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-vote/session-vote.component.ts</context>
           <context context-type="linenumber">3169</context>
@@ -30951,7 +30959,7 @@
       </trans-unit>
       <trans-unit id="sessionVote.teamRewardMsgLeading" datatype="html">
         <source>Mit <x id="totalScore" equiv-text="formatLocaleCount(entry.totalScore, getEffectiveLocale())"/> Punkten führt ihr.</source>
-        <target>Lideras con <x id="totalScore" equiv-text="entry.totalScore"/> puntos.</target>
+        <target>Lideráis con <x id="totalScore" equiv-text="entry.totalScore"/> puntos.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-vote/session-vote.component.ts</context>
           <context context-type="linenumber">3178</context>
@@ -31087,7 +31095,7 @@
       </trans-unit>
       <trans-unit id="sessionVote.timerAccommodation.error" datatype="html">
         <source>Zeitanpassung konnte nicht gespeichert werden.</source>
-        <target>No se pudo guardar el ajuste de hora.</target>
+        <target>No se pudo guardar el ajuste del tiempo de respuesta.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-vote/session-vote.component.ts</context>
           <context context-type="linenumber">3389</context>
@@ -32235,7 +32243,7 @@
       </trans-unit>
       <trans-unit id="motd.archiveCloseAria" datatype="html">
         <source>Schließen</source>
-        <target>Cerca</target>
+        <target>Cerrar</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/motd-archive-dialog/motd-archive-dialog.component.html</context>
           <context context-type="linenumber">16</context>
@@ -32305,8 +32313,8 @@
           <context context-type="linenumber">125</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="9182051550515919068" datatype="html">
-        <source>Anzahl Teams:</source>
+      <trans-unit id="5445788768283993956" datatype="html">
+        <source>Anzahl der Teams:</source>
         <target>Número de equipos:</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/preset-toast/preset-toast.component.html</context>
@@ -32314,7 +32322,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="presetToast.teamCountAria" datatype="html">
-        <source>Anzahl Teams wählen</source>
+        <source>Anzahl der Teams wählen</source>
         <target>Seleccionar número de equipos</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/preset-toast/preset-toast.component.html</context>
@@ -34071,7 +34079,7 @@
       </trans-unit>
       <trans-unit id="motd.toolbarArchiveAria" datatype="html">
         <source>News und Archiv</source>
-        <target>Noticias y archivos</target>
+        <target>Noticias y archivo</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/top-toolbar/top-toolbar.component.ts</context>
           <context context-type="linenumber">107</context>
@@ -34095,7 +34103,7 @@
       </trans-unit>
       <trans-unit id="motd.toolbarArchiveTooltip" datatype="html">
         <source>News und Archiv</source>
-        <target>Noticias y archivos</target>
+        <target>Noticias y archivo</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/top-toolbar/top-toolbar.component.ts</context>
           <context context-type="linenumber">121</context>

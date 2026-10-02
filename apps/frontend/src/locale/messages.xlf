@@ -261,10 +261,6 @@
           <context context-type="sourcefile">src/app/features/feedback/feedback-host.component.html</context>
           <context context-type="linenumber">937</context>
         </context-group>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/home/home.component.html</context>
-          <context context-type="linenumber">148</context>
-        </context-group>
       </trans-unit>
       <trans-unit id="1632524115807344357" datatype="html">
         <source>Nochmal versuchen</source>
@@ -395,7 +391,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="errors.sessionCreateRateLimit" datatype="html">
-        <source>Zu viele Session-Erstellungen. Bitte später erneut versuchen.</source>
+        <source>Zu viele Sessions wurden erstellt. Bitte versuche es später erneut.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/core/localize-known-server-message.ts</context>
           <context context-type="linenumber">57</context>
@@ -416,7 +412,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="errors.sessionCodeTooManyFailures" datatype="html">
-        <source>Zu viele falsche Codes – kurz warten.</source>
+        <source>Zu viele falsche Codes. Warte kurz und versuche es dann erneut.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/core/localize-known-server-message.ts</context>
           <context context-type="linenumber">115</context>
@@ -441,7 +437,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="errors.rateLimitRetryAfter" datatype="html">
-        <source>Bitte in <x id="seconds" equiv-text="retryAfterSeconds"/> Sekunden erneut versuchen.</source>
+        <source>Versuche es bitte in <x id="seconds" equiv-text="retryAfterSeconds"/> Sekunden erneut.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/core/localize-known-server-message.ts</context>
           <context context-type="linenumber">167</context>
@@ -469,7 +465,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="seo.titleQuizList" datatype="html">
-        <source>Meine Quizzes – arsnova.eu</source>
+        <source>Meine Quizze – arsnova.eu</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/core/seo-route-meta.ts</context>
           <context context-type="linenumber">76</context>
@@ -504,7 +500,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="seo.descQuizEdit" datatype="html">
-        <source>Fragen und Metadaten eines Quizzes bearbeiten, Vorschau und Upload für die Session vorbereiten.</source>
+        <source>Fragen und Metadaten eines Quiz bearbeiten, Vorschau und Upload für die Session vorbereiten.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/core/seo-route-meta.ts</context>
           <context context-type="linenumber">96</context>
@@ -560,7 +556,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="seo.descNewsArchive" datatype="html">
-        <source>Freigegebene Meldungen aus dem News-Archiv: Chronik zu Releases, Hinweisen und Transparenz rund um arsnova.eu.</source>
+        <source>Veröffentlichte Meldungen im News-Archiv: Neuigkeiten zu Versionen, Hinweisen und Transparenz rund um arsnova.eu.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/core/seo-route-meta.ts</context>
           <context context-type="linenumber">128</context>
@@ -7028,7 +7024,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="feedback.tempoHelpThreshold" datatype="html">
-        <source>Das Signal erscheint ab drei Aktiven und reagiert mit etwa 15 Sekunden Verzögerung. Kurz abwarten, bevor Sie anpassen.</source>
+        <source>Das Signal erscheint ab drei Aktiven und reagiert mit etwa 15 Sekunden Verzögerung. Warte kurz, bevor du das Tempo anpasst.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/feedback/feedback-host.component.ts</context>
           <context context-type="linenumber">276</context>
@@ -7947,7 +7943,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="help.hostPairingBody" datatype="html">
-        <source> Beim Start der Präsentation verbindest du Smartphone oder Tablet per QR. Die Verbindung bestätigst du zuerst am Host-Gerät. Danach bleibt die Präsentation auf dem Beamer, und du gehst frei durch den Raum. Das Gerät steuert die laufende Veranstaltung: Fragen, Ergebnisse, Q&amp;A, Blitzlicht und »Gesamte Session beenden«. Nicht aber: Quiz bearbeiten oder löschen. Die Steuerung kannst du ad hoc einer vertrauenswürdigen Tutor:in, Assistenz oder Moderator:in übergeben. </source>
+        <source> Beim Start der Präsentation verbindest du Smartphone oder Tablet per QR. Die Verbindung bestätigst du zuerst am Host-Gerät. Danach bleibt die Präsentation auf dem Beamer, und du gehst frei durch den Raum. Das Gerät steuert die laufende Veranstaltung: Fragen, Ergebnisse, Q&amp;A, Blitzlicht und »Gesamte Session beenden«. Nicht aber: Quiz bearbeiten oder löschen. Die Steuerung kannst du ad hoc einer vertrauenswürdigen Person aus Tutorium, Assistenz oder Moderation übergeben. </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/help/help.component.html</context>
           <context context-type="linenumber">188,195</context>
@@ -8007,7 +8003,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="help.hostModerationBody" datatype="html">
-        <source> Nutze je nach Situation Lesephase, Timer und die Presenter-Ansicht für den Beamer. Öffne sie über den Button in der Host-Ansicht; so bleibt das Host-Token im zweiten Tab erhalten. Alternativ den Host-Tab duplizieren und in der Adresse /present statt /host nutzen. Für Peer Instruction lässt du zuerst abstimmen, startest eine Diskussionsphase und öffnest anschließend eine zweite Abstimmung. Der Vorher-Nachher-Vergleich macht Veränderungen sichtbar. </source>
+        <source> Nutze je nach Situation Lesephase, Timer und die Presenter-Ansicht für den Beamer. Öffne die Presenter-Ansicht über den entsprechenden Button in der Host-Ansicht. Für Peer Instruction lässt du zuerst abstimmen, startest eine Diskussionsphase und öffnest anschließend eine zweite Abstimmung. Der Vorher-Nachher-Vergleich macht Veränderungen sichtbar. </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/help/help.component.html</context>
           <context context-type="linenumber">250,257</context>
@@ -8077,7 +8073,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="help.hostPulseBody" datatype="html">
-        <source> Starte ein Blitzlicht aus der Live-Session oder über »Nur ein Klick« auf der Startseite. Du kannst die Abstimmung pausieren, fortsetzen, zurücksetzen oder als neue Runde starten. Beim Tempo-Feedback ändern Teilnehmende ihre Rückmeldung jederzeit; du siehst nur die aggregierte Tendenz. </source>
+        <source> Starte ein Blitzlicht über die Blitzlicht-Karte auf der Startseite oder innerhalb einer Live-Session. Du kannst die Abstimmung pausieren, fortsetzen, zurücksetzen oder als neue Runde starten. Beim Tempo-Feedback ändern Teilnehmende ihre Rückmeldung jederzeit; du siehst nur die aggregierte Tendenz. </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/help/help.component.html</context>
           <context context-type="linenumber">316,321</context>
@@ -8098,7 +8094,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="help.hostLibraryBody" datatype="html">
-        <source> In der Quiz-Sammlung bearbeitest und sortierst du Fragen, prüfst die Vorschau und importierst oder exportierst Quizze als JSON. Über »Sammlung teilen« erzeugst du einen Sync-Link, mit dem andere Geräte dieselbe Sammlung nutzen können. Mit »Teilen beenden« setzt du eine ausprobierte Freigabe zurück; deine Quizzes bleiben auf diesem Gerät. Auf der Startseite fügst du unter »Geteilte Sammlung nutzen« einen empfangenen Link ein. KI-Vorlagen unterstützen dich beim Erstellen und Prüfen von Quizzen, ohne dass Inhalte an arsnova.eu gesendet werden. Beim Session-Start konfigurierst du unter anderem Stil, Rangliste, Sound, Teams, Nicknamen, Timer und Bonus-Codes. </source>
+        <source> In der Quiz-Sammlung bearbeitest und sortierst du Fragen, prüfst die Vorschau und importierst oder exportierst Quizze als JSON. Über »Sammlung teilen« erzeugst du einen Sync-Link, mit dem andere Geräte dieselbe Sammlung nutzen können. Mit »Teilen beenden« setzt du eine ausprobierte Freigabe zurück; deine Quizze bleiben auf diesem Gerät. Auf der Startseite fügst du unter »Geteilte Sammlung nutzen« einen empfangenen Link ein. KI-Vorlagen unterstützen dich beim Erstellen und Prüfen von Quizzen, ohne dass Inhalte an arsnova.eu gesendet werden. Beim Session-Start konfigurierst du unter anderem Stil, Rangliste, Sound, Teams, Nicknamen, Timer und Bonus-Codes. </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/help/help.component.html</context>
           <context context-type="linenumber">338,348</context>
@@ -8133,7 +8129,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="help.participantAnswerTimer" datatype="html">
-        <source> Falls angeboten, wählst du unter »Zeit anpassen« »10× Zeit« oder »Ohne Frist«. Mehr Zeit hilft nicht. Nach dem Countdown gibt es nur Mindestpunkte; vorn landest du damit selten. </source>
+        <source> Falls angeboten, wählst du unter »Zeit anpassen« »10× Zeit« oder »Ohne Frist«. Zusätzliche Zeit verschafft keinen Wettbewerbsvorteil: Richtige Antworten nach dem regulären Countdown erhalten nur Mindestpunkte. </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/help/help.component.html</context>
           <context context-type="linenumber">410,414</context>
@@ -8303,10 +8299,6 @@
           <context context-type="sourcefile">src/app/features/home/home.component.html</context>
           <context context-type="linenumber">23</context>
         </context-group>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/home/home.component.html</context>
-          <context context-type="linenumber">690,692</context>
-        </context-group>
       </trans-unit>
       <trans-unit id="homeHero.line1Dash" datatype="html">
         <source> – </source>
@@ -8330,7 +8322,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="homeHero.uspAudience" datatype="html">
-        <source> Für Schulen, Unis &amp; Events – bis zu 500 Personen. </source>
+        <source> Für Schulen, Hochschulen &amp; Events – bis zu 500 Personen. </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/home/home.component.html</context>
           <context context-type="linenumber">31,33</context>
@@ -8399,6 +8391,13 @@
           <context context-type="linenumber">139</context>
         </context-group>
       </trans-unit>
+      <trans-unit id="homeJoinCard.connecting" datatype="html">
+        <source>Verbindung wird hergestellt …</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/home/home.component.html</context>
+          <context context-type="linenumber">148</context>
+        </context-group>
+      </trans-unit>
       <trans-unit id="homeJoinCard.joinCta" datatype="html">
         <source>Los geht’s</source>
         <context-group purpose="location">
@@ -8407,7 +8406,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="homeHostIntro.eyebrow" datatype="html">
-        <source> Für Lehrende und Vortragende </source>
+        <source> Für Veranstaltende </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/home/home.component.html</context>
           <context context-type="linenumber">182,184</context>
@@ -8648,8 +8647,15 @@
           <context context-type="linenumber">682,684</context>
         </context-group>
       </trans-unit>
+      <trans-unit id="homeFeedbackCard.title" datatype="html">
+        <source> Blitzlicht </source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/home/home.component.html</context>
+          <context context-type="linenumber">690,692</context>
+        </context-group>
+      </trans-unit>
       <trans-unit id="homeScenario.eventFeedback" datatype="html">
-        <source> Stimmung/Tempo erfassen </source>
+        <source> Stimmung oder Tempo erfassen </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/home/home.component.html</context>
           <context context-type="linenumber">708,710</context>
@@ -8691,28 +8697,28 @@
         </context-group>
       </trans-unit>
       <trans-unit id="motd.thumbUpTooltip" datatype="html">
-        <source>Hilfreich – erneut tippen zum Zurücknehmen</source>
+        <source>Hilfreich – erneut auswählen, um die Bewertung zurückzunehmen</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/home/home.component.html</context>
           <context context-type="linenumber">854</context>
         </context-group>
       </trans-unit>
       <trans-unit id="motd.thumbUpAria" datatype="html">
-        <source>Hilfreich, erneut tippen zum Zurücknehmen</source>
+        <source>Hilfreich, erneut auswählen, um die Bewertung zurückzunehmen</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/home/home.component.html</context>
           <context context-type="linenumber">856</context>
         </context-group>
       </trans-unit>
       <trans-unit id="motd.thumbDownTooltip" datatype="html">
-        <source>Nicht hilfreich – erneut tippen zum Zurücknehmen</source>
+        <source>Nicht hilfreich – erneut auswählen, um die Bewertung zurückzunehmen</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/home/home.component.html</context>
           <context context-type="linenumber">868</context>
         </context-group>
       </trans-unit>
       <trans-unit id="motd.thumbDownAria" datatype="html">
-        <source>Nicht hilfreich, erneut tippen zum Zurücknehmen</source>
+        <source>Nicht hilfreich, erneut auswählen, um die Bewertung zurückzunehmen</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/home/home.component.html</context>
           <context context-type="linenumber">870</context>
@@ -8814,7 +8820,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="homeLiveCard.removeCtaForgetHint" datatype="html">
-        <source>Nur den Schnellzugang zu entfernen lässt das Forum offen. Mit der Wiederherstellungskarte kannst du den Host-Zugang später wiederherstellen.</source>
+        <source>Wenn du nur den Schnellzugang entfernst, bleibt das Forum offen. Mit der Wiederherstellungskarte kannst du den Host-Zugang später wiederherstellen.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/home/home.component.ts</context>
           <context context-type="linenumber">712</context>
@@ -8842,7 +8848,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="homeLiveCard.removeCtaError" datatype="html">
-        <source>Session konnte nicht gelöscht werden. Bitte erneut versuchen.</source>
+        <source>Die Session konnte nicht gelöscht werden. Bitte versuche es erneut.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/home/home.component.ts</context>
           <context context-type="linenumber">795</context>
@@ -8999,7 +9005,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="homeHostCard.syncLinkError" datatype="html">
-        <source>Bitte einen gültigen Sync-Link einfügen.</source>
+        <source>Füge bitte einen gültigen Sync-Link ein.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/home/home.component.ts</context>
           <context context-type="linenumber">1278</context>
@@ -9027,7 +9033,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="homeFeedbackCard.startError" datatype="html">
-        <source>Blitzlicht konnte nicht gestartet werden. Bitte erneut versuchen.</source>
+        <source>Das Blitzlicht konnte nicht gestartet werden. Bitte versuche es erneut.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/home/home.component.ts</context>
           <context context-type="linenumber">1341</context>
@@ -9153,8 +9159,8 @@
           <context context-type="linenumber">285</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="333141918113055287" datatype="html">
-        <source>Wird beigetreten…</source>
+      <trans-unit id="1645173415639912207" datatype="html">
+        <source>Beitritt läuft …</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/join/join.component.ts</context>
           <context context-type="linenumber">298</context>
@@ -9443,7 +9449,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="motd.archiveEmpty" datatype="html">
-        <source> Keine archivierten Meldungen. </source>
+        <source> Noch keine Meldungen im Archiv. </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/news-archive/news-archive-page.component.html</context>
           <context context-type="linenumber">73,75</context>
@@ -9509,7 +9515,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="motd.archiveItemFallbackTitle" datatype="html">
-        <source>Archiv-Meldung</source>
+        <source>Archivierte Meldung</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/news-archive/news-archive-page.component.ts</context>
           <context context-type="linenumber">131</context>
@@ -9524,7 +9530,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="motd.archiveLoadError" datatype="html">
-        <source>Archiv konnte nicht geladen werden.</source>
+        <source>Das News-Archiv konnte nicht geladen werden. Bitte versuche es später erneut.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/news-archive/news-archive-page.component.ts</context>
           <context context-type="linenumber">132</context>
@@ -9539,7 +9545,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="motd.archiveMarkedAllReadSnack" datatype="html">
-        <source>Archiv als gelesen markiert.</source>
+        <source>Alle Meldungen wurden als gelesen markiert.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/news-archive/news-archive-page.component.ts</context>
           <context context-type="linenumber">253</context>
@@ -9550,7 +9556,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="motd.archiveLoadMoreError" datatype="html">
-        <source>Weitere Meldungen konnten nicht geladen werden.</source>
+        <source>Weitere Meldungen konnten nicht geladen werden. Bitte versuche es erneut.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/news-archive/news-archive-page.component.ts</context>
           <context context-type="linenumber">349</context>
@@ -9811,7 +9817,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="productFeedback.status.followUpExpired" datatype="html">
-        <source>Die Zeit für die Ergänzung ist abgelaufen. Deine Zwei-Klick-Antwort bleibt gespeichert.</source>
+        <source>Die Zeit für die Ergänzung ist abgelaufen. Deine Antwort mit zwei Klicks bleibt gespeichert.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/product-feedback/product-feedback-card.component.ts</context>
           <context context-type="linenumber">612</context>
@@ -9846,21 +9852,21 @@
         </context-group>
       </trans-unit>
       <trans-unit id="productFeedback.status.claimFailed" datatype="html">
-        <source>Die Frage konnte nicht geladen werden. Bitte versuche es erneut oder schließe sie.</source>
+        <source>Die Frage konnte nicht geladen werden. Bitte versuche es erneut oder schließe die Rückmeldung.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/product-feedback/product-feedback-card.component.ts</context>
           <context context-type="linenumber">625</context>
         </context-group>
       </trans-unit>
       <trans-unit id="productFeedback.status.messageRejected" datatype="html">
-        <source>Die Ergänzung konnte nicht gesendet werden. Bitte versuche es erneut oder schließe sie.</source>
+        <source>Die Ergänzung konnte nicht gesendet werden. Bitte versuche es erneut oder schließe die Rückmeldung.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/product-feedback/product-feedback-card.component.ts</context>
           <context context-type="linenumber">627</context>
         </context-group>
       </trans-unit>
       <trans-unit id="productFeedback.status.rejected" datatype="html">
-        <source>Das hat nicht geklappt. Bitte erneut versuchen oder schließen.</source>
+        <source>Das hat nicht geklappt. Bitte versuche es erneut oder schließe die Rückmeldung.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/product-feedback/product-feedback-card.component.ts</context>
           <context context-type="linenumber">628</context>
@@ -11058,8 +11064,8 @@
           <context context-type="linenumber">338</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="1110390562708491750" datatype="html">
-        <source>Anzahl Teams</source>
+      <trans-unit id="115878560539112451" datatype="html">
+        <source>Anzahl der Teams</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/quiz/quiz-edit/quiz-edit.component.html</context>
           <context context-type="linenumber">393</context>
@@ -11070,7 +11076,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="quizForm.teamCountAria" datatype="html">
-        <source>Anzahl Teams</source>
+        <source>Anzahl der Teams</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/quiz/quiz-edit/quiz-edit.component.html</context>
           <context context-type="linenumber">402</context>
@@ -11309,7 +11315,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="quizForm.bonusCodeCountAria" datatype="html">
-        <source>Anzahl Bonus-Codes</source>
+        <source>Anzahl der Bonus-Codes</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/quiz/quiz-edit/quiz-edit.component.html</context>
           <context context-type="linenumber">498</context>
@@ -18736,8 +18742,8 @@
           <context context-type="linenumber">1596,1598</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="1952538840507841358" datatype="html">
-        <source> Gleiche Antwort? Prima. Verschiedene Meinung? Überzeugt euch gegenseitig. </source>
+      <trans-unit id="7119915262919086691" datatype="html">
+        <source> Gleiche Antwort? Prima. Unterschiedliche Meinungen? Überzeugt euch gegenseitig. </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.html</context>
           <context context-type="linenumber">1599,1601</context>
@@ -19288,7 +19294,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="sessionHost.peerSuggestionSub" datatype="html">
-        <source> Erste Runde noch verborgen, bis du weiter machst. </source>
+        <source> Erste Runde noch verborgen, bis du weitermachst. </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.html</context>
           <context context-type="linenumber">3321,3323</context>
@@ -25441,7 +25447,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="sessionVote.discussionHintSerious" datatype="html">
-        <source>Gleiche Antwort? Prima. Verschiedene Meinung? Überzeugt euch gegenseitig.</source>
+        <source>Gleiche Antwort? Prima. Unterschiedliche Meinungen? Überzeugt euch gegenseitig.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-vote/session-vote-participant-copy.ts</context>
           <context context-type="linenumber">302</context>
@@ -25707,7 +25713,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="sessionVote.streakCalloutHeadingSerious" datatype="html">
-        <source>Serie-Bonus</source>
+        <source>Serienbonus</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-vote/session-vote-participant-copy.ts</context>
           <context context-type="linenumber">440</context>
@@ -25742,7 +25748,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="sessionVote.streakInARowPlayful" datatype="html">
-        <source><x id="count" equiv-text="streakCount"/> richtige in Folge</source>
+        <source><x id="count" equiv-text="streakCount"/> richtige Antworten in Folge</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-vote/session-vote-participant-copy.ts</context>
           <context context-type="linenumber">459</context>
@@ -28597,15 +28603,15 @@
           <context context-type="linenumber">125</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="9182051550515919068" datatype="html">
-        <source>Anzahl Teams:</source>
+      <trans-unit id="5445788768283993956" datatype="html">
+        <source>Anzahl der Teams:</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/preset-toast/preset-toast.component.html</context>
           <context context-type="linenumber">145</context>
         </context-group>
       </trans-unit>
       <trans-unit id="presetToast.teamCountAria" datatype="html">
-        <source>Anzahl Teams wählen</source>
+        <source>Anzahl der Teams wählen</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/preset-toast/preset-toast.component.html</context>
           <context context-type="linenumber">154</context>

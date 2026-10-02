@@ -73,7 +73,7 @@ function seoDescHome(): string {
 }
 
 function seoTitleQuizList(): string {
-  return $localize`:@@seo.titleQuizList:Meine Quizzes – arsnova.eu`;
+  return $localize`:@@seo.titleQuizList:Meine Quizze – arsnova.eu`;
 }
 
 function seoDescQuizList(): string {
@@ -93,7 +93,7 @@ function seoTitleQuizEdit(): string {
 }
 
 function seoDescQuizEdit(): string {
-  return $localize`:@@seo.descQuizEdit:Fragen und Metadaten eines Quizzes bearbeiten, Vorschau und Upload für die Session vorbereiten.`;
+  return $localize`:@@seo.descQuizEdit:Fragen und Metadaten eines Quiz bearbeiten, Vorschau und Upload für die Session vorbereiten.`;
 }
 
 function seoTitleQuizPreview(): string {
@@ -125,7 +125,7 @@ function seoTitleNewsArchive(): string {
 }
 
 function seoDescNewsArchive(): string {
-  return $localize`:@@seo.descNewsArchive:Freigegebene Meldungen aus dem News-Archiv: Chronik zu Releases, Hinweisen und Transparenz rund um arsnova.eu.`;
+  return $localize`:@@seo.descNewsArchive:Veröffentlichte Meldungen im News-Archiv: Neuigkeiten zu Versionen, Hinweisen und Transparenz rund um arsnova.eu.`;
 }
 
 function seoTitleImprint(): string {
