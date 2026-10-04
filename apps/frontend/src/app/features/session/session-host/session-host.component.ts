@@ -1453,12 +1453,17 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       return null;
     }
     if (status === 'uncertain') {
-      return $localize`:@@sessionQa.wordCloudSemanticUncertainHint:Einige Themen sind unsicher. Prüfe die Mitgliedsfragen.`;
+      return $localize`:@@sessionWordCloud.freetextSemanticUncertainHint:Einige Themen sind unsicher. Prüfe die zugehörigen Antworten.`;
     }
     if (status === 'failed') {
       return $localize`:@@sessionQa.wordCloudSemanticFailedHint:Themenanalyse fehlgeschlagen. Es gelten Wörter und Phrasen.`;
     }
-    if (status === 'fallback') {
+    if (
+      status === 'fallback' ||
+      (status === undefined &&
+        !this.qaWordCloudAnalysisLocale() &&
+        this.buildFreetextWordCloudLemmaItems().length > 0)
+    ) {
       return $localize`:@@sessionQa.wordCloudSemanticFallbackHint:Themen sind gerade nicht belastbar. Es gelten Wörter und Phrasen.`;
     }
 

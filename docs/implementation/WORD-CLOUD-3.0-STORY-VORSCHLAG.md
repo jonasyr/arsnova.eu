@@ -1,12 +1,14 @@
 <!-- markdownlint-disable MD013 -->
 
-# Word Cloud 3.0 - Host-first-Themenmodus fuer Q&A
+# Word Cloud 3.0 - historisches Zielbild des Host-first-Themenmodus fuer Q&A
 
 **Arbeitstitel:** `Word Cloud 3.0`
 
 **Folgt auf:** `Story 1.14`, `Story 1.14a`, `Story 1.14b`, `Word Cloud 2.1/2.2/2.3/2.4/2.5/2.6`
 
-**Status:** kanonisches Zielbild fuer Story `1.14c`. Stufe 0 (Vertrag/UI) und Stufe 1 (privater Encoder + Clustering) sind im Repo; Kill-Switch default aus. Produktdoku Stufe 1: [`docs/features/word-cloud-semantic.md`](../features/word-cloud-semantic.md). Die optionale spaCy-Glaettung aus Story `1.14b` bleibt getrennt (`docs/features/word-cloud-spacy.md`).
+**Status:** historisches, weiterhin nachvollziehbares Zielbild fuer Story `1.14c`. Stufe 0 (Vertrag/UI), Stufe 1 (privater Encoder + Clustering) und die Folgestory `1.14d` (Host-Freitext-Themen) sind im Repo; der gemeinsame Kill-Switch bleibt default aus, eine Produktivaktivierung ist nicht belegt. Aktuelle Produktdoku: [`docs/features/word-cloud-semantic.md`](../features/word-cloud-semantic.md). Die optionale spaCy-Glaettung aus Story `1.14b` bleibt getrennt (`docs/features/word-cloud-spacy.md`).
+
+**Leseschluessel:** Die Abschnitte »Zielbild«, »Historischer Stand August 2026«, »Nicht-Ziele«, Akzeptanzkriterien und Umsetzungsphasen halten den damaligen 1.14c-Zuschnitt bewusst fest. Aussagen, nach denen Freitext noch ausserhalb der ersten Story liegt oder 1.14d erst folgen soll, sind Planungshistorie und kein aktueller Produktstatus. Der aktuelle Stand folgt in der Ergaenzung vom 2026-10-03 und in der verlinkten Produktdoku.
 
 **Voranalyse (2026-08-20):** Modellwahl, 8-vCPU/16-GB-Grenze, Zusammenspiel mit 8.9c, Gemini-Vergleich und Implementierungsstufen in [`WORD-CLOUD-3.0-1.14c-VORANALYSE-2026-08-20.md`](WORD-CLOUD-3.0-1.14c-VORANALYSE-2026-08-20.md). Die Voranalyse ersetzt dieses Zielbild nicht.
 
@@ -33,7 +35,7 @@ Damit wird `3.0` zu einer **Host-first-Moderationsstory** mit hohem Nutzwert und
 
 ---
 
-## Stand August 2026
+## Historischer Stand August 2026
 
 Der lokale Host-first-Pfad ist produktseitig vorhanden. `THEME` bleibt der lexikalische Phrasenmodus, nicht die semantische Clusterung:
 
@@ -47,7 +49,7 @@ Der lokale Host-first-Pfad ist produktseitig vorhanden. `THEME` bleibt der lexik
 - **Stufe 0 (2026-08-20):** `SEMANTIC` ist in Host-Q&A und Host-Freitext sichtbar; ohne Kill-Switch antwortet `wordCloud.analyze` mit `status: disabled`, `fallbackUsed: true` und 2.x-Eintraegen. Keine leere Karte. Presenter bleibt aussen vor.
 - **Stufe 1 (2026-08-20):** privater Encoder-Sidecar (Compose-Profil `encoder`, Unix-Socket oder internes HTTP), agglomeratives Clustering im Backend, extraktive Labels. Host-Q&A-Themenmodus fuer `de`/`en`. Kill-Switch `WORD_CLOUD_SEMANTIC_ENABLED` default aus. Ohne/mit totem Server bleibt 2.x. Freitext-Toggle faellt in 1.14c kontrolliert lexikalisch zurueck; Encoder-Clustering fuer Freitext ist Story 1.14d. Kanonisch: [`docs/features/word-cloud-semantic.md`](../features/word-cloud-semantic.md).
 
-Nicht umgesetzt und deshalb Gegenstand der weiteren `1.14c`-Stufen beziehungsweise eigener Folgestorys:
+Zum damaligen Stand nicht umgesetzt und deshalb Gegenstand weiterer `1.14c`-Stufen beziehungsweise eigener Folgestorys:
 
 - optionale quellengebundene Labelbildung durch ein Open-Weight-LLM (Stufe 2)
 - Confidence-Filter fuer den lokalen Document-Frequency-Pfad
@@ -55,6 +57,16 @@ Nicht umgesetzt und deshalb Gegenstand der weiteren `1.14c`-Stufen beziehungswei
 - Encoder-Clustering fuer Freitext-Snapshots (**Story 1.14d**; dieselbe Kaskade wie Q&A; die Stufe-0-UI ist vorhanden)
 - physisch getrennte Inferenzbox mit LLM, GPU und den Mess-/FinOps-/Lizenz-Nachweisen fuer eine spaetere Produktivfreigabe
 - 8.9c Slice 4 (generatives Summary-Modell auf derselben Serverrolle, anderem Auftrag)
+
+---
+
+## Ergaenzung 2026-10-03: Story 1.14d
+
+Host-Freitext verwendet nun bei `de`/`en` denselben privaten Encoder, dieselbe deterministische Complete-Linkage-Clusterung und denselben Kill-Switch wie Host-Q&A. `fr`/`es` erhalten den lexikalischen Backend-Fallback; unter italienischer UI bleibt der Fallback ohne gewaehlte unterstuetzte Wolkensprache lokal und sendet keinen Backendauftrag. Presenter-Freitext und Stufe-2-LLM-Labels bleiben ausserhalb des Umfangs. `WORD_CLOUD_SEMANTIC_ENABLED` bleibt in der Produktionsvorlage `false`; der implementierte Code ist kein Nachweis einer Produktivaktivierung.
+
+Die Queue ist pro Session auf `active + latest` begrenzt. Nur der neueste abweichende Folgesnapshot wartet; gleiche Hashes teilen das Promise. Wird der wartende Slot durch einen neueren Snapshot ersetzt, erhalten dessen bisherige Aufrufer sofort einen lexikalischen, nicht cachebaren Fallback. Nach Erfolg oder Fehler des aktiven Jobs startet der letzte Ersatz serialisiert. Ein Session-Purge invalidiert aktive und wartende Arbeit über eine Epoche. Der v2-Redis-Cache ist an die unveränderliche Session-ID gebunden; ein atomarer Lua-Write indiziert vor dem sensiblen Snapshot-Wert und lehnt nach gesetzter 24-Stunden-Fence auch spät zurückkehrende LEXICAL-/LEMMA-/SEMANTIC-Ergebnisse ab. Der fail-closed Pre-Delete-Pass setzt die Fence und entfernt den validierten, auf 2.048 Einträge begrenzten Session-Index atomar. Die produktive Durability-Barriere erfasst vor der Mutation Redis-Server-`run_id` und `CLIENT ID`, schreibt danach einen zufälligen unsensiblen Fünf-Minuten-Marker und akzeptiert `WAITAOF` nur mit lokalem Fsync, unverändertem Serverlauf und unveränderter Verbindung. Daher ist der zweite Pass nach dem Datenbank-Delete nur idempotente Absicherung. Vor v2 unindizierte Einträge werden im Runtime-Pfad einmal global gescannt, ohne v2 zu erfassen.
+
+Nach Writer-Stop entfernt ein Deploy-Gate mit einem bekannten kompatiblen Image v1, alle v2-Snapshot-Artefakte und den stillgelegten persistenten Textcache. Retention folgt erst nach diesem AOF-bestätigten Pass; danach wiederholt das Deploy-Gate den Sweep, persistiert bei einem Normal-Deploy unmittelbar vor App-Start den Ziel-Candidate und der Production-Entrypoint wiederholt den All-Cache-Sweep vor `exec`. Neue Prozesse blockieren Snapshot-Writes während des SIGTERM-Drains. Rollback/Recover sind nur zwischen gate-kompatiblen Images zulässig; pre-Gate-Ziele werden vor Checkout abgelehnt und bei einem ersten fehlgeschlagenen Cutover durch erneuten Candidate-Deploy oder ein kompatibles Forward-Fix-/Revert-Image ersetzt, nicht gestartet. Ein alter Candidate bleibt bis nach beiden Sweeps und Retention bindender Runner. Damit bleiben die unterstützten Normal-/Rollback-/Recover-/Re-Upgrade-Pfade ohne `O(S×N)` sicher; jeder globale Sweep plus S Session-Purges kostet `O(N + K + S)`, konstante Wiederholungen ändern die asymptotische Grenze nicht. Der Vertrag setzt den produktiven einzelnen Redis-Primary voraus; Redis Cluster wird nicht unterstützt. Der Encodertransport erlaubt global höchstens einen Sidecar-Call gleichzeitig.
 
 ---
 
@@ -408,4 +420,4 @@ Damit wird der groesste inhaltliche Mehrwert erschlossen, ohne die bestehende `2
 - moderationsnah
 - messbar und iterativ ausbaubar
 
-Embeddings, deterministisches Clustering und die optionale quellengebundene LLM-Labelbildung gehoeren zu Story `1.14c`. Encoder-Clustering fuer Quiz-Freitext ist Story `1.14d`. Presenter-Rollout und weitere Locales bleiben spaetere `3.x`-Folgestorys.
+Im historischen Zuschnitt gehoeren Embeddings, deterministisches Clustering und die optionale quellengebundene LLM-Labelbildung zu Story `1.14c`; Encoder-Clustering fuer Quiz-Freitext war als Story `1.14d` vorgesehen. 1.14d ist inzwischen fuer Host-Freitext implementiert. Presenter-Rollout, Stufe-2-Labels und eine gehaertete Encoderabdeckung weiterer Locales bleiben spaetere `3.x`-Folgestorys.
