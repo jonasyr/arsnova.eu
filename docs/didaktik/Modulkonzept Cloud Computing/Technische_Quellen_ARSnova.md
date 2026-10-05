@@ -790,15 +790,15 @@ Nicht zulässig ist: **ARSnova ist für 500 Teilnehmende vollständig produktiv 
 
 **Belegt nicht:** ein technisch garantiert privates Netzwerkziel, einen ausgelieferten generativen Modellserver, `llama-server`-Kompatibilität, produktive Aktivierung oder inhaltlich korrekte Zusammenfassungen. Der lokale Dev-Helfer ist kein Produktionspfad und kann bei optionaler Gemini-Konfiguration Daten extern übertragen.
 
-### `SRC-LLM-LLAMA-ZIELBILD` – angenommene Runtimeentscheidung
+### `SRC-LLM-LLAMA-ZIELBILD` – Runtimeentscheidung und Implementierung
 
-**Quelle:** [ADR-0035 zu `llama.cpp`](../../architecture/decisions/0035-self-hosted-llm-runtime-llama-cpp-over-ollama.md)
+**Quelle:** [ADR-0035 zu `llama.cpp`](../../architecture/decisions/0035-self-hosted-llm-runtime-llama-cpp-over-ollama.md) und [Runtime-Betriebsdoku](../../features/open-weight-llm-runtime.md)
 
-**Status:** akzeptierte Architekturentscheidung, aber nicht implementiertes Zielbild
+**Status:** Runtime technisch implementiert und lokal real geprüft; produktiv default aus
 
-**Belegt:** die Entscheidung, für künftige LLM-Labels und Summary-Slice 4 `llama.cpp`/`llama-server` direkt statt Ollama zu verwenden; privater zweiter Host als kanonische Produktionsannahme; ein gemeinsamer Slot; eigene Verträge, Queues, Timeouts, Fallbacks und Kill-Switch.
+**Belegt:** die Entscheidung und technische Umsetzung, für LLM-Labels, Summary-Slice 4 und Lernzielableitung `llama.cpp`/`llama-server` direkt statt Ollama zu verwenden; privater zweiter Host als kanonische Produktionsannahme; ein gemeinsamer Slot; eigene Verträge, Timeouts, Fallbacks und Kill-Switch; gepinntes Image/GGUF, Compose-Profile, Backendclient und realer Kurzlabel-Lauf.
 
-**Belegt nicht:** vorhandenes LLM-Image, Modellartefakt, Compose-Profil, Backendclient, Produktivhost, GPU, Kosten- oder Qualitätsabnahme. Die ADR autorisiert die Implementierung nicht selbst.
+**Belegt nicht:** einen vorhandenen Produktivhost, produktive Aktivierung, GPU, p95-Last-, Kosten-, Privacy- oder fachliche Consumer-Qualitätsabnahme. Die lokale Messung ist keine Produktionszusage.
 
 ### `SRC-ML-FEATURE-FLAGS` – aktueller Defaultzustand
 
@@ -806,7 +806,7 @@ Nicht zulässig ist: **ARSnova ist für 500 Teilnehmende vollständig produktiv 
 
 **Status:** implementierte Vorlage
 
-**Belegt:** `NLP_ENABLED=false`, `WORD_CLOUD_SEMANTIC_ENABLED=false`, `QA_NLP_ENABLED=false` und `QA_SUMMARY_ENABLED=false`. `OPEN_WEIGHT_LLM_ENABLED` ist nur auskommentiert als noch nicht implementiertes Zielbild; ein `llm`-Compose-Profil fehlt.
+**Belegt:** `NLP_ENABLED=false`, `WORD_CLOUD_SEMANTIC_ENABLED=false`, `QA_NLP_ENABLED=false`, `QA_SUMMARY_ENABLED=false` und `OPEN_WEIGHT_LLM_ENABLED=false`. Für Runtime R existieren getrennte Labor- und Zwei-Host-Compose-Pfade; `deploy.sh` startet das Profil weiterhin nicht.
 
 **Belegt nicht:** den Wert produktiver Umgebungsvariablen. Eine Vorlage ist keine Laufzeitabfrage.
 

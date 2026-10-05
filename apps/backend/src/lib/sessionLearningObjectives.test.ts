@@ -332,17 +332,20 @@ describe('session learning-objective service', () => {
       .mockResolvedValueOnce(sessionRow({ learningContextRevision: 5 }));
 
     await expect(
-      saveSessionLearningObjectives({
-        code: 'ABC123',
-        expectedLearningContextRevision: 4,
-        mutations: [
-          {
-            action: 'delete',
-            objectiveId: OBJECTIVE_ID,
-            expectedRevision: 2,
-          },
-        ],
-      }),
+      saveSessionLearningObjectives(
+        {
+          code: 'ABC123',
+          expectedLearningContextRevision: 4,
+          mutations: [
+            {
+              action: 'delete',
+              objectiveId: OBJECTIVE_ID,
+              expectedRevision: 2,
+            },
+          ],
+        },
+        NOW,
+      ),
     ).rejects.toMatchObject({ code: 'CONFLICT' });
     expect(prismaMock.sessionLearningObjective.findMany).not.toHaveBeenCalled();
 
@@ -357,17 +360,20 @@ describe('session learning-objective service', () => {
       }),
     );
     await expect(
-      saveSessionLearningObjectives({
-        code: 'ABC123',
-        expectedLearningContextRevision: 4,
-        mutations: [
-          {
-            action: 'delete',
-            objectiveId: OBJECTIVE_ID,
-            expectedRevision: 2,
-          },
-        ],
-      }),
+      saveSessionLearningObjectives(
+        {
+          code: 'ABC123',
+          expectedLearningContextRevision: 4,
+          mutations: [
+            {
+              action: 'delete',
+              objectiveId: OBJECTIVE_ID,
+              expectedRevision: 2,
+            },
+          ],
+        },
+        NOW,
+      ),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
   });
 
@@ -442,17 +448,20 @@ describe('session learning-objective service', () => {
     prismaMock.sessionLearningObjective.findMany.mockResolvedValue([objectiveRow()]);
 
     await expect(
-      saveSessionLearningObjectives({
-        code: 'ABC123',
-        expectedLearningContextRevision: 4,
-        mutations: [
-          {
-            action: 'delete',
-            objectiveId: OBJECTIVE_ID,
-            expectedRevision: 1,
-          },
-        ],
-      }),
+      saveSessionLearningObjectives(
+        {
+          code: 'ABC123',
+          expectedLearningContextRevision: 4,
+          mutations: [
+            {
+              action: 'delete',
+              objectiveId: OBJECTIVE_ID,
+              expectedRevision: 1,
+            },
+          ],
+        },
+        NOW,
+      ),
     ).rejects.toMatchObject({ code: 'CONFLICT' });
     expect(prismaMock.sessionLearningObjective.delete).not.toHaveBeenCalled();
     expect(prismaMock.session.update).not.toHaveBeenCalled();

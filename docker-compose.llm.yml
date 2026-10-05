@@ -1,0 +1,38 @@
+# Kanonische Story-8.9d-Topologie: eigener privater CPU-Host.
+# Ausschließlich über scripts/open-weight-llm/prod-compose.mjs bedienen; der
+# Wrapper prüft beim Erstellen/Starten Image-Digest, private Bind-Adresse,
+# Credential und GGUF-Digest; Rollback-/Inspektionsbefehle bleiben ausführbar.
+services:
+  open-weight-llm:
+    profiles: ['llm']
+    image: ${OPEN_WEIGHT_LLM_IMAGE:?OPEN_WEIGHT_LLM_IMAGE must be a digest image ref}
+    container_name: arsnova-open-weight-llm
+    restart: always
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    # Der Server bindet im Host-Netz exakt an OPEN_WEIGHT_LLM_BIND_ADDRESS;
+    # Wildcards werden vom Entry-Point und vom Betreiber-Wrapper abgewiesen.
+    network_mode: host
+    pids_limit: 128
+    mem_limit: 5g
+    cpus: '4.0'
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=128m,mode=1777
+    volumes:
+      - ${OPEN_WEIGHT_LLM_MODEL_DIR:?OPEN_WEIGHT_LLM_MODEL_DIR must be set}:/models:ro
+    env_file:
+      - .env.llm
+    environment:
+      OPEN_WEIGHT_LLM_TRANSPORT: http
+      OPEN_WEIGHT_LLM_THREADS: '4'
+    healthcheck:
+      test: ['CMD', '/opt/arsnova/healthcheck.sh']
+      interval: 15s
+      timeout: 5s
+      start_period: 180s
+      retries: 5
+    stop_grace_period: 10s

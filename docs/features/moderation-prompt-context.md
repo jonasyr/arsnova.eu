@@ -26,7 +26,7 @@ Damit gelten insbesondere folgende Grenzen:
 - N5–N9 liefern validierte Fachfragmente; der vollständige serverseitige N10-Kontextbuilder aus Slice 6 fehlt weiterhin.
 - Die Lernzielpersistenz und Host-Oberflächen sind vorhanden; die modellgestützte Ableitung aus Lösungen bleibt bis Slice 5 und Runtime-PR R ausdrücklich unverdrahtet.
 - Es gibt noch keine Tokenisierung, Budgetauswahl, Kontextvorschau oder Cacheverdrahtung für einen vollständigen Moderationskontext; der Latest-Themenbeleg ist nur ein interner Eingangsbestand.
-- Die private Runtime aus Story 8.9d ist weiterhin nicht implementiert. Der Gemini-Entwicklungshelfer, der bestehende HTTP-Adapter und der Encoder sind kein Runtime-Nachweis.
+- Die private Runtime aus Story 8.9d ist technisch implementiert, produktiv deaktiviert und noch nicht an die Lernzielableitung verdrahtet. Der Gemini-Entwicklungshelfer, der bestehende Summary-HTTP-Adapter und der Encoder bleiben getrennte Pfade.
 - Ein Vertragstest oder eine Fixture belegt keine Promptqualität und keine didaktische Wirksamkeit.
 
 Der neue Vertrag und die internen Fachfragmente sind deshalb **vorbereitete, noch nicht produktiv zum Gesamtauftrag verdrahtete Schnittstellen**. Feature-Flags bleiben unverändert; die Slices 2 bis 4 ändern weder Summary-Auswahl noch Modellauftrag. Slice 4 fügt ausschließlich hostgeschützte Lernziel-APIs und Hostoberflächen hinzu; Teilnehmer-DTOs bleiben unverändert. Nur ein ohnehin hostgestarteter erfolgreicher semantischer Q&A-Lauf aktualisiert zusätzlich den minimierten internen Themenbeleg. Die sichtbaren Kompasskarten behalten ihren bisherigen Host-UI-Vertrag, beziehen ihre Entscheidung nun aber aus dem gemeinsamen Regelmodul.
