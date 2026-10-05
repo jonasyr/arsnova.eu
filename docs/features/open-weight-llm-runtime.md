@@ -86,7 +86,9 @@ OPEN_WEIGHT_LLM_TOKEN=<lokales-ascii-secret-mit-32-bis-512-zeichen> \
 npm run docker:up:llm
 ```
 
-Die App im Compose-Netz nutzt `/run/open-weight-llm/llm.sock`. Host-npm auf macOS kann diesen Docker-Volume-Socket nicht sehen und verwendet stattdessen `OPEN_WEIGHT_LLM_URL=http://127.0.0.1:8080` mit einer nur an Loopback gebundenen Runtime.
+Der Laborbefehl baut und erstellt Runtime **und App** neu. Nur für diesen Aufruf setzt er `OPEN_WEIGHT_LLM_ENABLED=true`; das in derselben Shell gesetzte `OPEN_WEIGHT_LLM_TOKEN` gelangt dadurch identisch in beide Container. Die App im Compose-Netz nutzt anschließend `/run/open-weight-llm/llm.sock`. Ein bereits laufender App-Container kann so weder das deaktivierte Standardflag noch ein älteres Credential behalten. Ohne diesen expliziten Laborbefehl bleibt der Default `false`.
+
+Host-npm auf macOS kann diesen Docker-Volume-Socket nicht sehen und verwendet stattdessen `OPEN_WEIGHT_LLM_URL=http://127.0.0.1:8080` mit einer nur an Loopback gebundenen Runtime.
 
 Der Socket wird innerhalb des ausschließlich zwischen Runtime und App geteilten Named Volume mit Gruppe `65532` und Modus `0770` erzeugt. Die App erhält diese ID nur als zusätzliche Gruppe. Das ist erforderlich, weil Runtime und App absichtlich unter verschiedenen numerischen UID laufen und Linux für `connect()` Schreibrecht auf dem Socket-Inode verlangt. Readiness wird erst nach dem Setzen des Modus gemeldet. Das Volume ist nicht an den Host publiziert; zusätzlich erzwingen die auftragsrelevanten Endpunkte weiterhin das separate Bearer-Credential.
 

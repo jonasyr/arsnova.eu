@@ -71,6 +71,14 @@ test('Host-npm besitzt einen expliziten Loopback-HTTP-Laborpfad', () => {
   assert.match(runtime, /\/models:ro/);
 });
 
+test('Same-Host-Labor startet Runtime und App mit identischem aktivem Vertrag', () => {
+  const scripts = JSON.parse(read('package.json')).scripts;
+  const command = scripts['docker:up:llm'];
+  assert.match(command, /^OPEN_WEIGHT_LLM_ENABLED=true\s+/);
+  assert.match(command, /docker compose --profile llm up -d --build/);
+  assert.match(command, /\bopen-weight-llm app$/);
+});
+
 test('zweiter Produktionshost verlangt Digest-Image und bindet ohne Port-Mapping', () => {
   const compose = read('docker-compose.llm.yml');
   const runtime = extractServiceBlock(compose, 'open-weight-llm');

@@ -34,7 +34,7 @@
     "test:open-weight-llm": "node --test scripts/ci/open-weight-llm-runtime.test.mjs",
     "test:open-weight-llm-compose": "node --test scripts/ci/open-weight-llm-compose-smoke.test.mjs",
     "test:open-weight-llm:all": "node --test scripts/ci/open-weight-llm-runtime.test.mjs scripts/ci/open-weight-llm-compose-smoke.test.mjs",
-    "docker:up:llm": "docker compose --profile llm up -d --build open-weight-llm",
+    "docker:up:llm": "OPEN_WEIGHT_LLM_ENABLED=true docker compose --profile llm up -d --build open-weight-llm app",
     "docker:up:llm:http": "docker compose --profile llm-http up -d --build open-weight-llm-http",
     "llm:prod": "node scripts/open-weight-llm/prod-compose.mjs",
     "docker:up:encoder": "docker compose --profile encoder up -d --build wordcloud-encoder",
