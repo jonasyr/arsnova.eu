@@ -73,6 +73,9 @@ services:
       - wordcloud_encoder_socket:/run/wordcloud-encoder:ro
       - open_weight_llm_socket:/run/open-weight-llm:ro
     depends_on:
+      open-weight-llm:
+        condition: service_healthy
+        required: false
       postgres:
         condition: service_healthy
       redis:

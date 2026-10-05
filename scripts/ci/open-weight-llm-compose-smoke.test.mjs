@@ -77,6 +77,15 @@ test('Same-Host-Labor startet Runtime und App mit identischem aktivem Vertrag', 
   assert.match(command, /^OPEN_WEIGHT_LLM_ENABLED=true\s+/);
   assert.match(command, /docker compose --profile llm up -d --build/);
   assert.match(command, /\bopen-weight-llm app$/);
+
+  for (const composePath of ['docker-compose.yml', 'docker-compose.prod.yml']) {
+    const app = extractServiceBlock(read(composePath), 'app');
+    assert.match(
+      app,
+      /open-weight-llm:\s*\n\s+condition: service_healthy\s*\n\s+required: false/,
+      `${composePath}: Runtime initialisiert das Socket-Volume vor der App`,
+    );
+  }
 });
 
 test('zweiter Produktionshost verlangt Digest-Image und bindet ohne Port-Mapping', () => {

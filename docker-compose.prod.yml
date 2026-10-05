@@ -238,6 +238,9 @@ services:
       # OPEN_WEIGHT_LLM_URL (zweiter Host) und OPEN_WEIGHT_LLM_SOCKET_PATH
       # (Same-Host-Labor) kommen exklusiv aus `.env.production`.
     depends_on:
+      open-weight-llm:
+        condition: service_healthy
+        required: false
       pdf-worker:
         condition: service_healthy
       postgres:
