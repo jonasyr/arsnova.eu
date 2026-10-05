@@ -3,8 +3,8 @@
 # Generative Moderationszusammenfassung (Story 8.9c)
 
 **Zielgruppe:** Product Owner, Entwickler, Betrieb
-**Stand:** 2026-08-22
-**Status:** Slices 1–3 plus Loopback-Helfer und Snapshot-Ranking im Repo (Vertrag, Host-UI, privater HTTP-Adapter); Kill-Switch produktiv default aus; echtes LLM erst mit 8.9c Slice 4 nach Story 8.9d / ADR-0035, nicht als Drop-in auf `llama-server`
+**Stand:** 2026-10-05
+**Status:** Slices 1–3 plus Loopback-Helfer und Snapshot-Ranking im Repo; Runtime 8.9d technisch vorhanden; Kill-Switch produktiv default aus; fachlicher LLM-Consumer bleibt 8.9c Slice 4, nicht als Drop-in auf `llama-server`
 **Backlog:** Story 8.9c
 **ADR:** [0032-optional-nlp-cascade-for-qa-moderation-signals.md](../architecture/decisions/0032-optional-nlp-cascade-for-qa-moderation-signals.md) (Kaskade), [0035-self-hosted-llm-runtime-llama-cpp-over-ollama.md](../architecture/decisions/0035-self-hosted-llm-runtime-llama-cpp-over-ollama.md) (Slice-4-Runtime)
 
@@ -87,7 +87,7 @@ npm run test -w @arsnova/frontend -- \
   src/app/features/session/session-host/session-host.component.spec.ts
 ```
 
-Produktiv `QA_SUMMARY_ENABLED` nicht stillschweigend auf `true` setzen. Ohne privaten Inferenzserver gibt es keine Zusammenfassung. `OPEN_WEIGHT_LLM_ENABLED` (Story 8.9d, noch nicht implementiert) schaltet den Themenmodus nicht ab.
+Produktiv `QA_SUMMARY_ENABLED` nicht stillschweigend auf `true` setzen. Ohne privaten Inferenzserver gibt es keine Zusammenfassung. `OPEN_WEIGHT_LLM_ENABLED` schaltet den Themenmodus nicht ab; Runtime-Betrieb und Grenzen stehen in [open-weight-llm-runtime.md](open-weight-llm-runtime.md).
 
 ## Versionierter Moderationskontext aus Issue #456
 
@@ -103,10 +103,10 @@ Kontextbuilder, Datenzugriff, Tokenpacker, Cache, Vorschau und Adapterpfad folge
 Slices 2–7. Bis dahin sendet 8.9c weiterhin ausschließlich `locale`, `snapshotHash` und die
 begrenzten Q&A-Textquellen des bestehenden `QaSummaryInferenceRequestSchema`.
 
-Die private Runtime aus Story 8.9d ist ebenfalls noch zu implementieren.
-Ein separater **Runtime-PR R** muss vor #456 Slice 5 (Lernzielableitung) technisch
-abgenommen sein; Slices 1–4 können ohne Modell umgesetzt werden. HTTP-Adapter und
-Entwicklungshilfsserver gelten nicht als Runtime-Nachweis.
+Die private Runtime aus Story 8.9d ist als **Runtime R** technisch implementiert und real mit
+einem kurzen schemaerzwungenen Labelauftrag geprüft. Sie ist produktiv deaktiviert und noch
+nicht in diese Summary-Queue verdrahtet. HTTP-Adapter und Entwicklungshilfsserver bleiben
+davon getrennt.
 
 Die [Ergänzung zu ADR-0035](../architecture/decisions/0035-self-hosted-llm-runtime-llama-cpp-over-ollama.md#ergänzung-2026-09-22-runtime-voraussetzung-für-issue-456)
 regelt den dritten Auftrag, den gemeinsamen Slot und die Abnahme.

@@ -63,9 +63,13 @@ services:
       WORD_CLOUD_ENCODER_SOCKET_PATH: /run/wordcloud-encoder/encoder.sock
       WORD_CLOUD_ENCODER_TIMEOUT_MS: '120000'
       WORD_CLOUD_ENCODER_CACHE_TTL_SECONDS: '1800'
+      OPEN_WEIGHT_LLM_ENABLED: ${OPEN_WEIGHT_LLM_ENABLED:-false}
+      OPEN_WEIGHT_LLM_SOCKET_PATH: /run/open-weight-llm/llm.sock
+      OPEN_WEIGHT_LLM_TOKEN: ${OPEN_WEIGHT_LLM_TOKEN:-local-runtime-token-change-me-000000000000}
     volumes:
       - spacy_socket:/run/spacy:ro
       - wordcloud_encoder_socket:/run/wordcloud-encoder:ro
+      - open_weight_llm_socket:/run/open-weight-llm:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -143,8 +147,48 @@ services:
       start_period: 120s
       retries: 5
 
+  # Same-host-Labor für Story 8.9d. Nicht zusammen mit nlp+encoder auf dem
+  # 16-GB-Live-Host starten. Produktion nutzt docker-compose.llm.yml auf einem
+  # zweiten privaten Host.
+  open-weight-llm:
+    profiles: ['llm']
+    build:
+      context: ./docker/open-weight-llm
+      dockerfile: Dockerfile
+    image: arsnova-open-weight-llm:llama-b10524
+    container_name: arsnova-v3-open-weight-llm
+    restart: unless-stopped
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    network_mode: none
+    pids_limit: 128
+    mem_limit: 5g
+    cpus: '4.0'
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=128m,mode=1777
+    volumes:
+      - open_weight_llm_socket:/run/open-weight-llm
+      - ${OPEN_WEIGHT_LLM_MODEL_DIR:-./models/open-weight-llm}:/models:ro
+    environment:
+      OPEN_WEIGHT_LLM_TRANSPORT: unix
+      OPEN_WEIGHT_LLM_SOCKET_PATH: /run/open-weight-llm/llm.sock
+      OPEN_WEIGHT_LLM_TOKEN: ${OPEN_WEIGHT_LLM_TOKEN:-local-runtime-token-change-me-000000000000}
+      OPEN_WEIGHT_LLM_THREADS: '4'
+    healthcheck:
+      test: ['CMD', '/opt/arsnova/healthcheck.sh']
+      interval: 15s
+      timeout: 5s
+      start_period: 180s
+      retries: 5
+    stop_grace_period: 10s
+
 volumes:
   postgres_data:
   redis_data:
   spacy_socket:
   wordcloud_encoder_socket:
+  open_weight_llm_socket:

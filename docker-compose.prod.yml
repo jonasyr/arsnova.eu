@@ -142,6 +142,42 @@ services:
       retries: 5
     stop_grace_period: 10s
 
+  # Ausschließlich Same-Host-Labor. Nicht zusammen mit nlp+encoder auf dem
+  # 16-GB-Live-Host starten. Kanonische Produktion: docker-compose.llm.yml
+  # auf einem zweiten privaten Host. deploy.sh startet dieses Profil nicht.
+  open-weight-llm:
+    profiles: ['llm']
+    image: ${OPEN_WEIGHT_LLM_IMAGE:-arsnova-open-weight-llm:llama-b10524}
+    container_name: arsnova-v3-open-weight-llm
+    restart: always
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    network_mode: none
+    pids_limit: 128
+    mem_limit: 5g
+    cpus: '4.0'
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=128m,mode=1777
+    volumes:
+      - open_weight_llm_socket:/run/open-weight-llm
+      - ${OPEN_WEIGHT_LLM_MODEL_DIR:-./models/open-weight-llm}:/models:ro
+    env_file:
+      - .env.production
+    environment:
+      OPEN_WEIGHT_LLM_TRANSPORT: unix
+      OPEN_WEIGHT_LLM_THREADS: '4'
+    healthcheck:
+      test: ['CMD', '/opt/arsnova/healthcheck.sh']
+      interval: 15s
+      timeout: 5s
+      start_period: 180s
+      retries: 5
+    stop_grace_period: 10s
+
   app:
     image: ${ARSNOVA_IMAGE:?ARSNOVA_IMAGE must be set to a digest image ref}
     container_name: arsnova-v3-app
@@ -157,6 +193,7 @@ services:
       - pdf_worker_socket:/run/pdf-worker:ro
       - spacy_socket:/run/spacy:ro
       - wordcloud_encoder_socket:/run/wordcloud-encoder:ro
+      - open_weight_llm_socket:/run/open-weight-llm:ro
     env_file:
       - .env.production
     ports:
@@ -193,6 +230,11 @@ services:
       # private QA_SUMMARY_INFERENCE_URL kein Cloud-Fallback.
       # WORD_CLOUD_SEMANTIC_ENABLED kommt aus `.env.production` (Default false).
       # Encoder nur mit Compose-Profil `encoder`; deploy.sh startet ihn nicht.
+      # OPEN_WEIGHT_LLM_ENABLED kommt aus `.env.production` (Default false).
+      # Das llm-Profil hier ist nur Labor; kanonische Produktion läuft auf
+      # einem zweiten privaten Host und wird bewusst separat gestartet.
+      # OPEN_WEIGHT_LLM_URL (zweiter Host) und OPEN_WEIGHT_LLM_SOCKET_PATH
+      # (Same-Host-Labor) kommen exklusiv aus `.env.production`.
     depends_on:
       pdf-worker:
         condition: service_healthy
@@ -219,3 +261,4 @@ volumes:
   pdf_worker_socket:
   spacy_socket:
   wordcloud_encoder_socket:
+  open_weight_llm_socket:

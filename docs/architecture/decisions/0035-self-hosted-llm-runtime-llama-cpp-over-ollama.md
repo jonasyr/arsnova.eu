@@ -5,7 +5,7 @@
 **Status:** Accepted
 **Datum:** 2026-08-22
 **Entscheider:** Projektteam (Architekturentscheid auf Basis der 1.14c-Voranalyse, PO-Auftrag 2026-08-22)
-**Letzter Repo-Abgleich:** 2026-08-22 (Leitplanken nach 1.14b, 1.14c Stufe 1 und 8.9c Slices 1–3)
+**Letzter Repo-Abgleich:** 2026-10-05 (Runtime R implementiert; Produktivaktivierung und fachliche Consumer offen)
 **Kontext-Tags:** Machine Learning, Inferenz-Runtime, Selbst-Hosting, Backend-Architektur, Betrieb, Open-Weight-LLM
 
 **Ersetzt keine Produktentscheidung, nur die Runtime:** [WORD-CLOUD-3.0-1.14c-VORANALYSE-2026-08-20.md](../../implementation/WORD-CLOUD-3.0-1.14c-VORANALYSE-2026-08-20.md), [ADR-0032](0032-optional-nlp-cascade-for-qa-moderation-signals.md), Backlog Story 1.14c, Story 8.9c, Story 8.9d.
@@ -31,7 +31,7 @@ Randbedingungen, die für diese Entscheidung unverändert aus ADR-0032 und der V
 - Live-Hotpfade (`qa.submit`, Join, Vote, WebSocket) dürfen nie auf Inferenz warten.
 - Kein öffentlicher Port, kein stiller SaaS-Fallback, kein zweites Modellserver-Silo neben dem
   bereits beschlossenen privaten Encoder-Sidecar (1.14c Stufe 1, `docker/wordcloud-encoder`).
-- Zwei fachlich getrennte Aufträge (Cluster-Label, Summary-Bullet) sollen sich **eine**
+- Drei fachlich getrennte Aufträge (Cluster-Label, Summary-Bullet, Lernzielableitung) sollen sich **eine**
   Serverrolle teilen dürfen, aber eigene Prompts, Verträge, Queues und Timeouts behalten
   (Voranalyse §4.3/§4.6) — das bleibt durch diese ADR unverändert.
 
@@ -50,7 +50,7 @@ Direkt anhand der aktuellen Projektquellen geprüft (nicht nur aus Trainingswiss
 | [`vllm-project/vllm`](https://github.com/vllm-project/vllm)                                         | Apache-2.0 | Sehr aktiv, 89.7k Stars, explizit GPU-first (PagedAttention, CUDA-Graphs, Tensor-/Pipeline-Parallelism); CPU offiziell mitunterstützt, aber nicht der Entwurfsschwerpunkt                                                                                |
 | [`huggingface/text-generation-inference`](https://github.com/huggingface/text-generation-inference) | Apache-2.0 | **Vom Betreiber selbst archiviert (21.03.2026), "maintenance mode"**; README verweist explizit auf `vllm`/`SGLang` (GPU) oder **`llama.cpp`**/MLX (lokal) als Nachfolgeempfehlung; eigenes README: _"CPU is not the intended platform for this project"_ |
 
-`llama-server`-Flags (WebUI, Slots, `--host …sock`, `--ctx-size`, `--parallel`, `--json-schema` pro Request) gegen die aktuelle Server-README von `ggml-org/llama.cpp` geprüft (2026-08-22).
+`llama-server`-Flags (WebUI, Slots, `--host …sock`, `--ctx-size`, `--parallel`, Schema pro Request) gegen die aktuelle Server-README von `ggml-org/llama.cpp` geprüft (2026-08-22); das tatsächlich funktionierende b10524-Wire-Format wurde am 2026-10-05 mit dem gepinnten Modell nachgeprüft.
 
 ## Entscheidung
 
@@ -118,7 +118,7 @@ unzulässig.
 
 #### 2.2 Ein Slot, ein Inflight — nicht Concurrency 1 pro Auftrag
 
-Label- und Summary-Jobs dürfen sich **einen** `llama-server` teilen. Sie behalten getrennte
+Label-, Summary- und Lernziel-Jobs dürfen sich **einen** `llama-server` teilen. Sie behalten getrennte
 Prompts, Zod-Verträge, Queues und Cooldowns. `QA_SUMMARY_CONCURRENCY=1` und
 `WORD_CLOUD_ENCODER_MAX_IN_FLIGHT=1` sind **getrennte** Zähler; zwei Host-Klicks würden sonst
 zwei Requests in denselben Server schicken.
@@ -130,8 +130,9 @@ Verbindlich:
 
 - `--parallel 1` fest, nicht auto. `--parallel 2` verdoppelt den KV-Cache und sprengt das
   ~4-GB-Budget leicht.
-- **Ein** gemeinsames Inflight über Label- **und** Summary-Adapter. Ist der Slot belegt, bekommt
-  der zweite Auftrag sofort Fallback — nicht `pending` hinter einer versteckten llama.cpp-Queue.
+- **Ein** gemeinsames Inflight über Label-, Summary- und Lernzieladapter. Ist der Slot belegt,
+  bekommen Live-Aufträge sofort Fallback und Lernzielaufträge einen manuellen Retry-Zustand —
+  nicht `pending` hinter einer versteckten llama.cpp-Queue.
   Vor dem POST: `GET /slots?fail_on_no_slot=1` (503 → Backpressure). Dafür muss `--slots` gesetzt
   sein; ohne den Endpunkt antwortet `llama-server` mit 501 `not_supported_error`, nicht mit 503.
   Das App-Inflight bleibt die erste Sperre. Die Slot-Sonde fängt Belegung ab, die der Node-Zähler
@@ -147,9 +148,12 @@ Der 8.9c-Adapter spricht den eigenen Vertrag `POST /summary` → `QaSummaryModel
 `llama-server` spricht `/v1/chat/completions`. Die URL auf den OpenAI-Endpunkt zu legen zerbricht
 Zod, den Gemini-Helfer und die Quellenbindung.
 
-Story 8.9d liefert einen schmalen **Node-Client** (Arbeitsname `openWeightLlmClient`): Chat-
-Completions plus **pro Request** `json_schema` / GBNF. Label-Schema und Summary-Schema sind
-verschieden — **kein** globales `--json-schema` am Serverprozess.
+Story 8.9d liefert einen schmalen **Node-Client** (`openWeightLlmClient`): Chat-Completions
+plus **pro Request** schemaerzwungenes JSON/GBNF. Label-, Summary- und Lernzielschema sind
+verschieden — **kein** globales `--json-schema` am Serverprozess. Der Realtest mit b10524
+zeigte, dass `type: "json_schema"` plus `schema` HTTP 200 liefern kann, ohne die Grammatik
+anzuwenden. Verbindlich ist daher das ebenfalls dokumentierte und real geprüfte
+`type: "json_object"` plus `schema`; die nachgelagerte Zod-Prüfung bleibt Pflicht.
 
 `scripts/qa-summary-dev-server.mjs` bleibt Qualitätsorakel und lokaler Extraktor, kein
 Produktionspfad und keine Übersetzerschicht in Produktion.
@@ -169,7 +173,7 @@ Verbindlich:
 - `--ctx-size` explizit 2048 oder 4096, nach gemessener KV-Größe, nie Modelldefault.
 - `--n-predict` als harte Obergrenze (Richtung 256); Label-Requests setzen zusätzlich ein
   deutlich kleineres `max_tokens`.
-- Getrennte Backend-Timeouts für Label- und Summary-Job; Werte erst nach Prefill-Messung auf
+- Getrennte Backend-Timeouts für Label-, Summary- und Lernziel-Job; Werte erst nach Prefill-Messung auf
   der echten 8-vCPU-Box, nicht als Kopie der Gemini-Fenster.
 - Slice 4 sendet dem LLM eine **kürzere, schon gerankte** Quellenliste (Richtung 8), nicht
   automatisch alle 20 Snapshot-Quellen. Das Ranking aus 8.9c Slice 3 bleibt die Auswahl.
@@ -232,9 +236,10 @@ Diese Entscheidung betrifft ausschließlich die **Betreiber-seitige** Serving-Ru
 - 8.9b (in-process Gatekeeper/k-NN) — kein dritter Auftrag auf dem llama.cpp-Slot,
 - Freitext-Encoder-Clustering (Story 1.14d) — kein LLM-Label.
 
-Implementierungsfolge, sobald 8.9d beauftragt ist: **Runtime-Baustein zuerst** (Image, Profil,
+Implementierungsfolge: **Runtime-Baustein zuerst** (Image, Profil,
 Flags, gemeinsames Inflight, Health, Tests ohne Modell-Download) → 1.14c Stufe 2 (kurze Labels)
-→ 8.9c Slice 4 nach Prefill-Messung. Diese ADR autorisiert keine der drei Stufen von selbst.
+→ 8.9c Slice 4 nach Prefill-Messung. Runtime R ist umgesetzt; diese ADR autorisiert weiterhin
+keine Produktivaktivierung oder fachliche Freigabe der drei Consumer von selbst.
 
 ## Performance-Steckbrief
 
@@ -242,11 +247,12 @@ Flags, gemeinsames Inflight, Health, Tests ohne Modell-Download) → 1.14c Stufe
 - **Pfadtyp:** privater Hintergrund-/On-Demand-Dienst, kein synchroner Live-Hotpath.
 - **Kostenprofil:** CPU-Threads (2–4 laut Voranalyse), RAM (~4 GB Modell plus KV für den
   gepinnten Kontext, nicht für den nativen Modellkontext), Image ohne eingebettetes GGUF.
-- **Skalierungsprofil:** ein Slot, ein Inflight über beide Auftragstypen. Zwei Auftragstypen
-  teilen sich denselben Prozess; der zweite Job fällt sofort auf Fallback, statt in llama.cpp
+- **Skalierungsprofil:** ein Slot, ein Inflight über drei Auftragstypen. Drei Auftragstypen
+  teilen sich denselben Prozess; ein konkurrierender Job fällt sofort auf Fallback beziehungsweise manuellen Retry, statt in llama.cpp
   zu warten (Voranalyse §4.3, geschärft).
-- **Worst Case:** beide Aufträge gleichzeitig, Slot belegt → zweiter Auftrag sofort extraktiv
-  bzw. Stufe-1-Label. Prefill eines ungekürzten 20-Quellen-Prompts auf CPU reißt 8 s fast immer.
+- **Worst Case:** drei Aufträge gleichzeitig, Slot belegt → Live-Aufträge sofort extraktiv
+  beziehungsweise Stufe-1-Label, Lernzielauftrag manueller Retry. Prefill eines ungekürzten
+  20-Quellen-Prompts auf CPU reißt 8 s fast immer.
 - **Entlastungsstrategie:** hartes Timeout, Abbruch vor dem Backend-Timeout, Circuit Breaker,
   Slot-503, gekürzte gerankte Promptquellen, extraktiver Fallback in der App.
 - **Messstrategie:** Offline-/Notebook-Vergleich → isolierter Zwei-Server-Laborpfad (kanonisch)
@@ -277,7 +283,7 @@ Flags, gemeinsames Inflight, Health, Tests ohne Modell-Download) → 1.14c Stufe
   gepinntes Modell betreibt; würde sich bei künftigem Modellvergleich als Mehraufwand zeigen.
 - Weniger vorgefertigte Client-Bibliotheken als im Ollama-Ökosystem — arsnova.eu braucht den
   schmalen Node-Client ohnehin, weil der App-Vertrag nicht OpenAI-native ist.
-- Ein Slot für zwei Aufträge bleibt ein Betriebsrisiko. Es ist durch gemeinsames Inflight und
+- Ein Slot für drei Aufträge bleibt ein Betriebsrisiko. Es ist durch gemeinsames Inflight und
   sofortigen Fallback **begrenzt**, nicht verschwunden. `--parallel 2` ist dafür kein Ausweg
   im 4-GB-Budget.
 - CPU-Prefill kann Slice 4 auf der 8-vCPU-Box dauerhaft unbrauchbar machen. Dann bleibt die
@@ -323,7 +329,8 @@ Flags, gemeinsames Inflight, Health, Tests ohne Modell-Download) → 1.14c Stufe
   `--api-key`, `--reasoning off`, `--n-gpu-layers 0`, `--slot-prompt-similarity 0`. Ein
   gemeinsames Inflight; `GET /slots?fail_on_no_slot=1` vor dem POST (ohne `--slots`: 501, nicht
   503); Abbruch gibt den Slot frei.
-- Node-Client übersetzt App-Verträge nach Chat-Completions; `json_schema` **pro Request**.
+- Node-Client übersetzt App-Verträge nach Chat-Completions; `json_object` plus `schema`
+  **pro Request**, danach strikte Zod- und Referenzprüfung.
   `QA_SUMMARY_INFERENCE_URL` zeigt nicht auf `/v1/chat/completions`.
 - 1.14c Stufe 2 und 8.9c Slice 4 behalten getrennte Prompts, Zod-Verträge, Queues und Cooldowns;
   diese ADR autorisiert **keine** Zusammenlegung der beiden Aufträge und **kein** 8.9b auf dem
@@ -333,12 +340,12 @@ Flags, gemeinsames Inflight, Health, Tests ohne Modell-Download) → 1.14c Stufe
 - Slice 4 erst nach Prefill-Messung; DoD nicht „Gemini unter 8 s“. LLM-Prompt nutzt das
   bestehende Ranking, nicht den vollen 20er-Snapshot.
 - Tests analog `test:spacy-sidecar` / `test:wordcloud-encoder`: ohne Modell-Download, kein
-  öffentlicher Port, Ressourcenlimits, Hotpath-Isolation, Lastfall „beide Aufträge gleichzeitig“.
+  öffentlicher Port, Ressourcenlimits, Hotpath-Isolation, Lastfall „drei Aufträge gleichzeitig“.
 - Freigabestufen unverändert: Offline-Vergleich → isolierter Zwei-Server-Laborpfad →
   produktionsnahe Last-/Fehler-/Security-/Privacy-/Kostenprüfung, erst danach bewusste
   Produktivaktivierung.
-- Diese ADR autorisiert keine Implementierung; sie legt Runtime und Leitplanken fest, sobald
-  Story 8.9d, 1.14c Stufe 2 oder 8.9c Slice 4 beauftragt werden.
+- Runtime R setzt diese Leitplanken technisch um. Die ADR autorisiert weder die Aktivierung
+  noch die fachlichen Consumer aus 1.14c Stufe 2, 8.9c Slice 4 oder #456 Slice 5.
 
 ---
 
@@ -347,6 +354,7 @@ Flags, gemeinsames Inflight, Health, Tests ohne Modell-Download) → 1.14c Stufe
 [ADR-0025](0025-treat-future-extensions-as-performance-critical-until-proven-otherwise.md),
 [ADR-0026](0026-prioritize-performance-hotpaths-and-de-escalate-telemetry-side-load.md),
 [word-cloud-semantic.md](../../features/word-cloud-semantic.md), [qa-summary.md](../../features/qa-summary.md),
+[open-weight-llm-runtime.md](../../features/open-weight-llm-runtime.md),
 [capacity-estimate-16gb-16cores.md](../../capacity-estimate-16gb-16cores.md),
 [github.com/ggml-org/llama.cpp](https://github.com/ggml-org/llama.cpp) (`tools/server/README.md`),
 [github.com/ollama/ollama](https://github.com/ollama/ollama),
@@ -355,7 +363,7 @@ Flags, gemeinsames Inflight, Health, Tests ohne Modell-Download) → 1.14c Stufe
 
 ## Ergänzung 2026-09-22: Runtime-Voraussetzung für Issue #456
 
-**Status:** beauftragte Planung, noch keine Runtime-Implementierung oder Produktivfreigabe.
+**Status:** Runtime R am 2026-10-05 technisch implementiert und lokal mit echtem Modell geprüft; keine Produktivaktivierung oder Consumer-Freigabe.
 [Issue #456](https://github.com/kqc-real/arsnova.eu/issues/456) erweitert den bisherigen
 Geltungsbereich (Labels und Summary) um einen dritten Auftrag: **Lernzielableitung**.
 Frühere Aussagen über zwei Aufträge beschreiben den bisherigen Scope; die übrigen
@@ -365,8 +373,7 @@ Betriebsleitplanken bleiben verbindlich.
 
 Story 8.9d liefert die gemeinsame Runtime in einem separaten **Runtime-PR R**.
 Die Kontext-Slices 1–4 aus #456 können ohne Modell umgesetzt werden. **Vor Slice 5**
-muss R implementiert und durch Codex technisch abgenommen sein.
-Grok 4.7 High Fast implementiert; Codex reviewt den jeweiligen Commit.
+muss R implementiert und technisch abgenommen sein.
 HTTP-Adapter, Encoder und Gemini-Dev-Helfer ersetzen diese Abnahme nicht.
 
 R umfasst Image/Compose-Profil, gepinntes GGUF, privaten authentisierten Transport,

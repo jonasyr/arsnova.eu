@@ -19,6 +19,7 @@ tmp/
 .env
 .env.local
 .env.production
+.env.llm
 .env.arsnova-image
 .env.*.local
 deploy/backup/backup.env

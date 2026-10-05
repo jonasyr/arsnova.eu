@@ -5,12 +5,20 @@ import { describe, expect, it } from 'vitest';
 const routersDir = join(process.cwd(), 'src/routers');
 
 describe('wordCloud hotpath isolation', () => {
-  it('haelt spaCy und den Word-Cloud-Encoder aus Vote-, Q&A-Submit- und Join-Routern', () => {
+  it('haelt spaCy, Encoder und LLM aus Vote-, Q&A-Submit- und Join-Routern', () => {
     const forbidden =
-      /spacyClient|wordCloudNormalizer|normalizeWordCloudItems|nlpSidecar|wordCloudEncoderClient|wordCloudSemanticAnalyze|embedWithWordCloudEncoder/;
+      /spacyClient|wordCloudNormalizer|normalizeWordCloudItems|nlpSidecar|wordCloudEncoderClient|wordCloudSemanticAnalyze|embedWithWordCloudEncoder|openWeightLlmClient|runOpenWeightLlm/;
     for (const file of ['vote.ts', 'qa.ts', 'session.ts']) {
       const source = readFileSync(join(routersDir, file), 'utf8');
       expect(source, file).not.toMatch(forbidden);
+    }
+  });
+
+  it('haelt die LLM-Runtime aus beiden WebSocket-Servern', () => {
+    const libDir = join(process.cwd(), 'src/lib');
+    for (const file of ['trpcWebSocketServer.ts', 'yjsRelay.ts']) {
+      const source = readFileSync(join(libDir, file), 'utf8');
+      expect(source, file).not.toMatch(/openWeightLlmClient|runOpenWeightLlm/);
     }
   });
 
