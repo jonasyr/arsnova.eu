@@ -862,25 +862,28 @@ Tooltips und Quellenlisten erklären Varianten und Gewichtungsbasis. Gruppenausw
 
 ### 16.1 Unabhängige Schalter
 
-| Konfiguration                                               | Zuständigkeit                                 | Hinweis                                                                                   |
-| ----------------------------------------------------------- | --------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `QA_NLP_ENABLED`                                            | Automatische Q&A-Klassifikation               | Nur die ausdrücklich aktivierte Kaskade; kein LLM-Schalter                                |
-| `QA_NLP_TIMEOUT_MS`                                         | Klassifikationszeitlimit                      | Standard 2.000 ms; zulässiger Bereich 200–15.000 ms                                       |
-| `QA_NLP_QUEUE_LIMIT`                                        | Begrenzte Klassifikationsqueue                | Standard 100; laufende Aufträge zählen mit                                                |
-| `QA_NLP_CONCURRENCY`                                        | Lokale Klassifikationsparallelität            | Standard 1; zulässiger Bereich 1–4                                                        |
-| `QA_NLP_MIN_CONFIDENCE`                                     | Gatekeeper-Schwelle                           | Standard 0,55; mit Evaluation ändern                                                      |
-| `NLP_ENABLED`                                               | Optionale spaCy-Normalisierung                | Unabhängig von Klassifikation und LLM                                                     |
-| `WORD_CLOUD_SEMANTIC_ENABLED`                               | Semantische Wortwolkenanalyse                 | Exakt `true` aktiviert den optionalen Pfad                                                |
-| `WORD_CLOUD_ENCODER_SOCKET_PATH`                            | Lokaler Encodertransport                      | Standard `/run/wordcloud-encoder/encoder.sock`                                            |
-| `WORD_CLOUD_ENCODER_URL` und `WORD_CLOUD_ENCODER_TOKEN`     | Privater HTTP-Encodertransport                | Private Zielprüfung; keine Zugangsdaten in der URL                                        |
-| `WORD_CLOUD_ENCODER_TIMEOUT_MS`                             | Encoderzeitlimit                              | Standard 8.000 ms; zulässiger Bereich 500–120.000 ms                                      |
-| `WORD_CLOUD_ENCODER_CACHE_TTL_SECONDS`                      | Semantischer Cache                            | Standard 1.800 Sekunden                                                                   |
-| `QA_SUMMARY_ENABLED`                                        | Generative Kurzfassung                        | Eigenständiger Feature-Schalter                                                           |
-| `OPEN_WEIGHT_LLM_ENABLED`                                   | Gemeinsame private LLM-Runtime im Zielvertrag | Fünfter eigenständiger Kill-Switch gemäß ADR 0035; nur exakt `true`; Compose-Profil `llm` |
-| `QA_SUMMARY_INFERENCE_URL` und `QA_SUMMARY_INFERENCE_TOKEN` | Bisheriger Summary-Adaptertransport           | Vertrag beachten; nicht direkt mit beliebiger Chat-Completions-URL gleichsetzen           |
-| `QA_SUMMARY_MAX_SOURCES`                                    | Bisheriges Summary-Quellenlimit               | Standard 20, maximal 40; ersetzt kein 1.3-Tokenbudget                                     |
-| `QA_SUMMARY_COOLDOWN_MS`                                    | Wiederholung identischer Snapshots            | Standard 30.000 ms                                                                        |
-| `QA_SUMMARY_TTL_MS`                                         | Flüchtiger Summary-Zustand                    | Standard 1.800.000 ms                                                                     |
+| Konfiguration                                               | Zuständigkeit                       | Hinweis                                                                                   |
+| ----------------------------------------------------------- | ----------------------------------- | ----------------------------------------------------------------------------------------- |
+| `QA_NLP_ENABLED`                                            | Automatische Q&A-Klassifikation     | Nur die ausdrücklich aktivierte Kaskade; kein LLM-Schalter                                |
+| `QA_NLP_TIMEOUT_MS`                                         | Klassifikationszeitlimit            | Standard 2.000 ms; zulässiger Bereich 200–15.000 ms                                       |
+| `QA_NLP_QUEUE_LIMIT`                                        | Begrenzte Klassifikationsqueue      | Standard 100; laufende Aufträge zählen mit                                                |
+| `QA_NLP_CONCURRENCY`                                        | Lokale Klassifikationsparallelität  | Standard 1; zulässiger Bereich 1–4                                                        |
+| `QA_NLP_MIN_CONFIDENCE`                                     | Gatekeeper-Schwelle                 | Standard 0,55; mit Evaluation ändern                                                      |
+| `NLP_ENABLED`                                               | Optionale spaCy-Normalisierung      | Unabhängig von Klassifikation und LLM                                                     |
+| `WORD_CLOUD_SEMANTIC_ENABLED`                               | Semantische Wortwolkenanalyse       | Exakt `true` aktiviert den optionalen Pfad                                                |
+| `WORD_CLOUD_ENCODER_SOCKET_PATH`                            | Lokaler Encodertransport            | Standard `/run/wordcloud-encoder/encoder.sock`                                            |
+| `WORD_CLOUD_ENCODER_URL` und `WORD_CLOUD_ENCODER_TOKEN`     | Privater HTTP-Encodertransport      | Private Zielprüfung; keine Zugangsdaten in der URL                                        |
+| `WORD_CLOUD_ENCODER_TIMEOUT_MS`                             | Encoderzeitlimit                    | Standard 8.000 ms; zulässiger Bereich 500–120.000 ms                                      |
+| `WORD_CLOUD_ENCODER_CACHE_TTL_SECONDS`                      | Semantischer Cache                  | Standard 1.800 Sekunden                                                                   |
+| `QA_SUMMARY_ENABLED`                                        | Generative Kurzfassung              | Eigenständiger Feature-Schalter                                                           |
+| `OPEN_WEIGHT_LLM_ENABLED`                                   | Gemeinsame private LLM-Runtime      | Fünfter eigenständiger Kill-Switch gemäß ADR 0035; nur exakt `true`; Compose-Profil `llm` |
+| `OPEN_WEIGHT_LLM_URL` oder `OPEN_WEIGHT_LLM_SOCKET_PATH`    | Exklusiver Runtime-Transport        | Privates HTTP in Produktion; Unix-Socket nur Same-Host-Labor                              |
+| `OPEN_WEIGHT_LLM_TOKEN`                                     | Runtime-Authentisierung             | Separates Credential mit mindestens 32 Zeichen; nie in der URL                            |
+| `OPEN_WEIGHT_LLM_*_TIMEOUT_MS`                              | Auftragsspezifische Zeitbudgets     | Label 30 s, Summary 90 s, Lernziele 120 s; keine gemeinsame Modellqueue                   |
+| `QA_SUMMARY_INFERENCE_URL` und `QA_SUMMARY_INFERENCE_TOKEN` | Bisheriger Summary-Adaptertransport | Vertrag beachten; nicht direkt mit beliebiger Chat-Completions-URL gleichsetzen           |
+| `QA_SUMMARY_MAX_SOURCES`                                    | Bisheriges Summary-Quellenlimit     | Standard 20, maximal 40; ersetzt kein 1.3-Tokenbudget                                     |
+| `QA_SUMMARY_COOLDOWN_MS`                                    | Wiederholung identischer Snapshots  | Standard 30.000 ms                                                                        |
+| `QA_SUMMARY_TTL_MS`                                         | Flüchtiger Summary-Zustand          | Standard 1.800.000 ms                                                                     |
 
 Die Tabelle dokumentiert geprüfte vorhandene Namen und Werte sowie den ausdrücklich im ADR spezifizierten zusätzlichen LLM-Schalter. Sie erfindet keine weiteren Umgebungsvariablen für noch nicht implementierte 1.3-Verantwortlichkeiten. Maßgeblich für das fertige Release sind dessen Schema, `.env.production.example`, Compose-Konfiguration und freigegebenes Runtimeprofil. Ein deaktivierter LLM-Schalter lässt Encoder mit extraktiven Labels, spaCy, 8.9b und den Regelkompass unberührt.
 

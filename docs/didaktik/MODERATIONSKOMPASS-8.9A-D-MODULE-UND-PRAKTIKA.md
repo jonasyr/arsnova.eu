@@ -12,12 +12,12 @@
 
 ## 1. Verbindlicher Projektstand
 
-| Story    | Rolle im Gesamtsystem                                                         | Stand                                                                                       | Didaktische Grenze                                                     |
-| -------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| **8.9a** | deterministischer, quellenbelegter Moderationskompass                         | umgesetzt                                                                                   | keine NLP-/LLM-Inferenz                                                |
-| **8.9b** | asynchrone Q&A-Klassifikation mit Hash-/n-Gramm-Naive-Bayes und k-NN-Fallback | umgesetzt; Kill-Switch produktiv default aus                                                | kein Transformer und kein Auftrag auf dem LLM-Slot                     |
-| **8.9c** | on-demand, schema- und quellengebundene Moderationszusammenfassung            | Vertrag, Host-UI, Snapshot-Ranking, Queue und privater Adapter im Repo; echtes Modell offen | Slice 4 folgt erst nach 8.9d und Prefill-Messung                       |
-| **8.9d** | private Open-Weight-LLM-Runtime für 1.14c Stufe 2 und 8.9c Slice 4            | geplant; Runtime durch ADR-0035 festgelegt, nicht implementiert                             | kein LLM auf dem Live-Host, kein öffentlicher Port, kein SaaS-Fallback |
+| Story    | Rolle im Gesamtsystem                                                         | Stand                                                                                          | Didaktische Grenze                                                     |
+| -------- | ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| **8.9a** | deterministischer, quellenbelegter Moderationskompass                         | umgesetzt                                                                                      | keine NLP-/LLM-Inferenz                                                |
+| **8.9b** | asynchrone Q&A-Klassifikation mit Hash-/n-Gramm-Naive-Bayes und k-NN-Fallback | umgesetzt; Kill-Switch produktiv default aus                                                   | kein Transformer und kein Auftrag auf dem LLM-Slot                     |
+| **8.9c** | on-demand, schema- und quellengebundene Moderationszusammenfassung            | Vertrag, Host-UI, Snapshot-Ranking, Queue und privater Adapter im Repo; echtes Modell offen    | Slice 4 folgt erst nach 8.9d und Prefill-Messung                       |
+| **8.9d** | private Open-Weight-LLM-Runtime für Label, Summary und Lernzielableitung      | Runtime R technisch implementiert und lokal real geprüft; Consumer und Produktivfreigabe offen | kein LLM auf dem Live-Host, kein öffentlicher Port, kein SaaS-Fallback |
 
 8.9d entscheidet nach ADR-0035 über die Serving-Runtime `llama.cpp`/`llama-server`, nicht über eine automatische Produktivfreigabe. Kanonische Produktion ist ein zweiter privater Host. Label- und Summary-Auftrag teilen höchstens einen Server-Slot, behalten aber getrennte Prompts, Zod-Verträge, Queues, Timeouts und Fallbacks. 8.9b bleibt davon unabhängig.
 

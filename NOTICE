@@ -12,13 +12,13 @@ The default image aggregates official small pipelines. It is **not** a
 pure-MIT artifact, because `fr_core_news_sm` and `es_core_news_sm` keep
 their own licenses. The models are replaceable wheels (`requirements.txt`).
 
-| Package            | Version | License | Source                                    |
-| ------------------ | ------- | ------- | ----------------------------------------- |
-| spaCy              | 3.8.15  | MIT     | https://github.com/explosion/spaCy        |
-| de_core_news_sm    | 3.8.0   | MIT     | https://github.com/explosion/spacy-models |
-| en_core_web_sm     | 3.8.0   | MIT     | https://github.com/explosion/spacy-models |
-| fr_core_news_sm    | 3.8.0   | LGPL-LR | https://github.com/explosion/spacy-models |
-| es_core_news_sm    | 3.8.0   | GPL-3.0 | https://github.com/explosion/spacy-models |
+| Package         | Version | License | Source                                    |
+| --------------- | ------- | ------- | ----------------------------------------- |
+| spaCy           | 3.8.15  | MIT     | https://github.com/explosion/spaCy        |
+| de_core_news_sm | 3.8.0   | MIT     | https://github.com/explosion/spacy-models |
+| en_core_web_sm  | 3.8.0   | MIT     | https://github.com/explosion/spacy-models |
+| fr_core_news_sm | 3.8.0   | LGPL-LR | https://github.com/explosion/spacy-models |
+| es_core_news_sm | 3.8.0   | GPL-3.0 | https://github.com/explosion/spacy-models |
 
 License texts in the image: `docker/spacy/licenses/LGPL-LR.txt` and
 `docker/spacy/licenses/GPL-3.0.txt`.
@@ -26,9 +26,9 @@ License texts in the image: `docker/spacy/licenses/LGPL-LR.txt` and
 Not included
 ------------
 
-| Package            | License           | Reason                                      |
-| ------------------ | ----------------- | ------------------------------------------- |
-| it_core_news_sm    | CC BY-NC-SA 3.0   | incompatible with the distributed default   |
+| Package         | License         | Reason                                    |
+| --------------- | --------------- | ----------------------------------------- |
+| it_core_news_sm | CC BY-NC-SA 3.0 | incompatible with the distributed default |
 
 Italian lemma support in the distributed default requires a license-compatible
 alternative model, not `it_core_news_sm`.
@@ -39,12 +39,28 @@ Optional word-cloud encoder image (docker/wordcloud-encoder)
 Story 1.14c Stufe 1 ships an optional ONNX encoder sidecar. arsnova.eu remains
 MIT-licensed. The bundled embedding model is a third-party work.
 
-| Package                         | License    | Source                                              |
-| ------------------------------- | ---------- | --------------------------------------------------- |
-| intfloat/multilingual-e5-small  | Apache-2.0 | https://huggingface.co/intfloat/multilingual-e5-small |
-| onnxruntime                     | MIT        | https://github.com/microsoft/onnxruntime            |
-| tokenizers                      | Apache-2.0 | https://github.com/huggingface/tokenizers           |
-| numpy                           | BSD        | https://github.com/numpy/numpy                      |
+| Package                        | License    | Source                                                |
+| ------------------------------ | ---------- | ----------------------------------------------------- |
+| intfloat/multilingual-e5-small | Apache-2.0 | https://huggingface.co/intfloat/multilingual-e5-small |
+| onnxruntime                    | MIT        | https://github.com/microsoft/onnxruntime              |
+| tokenizers                     | Apache-2.0 | https://github.com/huggingface/tokenizers             |
+| numpy                          | BSD        | https://github.com/numpy/numpy                        |
 
 The encoder image does not include an LLM. Notices in the image:
 `docker/wordcloud-encoder/NOTICE`.
+
+Optional Open-Weight LLM runtime (docker/open-weight-llm)
+----------------------------------------------------------
+
+Story 8.9d provides an optional CPU-only runtime image. The image contains the
+MIT-licensed `llama.cpp` server but deliberately does not contain the GGUF.
+Operators obtain the separately versioned model artifact and mount it read-only.
+
+| Package / artifact                 | Version / revision                       | License    | Source                                                     |
+| ---------------------------------- | ---------------------------------------- | ---------- | ---------------------------------------------------------- |
+| ggml-org/llama.cpp                 | b10524                                   | MIT        | https://github.com/ggml-org/llama.cpp                      |
+| Qwen3-4B-Instruct-2507 Q4_K_M GGUF | a06e946bb6b655725eafa393f4a9745d460374c9 | Apache-2.0 | https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF |
+
+Exact image, file, size and SHA-256 pins are recorded in
+`docker/open-weight-llm/model-manifest.json`. Mounting the optional model does
+not relicense it or arsnova.eu.
