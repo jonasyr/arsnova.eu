@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   OPEN_WEIGHT_LLM_SCHEMA_VERSION,
@@ -22,6 +24,20 @@ import type { OpenWeightLlmConfig } from './openWeightLlmConfig';
 
 const SOURCE_ID = 'qa-question:11111111-1111-4111-8111-111111111111';
 const QUESTION_ID = '22222222-2222-4222-8222-222222222222';
+
+const reproductionTopicLabelRequest = {
+  schemaVersion: OPEN_WEIGHT_LLM_SCHEMA_VERSION,
+  taskType: 'topic_label',
+  locale: 'de',
+  clusterId: 'repro-linear-functions',
+  sources: [
+    { id: 's1', text: 'Was ist die Steigung der Geraden y = 2x + 1?' },
+    {
+      id: 's2',
+      text: 'Bestimme die lineare Funktion durch die Punkte (0, 1) und (2, 5).',
+    },
+  ],
+} satisfies OpenWeightLlmTopicLabelRequest;
 
 const requests = {
   topic_label: {
@@ -176,6 +192,38 @@ async function waitFor(predicate: () => boolean): Promise<void> {
 
 describe('openWeightLlmClient', () => {
   afterEach(() => resetOpenWeightLlmClientForTests());
+
+  it('hält die dokumentierte Modellprobe synchron zum Backend-Translator', async () => {
+    const fixture = JSON.parse(
+      readFileSync(
+        resolve(
+          process.cwd(),
+          '../../scripts/open-weight-llm/fixtures/topic-label-reproduction-request.json',
+        ),
+        'utf8',
+      ),
+    ) as unknown;
+    let translatedBody: string | null = null;
+    resetOpenWeightLlmClientForTests({
+      config: () => defaultConfig,
+      request: async (input) => {
+        if (input.path.startsWith('/slots')) return { status: 200, body: '[]' };
+        translatedBody = input.body;
+        return completionResponse({
+          schemaVersion: OPEN_WEIGHT_LLM_SCHEMA_VERSION,
+          taskType: 'topic_label',
+          label: 'lineare-funktionen',
+          sourceIds: ['s1', 's2'],
+        });
+      },
+    });
+
+    await expect(runOpenWeightLlm(reproductionTopicLabelRequest)).resolves.toMatchObject({
+      status: 'completed',
+    });
+    expect(translatedBody).not.toBeNull();
+    expect(JSON.parse(translatedBody ?? '{}')).toEqual(fixture);
+  });
 
   it.each(['topic_label', 'qa_summary', 'learning_objectives'] as const)(
     'übersetzt und validiert den Auftrag %s mit einem Schema pro Request',
