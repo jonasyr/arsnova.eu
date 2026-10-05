@@ -7,7 +7,7 @@
 - **IU Internationale Hochschule (IU)** bezeichnet die Hochschule; `DSCC0127` ist der Modulcode und `DSCC012701` der Kurscode.
 - **Credit Point (CP)** bezeichnet einen Leistungspunkt. Das Modul umfasst 5 CP.
 - **Unterrichtseinheit (UE)** bezeichnet 45 Minuten. Eine **Lerneinheit (LE)** umfasst genau zwei aufeinanderfolgende UE und damit 90 Minuten.
-- **TB01–TB12** bezeichnet zwölf stabile Themenblöcke. Die Kennungen legen weder Kalenderwochen noch Durchführungsform oder Belastungsverteilung fest.
+- **TB01–TB12** bezeichnet zwölf Inhaltsblöcke zu je drei UE. **V1–V8** bezeichnet die acht Vorlesungswochen, in denen diese Blöcke erteilt werden. Präsenz oder virtuelle Durchführung ändert den Stoff nicht.
 - **Qualifikationsziel (QZ)** bezeichnet eines der fünf offiziellen Ziele. **Modulziel (MZ)** bezeichnet eines der neun operationalisierten Ziele. **Learning Indicator (LI)** bezeichnet einen beobachtbaren Lernindikator.
 - **Multiple Choice (MC)** bezeichnet Aufgaben mit vorgegebenen Antwortmöglichkeiten. Der Ausdruck **MC-Test** bezeichnet die formative Lernanwendung.
 - **Künstliche Intelligenz (KI)** und **maschinelles Lernen (ML)** werden nur dann abgekürzt, wenn die Langformen zuvor genannt sind.
@@ -30,11 +30,11 @@
 | Umfang                     | 5 CP, 150 Stunden                                                           |
 | Betreute Zeit              | 36 UE à 45 Minuten = 27 Stunden                                             |
 | Selbststudium              | 123 Stunden                                                                 |
-| Themenblöcke               | 12 stabile Themenblöcke à 3 UE = 36 UE                                      |
+| Vorlesung                  | acht Wochen; zwölf Inhaltsblöcke à 3 UE = 36 UE                             |
 | Prüfung als Planungsbasis  | Referat mit insgesamt 15 Minuten mündlicher Prüfung je Prüfling             |
 | Online- und Live-Werkzeuge | freiwillig-formativ; keine Zulassung, keine Prüfungsleistung und keine Note |
 
-Das Modulpaket ordnet die Themenblöcke weder Kalenderwochen noch einer Präsenz-, virtuellen oder Tutoriumsform zu. Für jede Durchführung gelten dieselben zwölf Themenblöcke, 36 UE, Inhalte, Lernprodukte und Prüfungsinformationen. Eine konkrete Terminierung ist nicht Bestandteil des curricularen Vertrags.
+Für jede Durchführung gelten dieselben acht Vorlesungswochen, zwölf Inhaltsblöcke, 36 UE, Inhalte, Lernprodukte und die sechs Referatsthemen. Präsenz oder virtuelle Durchführung ändert diesen Stoff nicht. Ein Inhaltsblock bleibt immer 3 UE: 90 Minuten Lerneinheit und 45 Minuten MC-Test. In V2, V5, V7 und V8 folgen zwei Blöcke nacheinander.
 
 ## 3. Offizielle Qualifikationsziele
 
@@ -77,7 +77,7 @@ Die genaue Formulierung aller 24 LI und ihr Constructive Alignment stehen in der
 1. **Synchrones Lernwerkzeug:** Livefragen aktivieren Vorwissen, lenken Aufmerksamkeit, machen Fehlvorstellungen sichtbar, eröffnen Peer-Diskussion und ermöglichen unmittelbare Rückmeldung.
 2. **Authentisches Studienobjekt:** Repository, Architektur, Konfigurationen, Betriebsdokumente und Messberichte bilden einen realen Cloud-Fall. Jede Aussage wird jedoch nach Evidenzstufe, Messumgebung und Gültigkeitsgrenze geprüft.
 
-Die Live-Teilnahme funktioniert auf Tablet oder Laptop im Browser. Für vertiefte Repository-, Architektur-, Konfigurations- und Laborarbeit ist ein Laptop erforderlich. Fehlt ein geeignetes Gerät oder ist eine Interaktion unter Zeitdruck nicht möglich, steht ein fachlich gleichwertiger untimierter Weg mit denselben Inhalten zur Verfügung.
+Die Live-Teilnahme funktioniert auf Tablet oder Laptop im Browser. Für vertiefte Repository-, Architektur-, Konfigurations- und Laborarbeit ist ein Laptop erforderlich. Fehlt ein geeignetes Gerät oder ist eine Interaktion unter Zeitdruck nicht möglich, steht ein fachlich gleichwertiger Weg ohne Zeitlimit mit denselben Inhalten zur Verfügung.
 
 ### 5.2 Quellenkritik vor Produktbehauptung
 
@@ -125,6 +125,21 @@ UE 3 folgt in jedem Themenblock exakt demselben 45-Minuten-Ablauf:
 Die 32 Minuten sind ein organisatorischer Planwert. Der Lernmodus besitzt keinen technischen Countdown. Der frühere UE3-Umfang für Labor, Lernprodukt oder Präsentation wird in die 90-minütige LE und das Selbststudium integriert; er wird weder als vierte UE behandelt noch zusätzlich auf den Workload gerechnet.
 
 ## 7. Themenblockplan
+
+Acht Vorlesungswochen verdichten die zwölf Inhaltsblöcke. Die vier zusammengezogenen Wochen entsprechen der Verdichtung des früheren Referatskatalogs: Architekturteile, Kapazität, Plattform und Kosten sowie Entscheidungsarbeit bilden je eine Woche. Grundlagen und Serverless bleiben eigene Wochen, weil sie Modulinhalt bleiben, auch ohne eigenes Referatsthema. Der Umfang bleibt 36 UE: vier Wochen mit 3 UE und vier Wochen mit 6 UE.
+
+| Woche  |  UE | Schwerpunkt                                                          | Inhaltsblöcke | Zielbezug                     |
+| ------ | --: | -------------------------------------------------------------------- | ------------- | ----------------------------- |
+| **V1** |   3 | Grundlagen, Cloud- und Bereitstellungsmodelle, Shared Responsibility | TB01          | MZ1, LI01–LI03                |
+| **V2** |   6 | Container, IaC, Deployment, Härtung und Zustand                      | TB02, TB03    | MZ2/MZ6, LI04–LI06, LI15      |
+| **V3** |   3 | Serverless Computing                                                 | TB04          | MZ3, LI07–LI08                |
+| **V4** |   3 | Datenwissenschaft, maschinelles Lernen und Informationsqualität      | TB06          | MZ5, LI12–LI14                |
+| **V5** |   6 | Storage, Recovery, Skalierung und verteilte Systeme                  | TB07, TB08    | MZ6/MZ7, LI15–LI18            |
+| **V6** |   3 | IAM, Security, Observability, Degradation und Resilienz              | TB09          | MZ8, LI19–LI21                |
+| **V7** |   6 | Plattformen, FinOps, Nachhaltigkeit und 6R                           | TB05, TB10    | MZ4/MZ9, LI09–LI11, LI22–LI23 |
+| **V8** |   6 | Architekturentscheidung, Referatswerkstatt und Probeverteidigung     | TB11, TB12    | MZ9, LI23–LI24                |
+
+Stoffinventar der zwölf Blöcke:
 
 | Themenblock | Schwerpunkt der 90-minütigen LE                                      | In LE und Selbststudium integriertes Lernprodukt                                                                | Zielbezug                   |
 | ----------- | -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------- |
@@ -180,7 +195,7 @@ Jeder Themenblock verwendet genau zehn anspruchsvolle Livefragen und jeden der z
 
 Alle Fragen sind ausschließlich `MEDIUM` oder `HARD`; leichte Fragen sind ausgeschlossen. Die Optionen bewertbarer Auswahlfragen sind grammatisch parallel, ähnlich lang und bilden plausible Fehlvorstellungen ab.
 
-Das Gamification-Profil ist aktiv: automatisch vergebene Kindergarten-Pseudonyme, Rangliste, die vier automatisch gebildeten Teams `Apfel :apple:`, `Birne :pear:`, `Banane :banana:` und `Apfelsine :orange:`, drei Boni, motivierende Meldungen sowie Sound-, Belohnungs- und Emoji-Effekte. Der Standardtimer von 60 Sekunden wird nach Schwierigkeit skaliert. Vorher liegt eine Lesephase; persönliche Zeitunterstützung und eine gleichwertige untimierte Alternative haben Vorrang.
+Das Gamification-Profil ist aktiv: automatisch vergebene Kindergarten-Pseudonyme, Rangliste, die vier automatisch gebildeten Teams `Apfel :apple:`, `Birne :pear:`, `Banane :banana:` und `Apfelsine :orange:`, drei Boni, motivierende Meldungen sowie Sound-, Belohnungs- und Emoji-Effekte. Der Standardtimer von 60 Sekunden wird nach Schwierigkeit skaliert. Vorher liegt eine Lesephase; persönliche Zeitunterstützung und eine gleichwertige Alternative ohne Zeitlimit haben Vorrang.
 
 Fachinformation und notwendige Handlungen werden nie ausschließlich über Farbe, Bild, Animation, Sound oder ein anderes einzelnes Sinnesmerkmal vermittelt. Während eine bewertbare Livefrage aktiv ist, werden Lösung, Referenzwert und Lösungskennzeichnung nicht angezeigt. Erst nach dem Schließen der Frage folgt die fachliche Auflösung.
 
@@ -203,7 +218,7 @@ Verbindlich sind:
 - erster Durchlauf in UE 3 mit 32 Minuten Planzeit,
 - weiterer vollständiger Wiederabruf ohne kalendarische Vorgabe,
 - erneuter Abruf zentraler Konzepte in späteren Themenblöcken,
-- vollständige untimierte Alternativfassung mit denselben Fragen, Lösungen und Erklärungen.
+- vollständige Alternativfassung ohne Zeitlimit mit denselben Fragen, Lösungen und Erklärungen.
 
 Der MC-Test dient Selbstdiagnose und wiederholtem Abruf. Das Modulpaket legt dafür keinen kalendarischen Abstand fest. Punkte, Bearbeitungszeiten und Einzelverläufe haben keine Prüfungs- oder Zulassungswirkung.
 
@@ -247,7 +262,7 @@ Einzel- oder Gruppenformat, Handout oder Poster, Thema, Termin und zulässige Hi
 
 Das Constructive Alignment verbindet dieselbe beobachtbare Handlung über Lernaktivität, formative Evidenz und Prüfung: klassifizieren, analysieren, entwerfen, messen, vergleichen, begrenzen, entscheiden und verteidigen. Die vollständige Zuordnung steht in der [Lernziel- und Alignment-Matrix](./Lernziel_Alignment_Matrix.md).
 
-Der [Referatsthemenkatalog](./Referatsthemen_Cloud_Computing_ARSnova.md) übersetzt dieses Alignment in zehn klar informatisch ausgerichtete Aufgaben zu Architektur, Schnittstellen, Daten und Zustand, Deployment, Security, Performance und Zuverlässigkeit am Fallbeispiel arsnova.eu. Gemeinsam decken sie alle fünf QZ, neun MZ und 24 LI ab; jeder einzelne Auftrag bleibt auf einen in 15 Minuten verteidigbaren Cloud-Schwerpunkt begrenzt.
+Die Vorlesung folgt den acht Wochen in Abschnitt 7. Die Referatsprüfung folgt dem Sechserplan in [CLOUD-COMPUTING-REFERAT-PRUEFUNG.md](../CLOUD-COMPUTING-REFERAT-PRUEFUNG.md). Ein einzelnes Referat deckt nicht alle fünf QZ, neun MZ und 24 LI ab; diese Abdeckung leistet das Modul über die zwölf Themenblöcke.
 
 ARSnova-Punkte, Ranglisten, MC-Test-Punkte, Agentenbewertungen, Dossierfortschritt und Bearbeitungszeiten sind ausdrücklich keine Prüfungsleistung, keine Zulassungsvoraussetzung und keine individuelle Note. Auswahl der Prüfungsfragen und Benotung bleiben bei der prüfenden Person. Ob und wie KI-Werkzeuge für die formale Einreichung zulässig sind, richtet sich ausschließlich nach der veröffentlichten Prüfungsaufgabe beziehungsweise myCampus.
 
@@ -258,6 +273,6 @@ ARSnova-Punkte, Ranglisten, MC-Test-Punkte, Agentenbewertungen, Dossierfortschri
 - Es findet keine Nutzung für Forschung, Publikation, individuelle Leistungsbewertung oder personenbezogene Leistungsprofile statt.
 - Für Lehre und Dossier werden vorrangig Aggregate, synthetische Daten, freigegebene Repository-Nachweise und isolierte Nichtproduktionsumgebungen genutzt.
 - Pseudonyme sind keine Zusage vollständiger technischer Anonymität. Klarnamen, Secrets, Tokens, Produktionszugänge und nicht freigegebene personenbezogene Daten gehören nicht in Tool-, Agenten- oder Dossierartefakte.
-- Jede zeitgebundene Aktivität besitzt eine fachlich gleichwertige untimierte Alternative; genehmigte individuelle Zeitunterstützung hat Vorrang.
+- Jede zeitgebundene Aktivität besitzt eine fachlich gleichwertige Alternative ohne Zeitlimit; genehmigte individuelle Zeitunterstützung hat Vorrang.
 - Fragen, Diagramme und Ergebnisse erhalten eine textliche beziehungsweise strukturelle Entsprechung. Farbe, Ton, Animation oder Raumposition tragen nie allein die Fachinformation.
 - Aggregierte Fehlvorstellungen dürfen die nächste Erklärung oder ein neues Beispiel steuern. Sie begründen weder ein individuelles Urteil noch einen Wirksamkeits- oder Kausalnachweis.

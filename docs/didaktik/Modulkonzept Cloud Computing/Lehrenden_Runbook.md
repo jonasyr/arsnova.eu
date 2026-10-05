@@ -2,7 +2,7 @@
 
 **Stand:** 14.09.2026 · **Status:** operative Kursfassung
 
-Die Zielgruppe dieses Kurses besteht ausschließlich aus Bachelorstudierenden der Informatik. Dieses Runbook setzt zwölf stabile Themenblöcke mit insgesamt 36 betreuten Unterrichtseinheiten um. Die fachliche Füllung, der verbindliche Themenblockwortschatz und die Lernprodukte stehen im [Themenblockplan](./Themenblockplan_Cloud_Computing_12_Themenbloecke.md). Das Runbook ist nur zusammen mit diesem Plan und dem [Datenmanagement- und Datenschutzplan](./Datenmanagement_Datenschutz.md) freigegeben. Offene institutionelle, datenschutzrechtliche oder prüfungsorganisatorische Gates werden nicht durch Annahmen ersetzt.
+Die Zielgruppe dieses Kurses besteht ausschließlich aus Bachelorstudierenden der Informatik. Dieses Runbook setzt acht Vorlesungswochen und zwölf Inhaltsblöcke mit insgesamt 36 betreuten Unterrichtseinheiten um. Die Wochenzuordnung steht im Themenblockplan, Abschnitt 0. Die fachliche Füllung, der verbindliche Themenblockwortschatz und die Lernprodukte stehen im [Themenblockplan](./Themenblockplan_Cloud_Computing_12_Themenbloecke.md). Das Runbook ist nur zusammen mit diesem Plan und dem [Datenmanagement- und Datenschutzplan](./Datenmanagement_Datenschutz.md) freigegeben. Offene institutionelle, datenschutzrechtliche oder prüfungsorganisatorische Gates werden nicht durch Annahmen ersetzt.
 
 ## 1. Begriffe, Evidenzstufen und Rollen
 
@@ -10,7 +10,7 @@ Die Zielgruppe dieses Kurses besteht ausschließlich aus Bachelorstudierenden de
 
 - **Unterrichtseinheit (UE):** 45 Minuten.
 - **Lerneinheit (LE):** die ersten zwei UE eines Themenblocks als zusammenhängender 90-Minuten-Block.
-- **TB01–TB12:** die zwölf stabilen Themenblöcke ohne kalendarische oder modale Zuordnung.
+- **TB01–TB12:** die zwölf Inhaltsblöcke zu je drei UE. **V1–V8:** die acht Vorlesungswochen. V2 umfasst TB02 und TB03, V5 TB07 und TB08, V7 TB05 und TB10, V8 TB11 und TB12. Die übrigen Wochen umfassen genau einen Block.
 - **L01–L10:** die zehn ARSnova-Livefragen eines Themenblocks in der Reihenfolge der Importdatei.
 - **Multiple Choice (MC):** Aufgaben mit vorgegebenen Antwortoptionen; **MC-Test** bezeichnet hier die formative Lernanwendung.
 - **Fragen und Antworten (Q&A):** der moderierte ARSnova-Fragenkanal.
@@ -31,7 +31,7 @@ Die Zielgruppe dieses Kurses besteht ausschließlich aus Bachelorstudierenden de
 - **6R:** Rehost, Replatform, Repurchase, Refactor, Retire und Retain.
 - **LIVE:** Daten aus dem konkreten Kurslauf; **REPO:** versionierte Repository-Nachweise; **LEHRDATEN:** synthetische Übungsdaten.
 - **OFFLINE:** Herkunftszusatz für ohne Plattform erhobene Kursdaten; `LIVE/OFFLINE` bleibt LIVE und unterliegt demselben Datenschutzplan.
-- **D:** Kalendertag der konkreten Durchführung eines Themenblocks; daraus folgt keine curriculare Wochenzuordnung.
+- **D:** Kalendertag der konkreten Durchführung eines Inhaltsblocks innerhalb seiner Vorlesungswoche V1–V8.
 - **H-0:30:** dreißig Minuten vor Beginn des Themenblocks.
 - **T0:** dokumentiertes Ende eines Daten- oder Bearbeitungsfensters.
 
@@ -60,15 +60,15 @@ Eine Person darf mehrere Bedienrollen übernehmen. Inhaltliche Freigabe und Lös
 
 ## 2. Harte Betriebsregeln
 
-1. Der Kurs umfasst exakt zwölf stabile Themenblöcke mit je drei UE und insgesamt 36 UE. UE 1 und UE 2 bilden eine 90-minütige LE; UE 3 umfasst ausschließlich drei Minuten Übergang, 32 Minuten MC-Test und zehn Minuten aggregierte Ergebnis- und Lösungsbesprechung.
+1. Der Kurs umfasst acht Vorlesungswochen und exakt zwölf Inhaltsblöcke mit je drei UE, insgesamt 36 UE. UE 1 und UE 2 bilden eine 90-minütige LE; UE 3 umfasst ausschließlich drei Minuten Übergang, 32 Minuten MC-Test und zehn Minuten aggregierte Ergebnis- und Lösungsbesprechung. Eine Doppelwoche führt beide Blöcke nacheinander, jeweils mit eigener LE und eigenem MC-Test.
 2. Frühere Lernprodukte aus UE 3 werden in die 90-minütige LE und das Selbststudium integriert. Sie erzeugen keine vierte UE und keine zusätzliche Prüfungsleistung.
-3. Das Modulpaket weist Themenblöcken weder Kalenderwochen noch Präsenz-, virtuelle oder Tutoriumsformen zu.
+3. Die acht Vorlesungswochen sind verbindlich. Präsenz oder virtuelle Durchführung ändert Stoff, UE-Zahl und Prüfung nicht.
 4. Jeder Themenblock nutzt genau zehn ARSnova-Fragen, jeden der zehn freigegebenen Fragetypen genau einmal und ausschließlich `MEDIUM` oder `HARD`. Die Typen sind `MULTIPLE_CHOICE`, `SINGLE_CHOICE`, `FREETEXT`, `SHORT_TEXT`, `SURVEY`, `RATING`, `NUMERIC_ESTIMATE`, `MATCHING`, `ORDERING` und `CATEGORIZATION`.
 5. Das ARSnova-Profil bleibt unverändert: automatisch vergebene Kindergarten-Pseudonyme, keine eigenen Nicknames, Rangliste, vier automatisch gebildete Teams `Apfel :apple:`, `Birne :pear:`, `Banane :banana:` und `Apfelsine :orange:`, drei Boni, Sound-, Belohnungs-, Motivations- und Emoji-Effekte, Standardtimer 60 Sekunden, Schwierigkeitsskalierung, persönliche Zeitunterstützung und Lesephase. Hintergrundmusik bleibt `null`.
 6. Rang, Punkte, Geschwindigkeit, Teamstand, Boni, Reaktionen und persönliche Zeitwahl sind ausschließlich Spiel- und Zugangselemente. Sie sind kein Kompetenzmaß.
 7. Während einer bewertbaren ARSnova-Frage werden Lösung, Referenzwert und Richtig-Markierung nicht an Teilnehmende offengelegt. Die Auflösung beginnt erst nach dem Schließen der Frage. Umfragen und Ratings werden ausdrücklich als unbewertet bezeichnet.
 8. Der MC-Test enthält genau 30 Items, läuft im Modus `practice`, gibt Sofortfeedback, besitzt keinen technischen Countdown und wird mit `show_top5_public=false` betrieben.
-9. Toolteilnahme ist freiwillig und ohne Notennachteil. Jede zeitgebundene Aktivität besitzt denselben Inhalt als untimierte, barrierearme Alternative.
+9. Toolteilnahme ist freiwillig und ohne Notennachteil. Jede zeitgebundene Aktivität besitzt denselben Inhalt als barrierearme Alternative ohne Zeitlimit.
 10. Fachinformation wird nie ausschließlich durch Farbe, Ton, Animation, Emoji, räumliche Position oder Zeitdruck vermittelt.
 11. Live-, MC-Test- und sonstige Toolergebnisse dienen ausschließlich der Lehre und internen Qualitätssicherung. Ausgeschlossen sind individuelle Leistungsbewertung, Anwesenheitskontrolle, Forschung, Publikation und personenbezogene Leistungsprofile.
 12. Repository- und Laborarbeit erfolgt nur auf einem festgelegten Commit in isolierten Nichtproduktionsumgebungen. Produktionszugänge, Echtdaten, unbudgetierte Ressourcen und Produktivlasttests sind ausgeschlossen.
@@ -121,7 +121,7 @@ IR übergibt LD und QE:
 - lesbare Fragen- und Lösungsansicht;
 - Material- und Quellenmanifest mit Repository-Commit und Abrufdatum volatiler Provider- oder Preisquellen;
 - ein maximal einseitiges LE-Arbeitsblatt für Repository-, Konfigurations- oder Laborarbeit;
-- die untimierte Alternative in zugänglichem Digitalformat und druckbarer Fassung;
+- die Alternative ohne Zeitlimit in zugänglichem Digitalformat und druckbarer Fassung;
 - Erwartungshorizont, häufige Fehlvorstellungen und zulässige Aussagegrenzen;
 - das in LE und Selbststudium integrierte Dossierartefakt.
 
@@ -144,7 +144,7 @@ LD gibt den Themenblock nur frei, wenn jede Antwort „ja“ lautet:
 - Ist die Themenblockdatei unverändert gegenüber dem freigegebenen Prüfsummenstand?
 - Bleibt die Lösung in Lese- und Aktivphase geheim?
 - Funktionieren Pseudonyme, Teams, Rangliste, Boni, Effekte, Lesephase und persönliche Zeit?
-- Ist die untimierte Alternative ohne Login- oder Gerätezwang vollständig nutzbar?
+- Ist die Alternative ohne Zeitlimit auch ohne Login- oder Gerätezwang vollständig nutzbar?
 - Zeigt der MC-Test Lernmodus, Sofortfeedback, keinen Countdown und keine öffentliche Top-Fünf?
 - Sind 3 + 32 + 10 Minuten in UE 3 reserviert?
 - Sind Repository-Commit, Quellenstand, Laborziel, Rechte, Kostenlimit, Abbruch und Cleanup eindeutig?
@@ -161,7 +161,7 @@ Bei einem „nein“ wird die betroffene Onlinefunktion nicht eingesetzt. Abschn
 4. Der MC-Test wird in einem frischen Teilnehmerprofil geprüft.
 5. LB bestätigt Zielserverstatus, Kosten-/Zeitlimit, Abbruchkanal und automatischen Cleanup.
 6. Offline-Fragen, Antwortmaterial, Repository-Ausschnitte und vorab erzeugte Referenzausgaben werden lokal geöffnet.
-7. Die Startfolie zeigt Freiwilligkeit, fehlende Notenwirkung, Pseudonymität ohne Anonymitätsversprechen, untimierte Alternative und das Verbot von Personen- oder Geheimdaten in Freitext.
+7. Die Startfolie zeigt Freiwilligkeit, fehlende Notenwirkung, Pseudonymität ohne Anonymitätsversprechen, Alternative ohne Zeitlimit und das Verbot von Personen- oder Geheimdaten in Freitext.
 8. Die technische Lernumgebung stellt einen schriftlichen Beteiligungsweg und einen institutionellen Ersatzkanal bereit. Eine Aufzeichnung ist nicht Bestandteil des Kursvertrags.
 
 ## 4. Betriebsplan der zwölf Themenblöcke
@@ -204,7 +204,7 @@ Ein späterer freiwilliger Wiederabruf kann ohne kalendarische Vorgabe für den 
 
 | Minute | Auftrag                                                                                         | ARSnova- und Lehrfunktion                          |
 | -----: | ----------------------------------------------------------------------------------------------- | -------------------------------------------------- |
-|    0–4 | Lernziel, Leitfrage, Datenhinweis, Evidenzstufe und untimierten Weg sichtbar machen             | keine Datenerhebung                                |
+|    0–4 | Lernziel, Leitfrage, Datenhinweis, Evidenzstufe und den Weg ohne Zeitlimit sichtbar machen      | keine Datenerhebung                                |
 |    4–8 | L01 individuell beantworten und knapp auflösen                                                  | Vorwissen aktivieren                               |
 |   8–12 | L02 beantworten; stärksten Distraktor kontrastieren                                             | ältere Kernidee abrufen                            |
 |  12–22 | kompaktes Begriffsmodell mit einer Primär- oder Repositoryquelle aufbauen                       | Fachinput, keine neue Livefrage                    |
@@ -229,7 +229,7 @@ Die Summe beträgt genau 90 Minuten. Lange Agenten- oder Laborläufe laufen nur 
 1. LD nennt in höchstens 30 Sekunden die Funktion „Aktivierung“, „Diagnose“, „Anwendung“, „Transfer“ oder „Rückmeldung“.
 2. Frage und Antwortweg werden sichtbar und zusätzlich verbal beziehungsweise strukturell zugänglich gemacht. In der Lesephase wird keine Lösung angedeutet.
 3. Erst nach der Lesephase beginnt die Antwortphase. Der 60-Sekunden-Standardtimer wird nach Schwierigkeit skaliert; persönliche Zeitunterstützung bleibt aktiv.
-4. Wer nicht zeitgebunden teilnehmen kann oder möchte, bearbeitet dieselbe Frage im untimierten Begleitmaterial. Eine fehlende Liveantwort hat keine negative Folge und wird nicht nachgetragen.
+4. Wer nicht zeitgebunden teilnehmen kann oder möchte, bearbeitet dieselbe Frage im Begleitmaterial ohne Zeitlimit. Eine fehlende Liveantwort hat keine negative Folge und wird nicht nachgetragen.
 5. Solange eine bewertbare Frage aktiv ist, zeigt und nennt LD weder Lösung noch richtige Optionsmenge. Chat, Foliennotizen und Bildschirmfreigabe dürfen sie ebenfalls nicht verraten.
 6. Nach dem Schließen werden nur Aggregat, fachlich relevante Distraktoren und Begründungen besprochen. Eine zweite Runde bleibt von der ersten getrennt.
 7. Eine aggregierte Quote unter ungefähr zwei Dritteln oder ein zulässiges, mindestens fünf Antworten umfassendes Fehlvorstellungssignal markiert das Konzept für eine neue Erklärung. Es ist keine Bestehensgrenze und kein individuelles Urteil.
@@ -249,7 +249,7 @@ Die Summe beträgt genau 90 Minuten. Lange Agenten- oder Laborläufe laufen nur 
 
 - Tablet oder Laptop genügen für ARSnova und MC-Test.
 - Tiefes Lesen von Code, Diffs, Compose-Dateien, Logs, Messreports und Providerquellen erfolgt am Laptop. Pro Gruppe muss mindestens ein zugänglicher Laptop bereitstehen; ein persönliches Gerät ist keine Teilnahmevoraussetzung.
-- Partnerarbeit teilt nicht automatisch eine Antwort oder Identität. Liveantworten können weiterhin einzeln über Papier oder den untimierten Weg gegeben werden.
+- Partnerarbeit teilt nicht automatisch eine Antwort oder Identität. Liveantworten können weiterhin einzeln über Papier oder den Weg ohne Zeitlimit gegeben werden.
 - Lokale Rechner sind Zugangspunkte. Rechenleistung und Betriebsevidenz stammen aus derselben isolierten Laborumgebung.
 - Auf dem Laptop wird standardmäßig nur gelesen. Änderungen erfolgen ausschließlich im freigegebenen Arbeitsbereich und nie auf Produktion.
 
@@ -259,7 +259,7 @@ Die Summe beträgt genau 90 Minuten. Lange Agenten- oder Laborläufe laufen nur 
 
 |  Minute |   Dauer | Handlung                                                                                                                            |
 | ------: | ------: | ----------------------------------------------------------------------------------------------------------------------------------- |
-|   90–93 |  3 Min. | Wechsel, Link und untimierte Fassung öffnen; `practice`, fehlenden Countdown und Freiwilligkeit nennen                              |
+|   90–93 |  3 Min. | Wechsel, Link und Fassung ohne Zeitlimit öffnen; `practice`, fehlenden Countdown und Freiwilligkeit nennen                          |
 |  93–125 | 32 Min. | genau 30 Items bearbeiten; Sofortfeedback und Glossar nutzen                                                                        |
 | 125–135 | 10 Min. | aggregierte Ergebnisse, Lösungen und häufige Distraktoren besprechen; mindestens zwei fachlich ergiebige Items vollständig erklären |
 
@@ -297,7 +297,7 @@ LD schaltet nach genau einem kontrollierten Neuversuch auf den festgelegten Fall
 | Störung                                                       | Sofortweg                                                                                                         | Aussagegrenze                                                                   |
 | ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
 | ARSnova nicht erreichbar oder Beitritt fehlerhaft             | alle zehn Fragen aus der lokalen Fassung; anonyme Karten oder strukturierter Antwortbogen; Runden getrennt zählen | als `LIVE/OFFLINE` kennzeichnen, nie später stellvertretend in ARSnova eingeben |
-| Pseudonyme, Lösungsschutz oder Zeitunterstützung nicht sicher | Online-Session nicht öffnen beziehungsweise stoppen; untimierte Offlinefassung verwenden                          | keine Daten des Fehlmodus auswerten                                             |
+| Pseudonyme, Lösungsschutz oder Zeitunterstützung nicht sicher | Online-Session nicht öffnen beziehungsweise stoppen; Offlinefassung ohne Zeitlimit verwenden                      | keine Daten des Fehlmodus auswerten                                             |
 | MC-Test nicht erreichbar oder falscher Modus                  | vollständige 30-Item-Alternativfassung mit getrenntem Lösungsblatt; 32 + 10 Minuten beibehalten                   | kein Plattformexport und keine erfundene Abschlussquote                         |
 | Campusnetz ausgefallen                                        | heruntergeladene Folien, Repository-Ausschnitte, Referenzreports und Offlineantworten                             | keine Behauptung über einen aktuell laufenden Produktivzustand                  |
 | einzelnes Gerät fehlt                                         | Ersatzgerät, Partnerzugang oder private Papierantwort                                                             | Personen-, Geräte- und Antwortzahl getrennt halten                              |
@@ -349,7 +349,7 @@ ARSnova-Code sieht nach `endedAt` eine 14-tägige Host-Nachbereitung und erst da
 | Secret oder Produktionszugang im Prompt, Log oder Bildschirm      | Agent und Freigabe stoppen, Credential widerrufen, LB und DS informieren                            | neue kurzlebige Identität in isolierter Umgebung              |
 | Agent verlässt Ziel, Rechte oder Budget                           | Prozess und ausgehenden Zugriff beenden; Ressource sperren                                          | nur nach neuem Vertrag und menschlichem Gate                  |
 | Kosten-, Ressourcen-, SLO- oder Stabilitätsgrenze erreicht        | Last beziehungsweise Labor sofort abbrechen; Zustand und minimale Evidenz sichern                   | Ursache prüfen; Schwelle nicht ad hoc lockern                 |
-| Barriere verhindert gleichwertige Teilnahme                       | zeitgebundenen Weg stoppen und untimierte Alternative aktivieren                                    | Fachinhalt ohne individuelle Sanktion fortsetzen              |
+| Barriere verhindert gleichwertige Teilnahme                       | zeitgebundenen Weg stoppen und Alternative ohne Zeitlimit aktivieren                                | Fachinhalt ohne individuelle Sanktion fortsetzen              |
 | Export oder Löschung nicht nachweisbar                            | weitere Erhebung auf der Instanz sperren; an DS und MV eskalieren                                   | erst nach bestandenem Abwesenheitsnachweis                    |
 
 Der Incident-Ablauf lautet immer: stoppen, eindämmen, institutionell informieren, minimal dokumentieren, kontrolliert löschen oder übergeben, Gegenmaßnahme prüfen. Ob eine rechtliche Meldung erforderlich ist, entscheidet ausschließlich die zuständige institutionelle Stelle.
@@ -388,8 +388,8 @@ Personen, Pseudonyme, individuelle Verläufe, Geschwindigkeit, Rang und Teamstan
 - [Themenblockplan](./Themenblockplan_Cloud_Computing_12_Themenbloecke.md)
 - [ARSnova-Blueprint](./ARSnova_Blueprint_12_Themenbloecke.md)
 - [MC-Test-Blueprint](./MC-Test_Blueprint_12_Themenbloecke.md)
-- [Referatsthemenkatalog](./Referatsthemen_Cloud_Computing_ARSnova.md)
+- [Referatsprüfung, sechs Themen](../CLOUD-COMPUTING-REFERAT-PRUEFUNG.md)
 - [Datenmanagement und Datenschutz](./Datenmanagement_Datenschutz.md)
 - [Technische Quellen zu ARSnova.eu](./Technische_Quellen_ARSnova.md)
 
-Bis zur vollständigen Migration ihrer einzigartigen Detailregeln ergänzen die [IU-Formalia](../CLOUD-COMPUTING-IU-FORMALIA.md), die [Referatsumsetzung](../CLOUD-COMPUTING-REFERAT-PRUEFUNG.md), das [modalitätsneutrale Durchführungskonzept](../CLOUD-COMPUTING-DURCHFUEHRUNG-MODALITAETSNEUTRAL.md) und das [Agentic-Lehrlabor](../CLOUD-COMPUTING-AGENTIC-LEHRLABOR.md) das neue Paket. Bei einem Widerspruch gelten das aktuelle Modulkonzept, der veröffentlichte Prüfungsauftrag beziehungsweise myCampus und dieses Runbook; überholte UE-3-, MC-Generator- oder ausschließlich-agent-first-Regeln gelten nicht.
+Bis zur vollständigen Migration ihrer einzigartigen Detailregeln ergänzen die [IU-Formalia](../CLOUD-COMPUTING-IU-FORMALIA.md), das [modalitätsneutrale Durchführungskonzept](../CLOUD-COMPUTING-DURCHFUEHRUNG-MODALITAETSNEUTRAL.md) und das [Agentic-Lehrlabor](../CLOUD-COMPUTING-AGENTIC-LEHRLABOR.md) das neue Paket. Bei einem Widerspruch gelten das aktuelle Modulkonzept, der veröffentlichte Prüfungsauftrag beziehungsweise myCampus und dieses Runbook; überholte UE-3-, MC-Generator- oder ausschließlich-agent-first-Regeln gelten nicht.

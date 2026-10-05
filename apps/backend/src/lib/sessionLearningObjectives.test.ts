@@ -60,7 +60,7 @@ function sessionRow(overrides: Record<string, unknown> = {}) {
     id: SESSION_ID,
     status: 'LOBBY',
     endedAt: null,
-    expiresAt: new Date('2026-10-05T10:00:00.000Z'),
+    expiresAt: new Date('2099-01-01T00:00:00.000Z'),
     quizId: QUIZ_A_ID,
     learningContextRevision: 4,
     learningContextConfigured: true,
