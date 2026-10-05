@@ -73,7 +73,9 @@ versionierten Migrationen mit `npx prisma migrate deploy` angewendet sein. Die
 zugehörigen Controlled-Clock-Unit- und Frontendtests laufen im normalen
 Backend-/Frontend-Testjob. Der Retention-Test prüft zusätzlich die
 14-Tage-/Legal-Hold-Bridge für alte Cleanup-Images, Cascade und Set-Null,
-Audit-Minimierung, Invite-Job-Löschung sowie die getrennten 90-/365-Tage-TTLs.
+Audit-Minimierung, Invite-Job-Löschung, gültige Leitindizes aller
+Session-/Parent-Quiz-Purge-Referenzaktionen sowie die getrennten
+90-/365-Tage-TTLs.
 Der Orphan-Scope-PostgreSQL-Test prüft zusätzlich die gemeinsame
 Sessionzeilensperre für Parent-Quiz-Löschung und späte FK-lose Audit-/Invite-
 Writer.

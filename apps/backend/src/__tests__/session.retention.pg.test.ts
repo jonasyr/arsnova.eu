@@ -43,6 +43,106 @@ describe.skipIf(!RUN_PG)('session retention (PostgreSQL)', () => {
     await client.end();
   });
 
+  it('hält alle Referenzaktionen des Session-Purges über Leitindizes bounded', async () => {
+    const expected = [
+      {
+        indexName: 'AdminAuditLog_sessionId_idx',
+        tableName: 'AdminAuditLog',
+        leadingColumn: 'sessionId',
+      },
+      {
+        indexName: 'AnswerOption_questionId_idx',
+        tableName: 'AnswerOption',
+        leadingColumn: 'questionId',
+      },
+      {
+        indexName: 'BonusToken_participantId_idx',
+        tableName: 'BonusToken',
+        leadingColumn: 'participantId',
+      },
+      {
+        indexName: 'BonusToken_sessionId_idx',
+        tableName: 'BonusToken',
+        leadingColumn: 'sessionId',
+      },
+      {
+        indexName: 'HostCredentialExchange_sourceCredentialId_idx',
+        tableName: 'HostCredentialExchange',
+        leadingColumn: 'sourceCredentialId',
+      },
+      {
+        indexName: 'Participant_teamId_idx',
+        tableName: 'Participant',
+        leadingColumn: 'teamId',
+      },
+      {
+        indexName: 'ParticipantJoinReplay_participantId_idx',
+        tableName: 'ParticipantJoinReplay',
+        leadingColumn: 'participantId',
+      },
+      {
+        indexName: 'QaQuestion_participantId_idx',
+        tableName: 'QaQuestion',
+        leadingColumn: 'participantId',
+      },
+      {
+        indexName: 'QaUpvote_participantId_idx',
+        tableName: 'QaUpvote',
+        leadingColumn: 'participantId',
+      },
+      {
+        indexName: 'SessionFeedback_participantId_idx',
+        tableName: 'SessionFeedback',
+        leadingColumn: 'participantId',
+      },
+      {
+        indexName: 'Vote_questionId_idx',
+        tableName: 'Vote',
+        leadingColumn: 'questionId',
+      },
+      {
+        indexName: 'VoteAnswer_answerOptionId_idx',
+        tableName: 'VoteAnswer',
+        leadingColumn: 'answerOptionId',
+      },
+    ];
+    const indexes = await client.query<{
+      indexName: string;
+      tableName: string;
+      leadingColumn: string;
+      isValid: boolean;
+      isReady: boolean;
+    }>(
+      `
+        SELECT
+          index_relation.relname AS "indexName",
+          table_relation.relname AS "tableName",
+          attribute.attname AS "leadingColumn",
+          index_metadata.indisvalid AS "isValid",
+          index_metadata.indisready AS "isReady"
+        FROM pg_index AS index_metadata
+        JOIN pg_class AS index_relation
+          ON index_relation.oid = index_metadata.indexrelid
+        JOIN pg_class AS table_relation
+          ON table_relation.oid = index_metadata.indrelid
+        JOIN pg_namespace AS table_namespace
+          ON table_namespace.oid = table_relation.relnamespace
+        JOIN pg_attribute AS attribute
+          ON attribute.attrelid = table_relation.oid
+         AND attribute.attnum = index_metadata.indkey[0]
+        WHERE table_namespace.nspname = current_schema()
+          AND index_relation.relname = ANY($1::text[])
+        ORDER BY index_relation.relname
+      `,
+      [expected.map((entry) => entry.indexName)],
+    );
+
+    expect(indexes.rows).toHaveLength(expected.length);
+    for (const entry of expected) {
+      expect(indexes.rows).toContainEqual({ ...entry, isValid: true, isReady: true });
+    }
+  });
+
   it('schützt die 14-tägige Nachbereitung im Rollback und minimiert abhängige Daten', async () => {
     const code = uniqueSessionCode();
     await client.query(
