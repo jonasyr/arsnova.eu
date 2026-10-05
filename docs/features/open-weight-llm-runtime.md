@@ -130,6 +130,8 @@ Der Entry-Point erzwingt unter anderem:
 
 Containergrenzen: 4 CPU, 5 GiB RAM, 128 PIDs, read-only Root-Dateisystem, alle Linux-Capabilities entfernt und `no-new-privileges`. Der Server bindet nie automatisch an eine Wildcard.
 
+Der `/health`-Endpunkt des gepinnten llama.cpp-Builds erzwingt selbst keinen API-Key. Der Container-Healthcheck sendet den Bearer-Header zwar mit, aber die Readiness-Antwort ist keine Authentisierungsgrenze. Deshalb bleiben privates Netz beziehungsweise `network_mode: none` und die Host-Firewall verbindlich. Die auftragsrelevanten Endpunkte `/slots` und `/v1/chat/completions` erzwingen das exakte Runtime-Credential.
+
 ## Realer lokaler Modellnachweis vom 2026-10-05
 
 Messgrenze: Apple M2 Pro, 12 Kerne, 16 GB RAM; Docker-Linux `arm64`; Containerlimit 4 CPU / 5 GiB; CPU-only; Unix-Socket; lokale Runtime-Image-ID `sha256:5c686e7e06ca10ccf0126c76d2130f0c024fce9038913abf3e774f888fc54ecd` auf Basis des oben gepinnten Multiarch-Digests. Die Messung ist ein Runtime-Nachweis, keine Produktions- oder Qualitätsabnahme der drei Consumer.
@@ -157,6 +159,8 @@ Auftrag: deutsches Kurzlabel aus zwei Quellen, strikt strukturierte Ausgabe. Erg
 | maximal beobachtete CPU              |                                                        394 % |
 
 Ein Warm-Lauf mit 148 gecachten Prompttokens dauerte 1.120 ms. Die Messung belegt Schemaerzwingung und Ausführbarkeit des kurzen Labelauftrags. Sie belegt nicht Summary-Prefill auf der echten 8-vCPU-Inferenzbox, Lernzielqualität, p95 unter Last, Produktions-RSS oder fachliche Freigabe. Diese Nachweise bleiben vor Aktivierung beziehungsweise in den jeweiligen Consumer-Slices offen.
+
+Nach den Review-Korrekturen wurde der finale Stand am 2026-10-05 erneut als Image `sha256:b53c8233a91413e428b406f70056c28a7d90d5ff41d3726919156a211bd063a5` gebaut und mit demselben verifizierten GGUF gestartet. Effektiv geprüft wurden UID/GID `65532:65532`, read-only Root-Dateisystem, `network_mode: none`, 5 GiB RAM, 4 CPU, 128 PIDs, `cap_drop: ALL`, `no-new-privileges` und `healthy`. Am geschützten Slot-Endpunkt lieferte das exakte Token HTTP 200, ein anderes formal gültiges Token HTTP 401. Ein realer schema-gebundener Abschlussaufruf lieferte `{"label":"Lineare Funktionen und Steigungen"}`; llama.cpp meldete 1.090 ms Prompt- und 422 ms Generierungszeit. Der isolierte Testcontainer wurde anschließend gestoppt und durch `--rm` entfernt.
 
 ## Verifikation
 
