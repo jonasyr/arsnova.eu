@@ -1459,6 +1459,594 @@ describe('QuizStoreService', () => {
     expect(localStorage.getItem(`quiz-sync-share-token:${roomId}`)).toBe(importedToken);
   });
 
+  it('behält beim erneuten Import desselben Tokens den laufenden Pending-Zustand', () => {
+    const service = TestBed.inject(QuizStoreService);
+    const roomId = service.syncRoomId();
+    const importedToken = `v1.${roomId}.3.${'d'.repeat(43)}`;
+    const initYjsPersistence = vi.fn();
+    const ensureShareRegisteredAndConnect = vi.fn();
+    const internals = service as unknown as {
+      initYjsPersistence: typeof initYjsPersistence;
+      ensureShareRegisteredAndConnect: typeof ensureShareRegisteredAndConnect;
+      pendingImportedShareToken: {
+        roomId: string;
+        token: string;
+        previousToken: string | null;
+      } | null;
+      pendingImportedQuizRestore: {
+        roomId: string;
+        baselineSerialized: string;
+        latestSerialized: string;
+        persistenceStarted: boolean;
+        persistenceSynced: boolean;
+        providerSynced: boolean;
+        providerPresetSerialized: string | null;
+        providerSerialized: string | null;
+      } | null;
+    };
+    internals.initYjsPersistence = initYjsPersistence;
+    internals.ensureShareRegisteredAndConnect = ensureShareRegisteredAndConnect;
+
+    service.activateSyncRoom(roomId, { markShared: true, shareToken: importedToken });
+    const pendingShare = internals.pendingImportedShareToken;
+    const pendingRestore = internals.pendingImportedQuizRestore;
+    expect(pendingShare).not.toBeNull();
+    expect(pendingRestore).not.toBeNull();
+    pendingRestore!.persistenceStarted = true;
+    pendingRestore!.providerSynced = true;
+
+    service.activateSyncRoom(roomId, { markShared: true, shareToken: importedToken });
+
+    expect(service.syncShareStatus()).toBe('pending');
+    expect(localStorage.getItem(`quiz-sync-share-token:${roomId}`)).toBeNull();
+    expect(internals.pendingImportedShareToken).toBe(pendingShare);
+    expect(internals.pendingImportedQuizRestore).toBe(pendingRestore);
+    expect(internals.pendingImportedQuizRestore).toEqual(
+      expect.objectContaining({ persistenceStarted: true, providerSynced: true }),
+    );
+    expect(initYjsPersistence).toHaveBeenCalledOnce();
+    expect(ensureShareRegisteredAndConnect).not.toHaveBeenCalled();
+  });
+
+  it('behält Pending bei einem identischen Storage-Token aus einem anderen Tab', () => {
+    const service = TestBed.inject(QuizStoreService);
+    const roomId = service.syncRoomId();
+    const importedToken = `v1.${roomId}.3.${'e'.repeat(43)}`;
+    const internals = service as unknown as {
+      initYjsPersistence: ReturnType<typeof vi.fn>;
+      pendingImportedShareToken: object | null;
+      pendingImportedQuizRestore: object | null;
+    };
+    internals.initYjsPersistence = vi.fn();
+
+    service.activateSyncRoom(roomId, { markShared: true, shareToken: importedToken });
+    const pendingShare = internals.pendingImportedShareToken;
+    const pendingRestore = internals.pendingImportedQuizRestore;
+
+    globalThis.dispatchEvent(
+      new StorageEvent('storage', {
+        key: `quiz-sync-share-token:${roomId}`,
+        newValue: importedToken,
+      }),
+    );
+
+    expect(service.syncShareStatus()).toBe('pending');
+    expect(service.syncShareToken()).toBe(importedToken);
+    expect(internals.pendingImportedShareToken).toBe(pendingShare);
+    expect(internals.pendingImportedQuizRestore).toBe(pendingRestore);
+  });
+
+  it('behält Pending auch bei abgewiesenen Reimport-Links desselben Raums', () => {
+    const service = TestBed.inject(QuizStoreService);
+    const roomId = service.syncRoomId();
+    const importedToken = `v1.${roomId}.3.${'d'.repeat(43)}`;
+    const initYjsPersistence = vi.fn();
+    const ensureShareRegisteredAndConnect = vi.fn();
+    const internals = service as unknown as {
+      initYjsPersistence: typeof initYjsPersistence;
+      ensureShareRegisteredAndConnect: typeof ensureShareRegisteredAndConnect;
+      pendingImportedShareToken: object | null;
+      pendingImportedQuizRestore: {
+        persistenceStarted: boolean;
+        providerSynced: boolean;
+      } | null;
+    };
+    internals.initYjsPersistence = initYjsPersistence;
+    internals.ensureShareRegisteredAndConnect = ensureShareRegisteredAndConnect;
+
+    service.activateSyncRoom(roomId, { markShared: true, shareToken: importedToken });
+    const pendingShare = internals.pendingImportedShareToken;
+    const pendingRestore = internals.pendingImportedQuizRestore;
+    pendingRestore!.persistenceStarted = true;
+    pendingRestore!.providerSynced = true;
+
+    const rejectedTokens = [
+      'kein-token',
+      `v1.${roomId}.2.${'e'.repeat(43)}`,
+      `v1.${roomId}.3.${'f'.repeat(43)}`,
+    ];
+    for (const rejectedToken of rejectedTokens) {
+      service.activateSyncRoom(roomId, { markShared: true, shareToken: rejectedToken });
+
+      expect(service.syncShareStatus()).toBe('pending');
+      expect(service.syncShareToken()).toBe(importedToken);
+      expect(localStorage.getItem(`quiz-sync-share-token:${roomId}`)).toBeNull();
+      expect(internals.pendingImportedShareToken).toBe(pendingShare);
+      expect(internals.pendingImportedQuizRestore).toBe(pendingRestore);
+    }
+    expect(initYjsPersistence).toHaveBeenCalledOnce();
+    expect(ensureShareRegisteredAndConnect).not.toHaveBeenCalled();
+  });
+
+  it('finalisiert einen importierten Share erst nach Provider- und IndexedDB-Sync', async () => {
+    vi.stubGlobal('indexedDB', {});
+    const service = TestBed.inject(QuizStoreService);
+    const roomId = '00000000-0000-4000-8000-000000000456';
+    const importedToken = `v1.${roomId}.1.${'d'.repeat(43)}`;
+    const Y = await import('yjs');
+    const yDoc = new Y.Doc();
+    const yRoot = yDoc.getMap<string>('quiz-library');
+    const yObjectives = yDoc.getMap<string>('quiz-learning-objectives-v1');
+    const internals = service as unknown as {
+      yDoc: InstanceType<typeof Y.Doc> | null;
+      yRoot: import('yjs').Map<string> | null;
+      yLearningObjectivesRoot: import('yjs').Map<string> | null;
+      initYjsPersistence: (roomId: string) => Promise<void>;
+      beginLearningObjectiveYjsRestore: (roomId: string) => void;
+      handleInitialYjsSourceSynced: (
+        roomId: string,
+        source: 'persistence' | 'provider',
+        token?: string,
+      ) => void;
+      applyYjsSnapshot: () => boolean;
+      serializeQuizDocuments: () => string;
+    };
+    internals.initYjsPersistence = vi.fn().mockResolvedValue(undefined);
+
+    service.createQuiz({ name: 'Remote vorhanden' });
+    const remoteSerialized = internals.serializeQuizDocuments();
+
+    service.activateSyncRoom(roomId, { markShared: true, shareToken: importedToken });
+    internals.beginLearningObjectiveYjsRestore(roomId);
+    internals.yDoc = yDoc;
+    internals.yRoot = yRoot;
+    internals.yLearningObjectivesRoot = yObjectives;
+    yRoot.set('quizzes', remoteSerialized);
+
+    const earlyLocalQuiz = service.createQuiz({ name: 'Frühe lokale Änderung' });
+
+    // Yjs kann Remote-Updates bereits vor dem abschließenden provider.sync-Event beobachten.
+    internals.applyYjsSnapshot();
+
+    const secondEarlyLocalQuiz = service.createQuiz({
+      name: 'Zweite frühe lokale Änderung',
+    });
+
+    // Der Provider kann vor dem IndexedDB-Restore synchron sein. Der Puffer
+    // bleibt aktiv und merkt sich den dabei beobachteten autoritativen Stand.
+    internals.handleInitialYjsSourceSynced(roomId, 'provider', importedToken);
+    expect(localStorage.getItem(`quiz-sync-share-token:${roomId}`)).toBeNull();
+
+    // Ein verspäteter Cache-Wert darf weder den Remote-Katalog noch A/B gewinnen.
+    yRoot.set('quizzes', '[]');
+    internals.applyYjsSnapshot();
+
+    expect(yRoot.get('quizzes')).toBe('[]');
+    expect(yRoot.has('quiz-learning-objectives-v1-initialized')).toBe(false);
+
+    internals.handleInitialYjsSourceSynced(roomId, 'persistence');
+
+    expect(service.quizzes().map((quiz) => quiz.name)).toEqual(
+      expect.arrayContaining([
+        'Remote vorhanden',
+        'Frühe lokale Änderung',
+        'Zweite frühe lokale Änderung',
+      ]),
+    );
+    expect(
+      (JSON.parse(yRoot.get('quizzes') ?? '[]') as Array<{ id: string }>).map((quiz) => quiz.id),
+    ).toEqual(expect.arrayContaining([earlyLocalQuiz.id, secondEarlyLocalQuiz.id]));
+    expect(yRoot.get('quiz-learning-objectives-v1-initialized')).toBe('1');
+  });
+
+  it('isoliert den Provider-Snapshot von einem bereits vorhandenen IndexedDB-Cache', async () => {
+    vi.stubGlobal('navigator', { ...navigator, userAgent: 'Mozilla/5.0 Chrome/120' });
+    vi.stubGlobal('WebSocket', class {});
+    vi.stubGlobal('indexedDB', {});
+
+    const service = TestBed.inject(QuizStoreService);
+    const roomId = '00000000-0000-4000-8000-000000000457';
+    const importedToken = `v1.${roomId}.1.${'e'.repeat(43)}`;
+    const remotePreset = {
+      theme: 'contrast',
+      preset: 'serious',
+      seriousOptions: 'remote-serious',
+      playfulOptions: null,
+    };
+    const cachedPreset = {
+      theme: 'dark',
+      preset: 'playful',
+      seriousOptions: null,
+      playfulOptions: 'stale-playful',
+    };
+    const lifecycle: string[] = [];
+    let providerDoc: import('yjs').Doc | null = null;
+    let providerSyncListener: ((isSynced: boolean) => void) | null = null;
+    let providerConnected = false;
+    let providerConnections = 0;
+    let staleCacheReachedProvider = false;
+    let persistenceAttached = false;
+    let persistenceSyncedListener: (() => void) | null = null;
+
+    class FakeProvider {
+      readonly awareness = {
+        setLocalStateField: vi.fn(),
+        on: vi.fn(),
+        off: vi.fn(),
+      };
+      readonly destroy = vi.fn(() => {
+        providerConnected = false;
+        lifecycle.push('provider-disconnect');
+      });
+
+      constructor(_url: string, _room: string, doc: import('yjs').Doc) {
+        providerConnections++;
+        providerConnected = true;
+        lifecycle.push(providerConnections === 1 ? 'provider' : 'provider-reconnect');
+        providerDoc = doc;
+      }
+
+      readonly on = vi.fn((event: string, listener: (value: never) => void) => {
+        if (event === 'sync') {
+          providerSyncListener = listener as unknown as (isSynced: boolean) => void;
+        }
+      });
+    }
+
+    class FakePersistence {
+      readonly destroy = vi.fn();
+      synced = false;
+      constructor(_name: string, doc: import('yjs').Doc) {
+        lifecycle.push('persistence');
+        persistenceAttached = true;
+        staleCacheReachedProvider = providerConnected;
+        // Simuliert den bereits vorhandenen, aber veralteten Cache. Entscheidend
+        // ist, dass der Live-Provider vor dem Anfügen getrennt wurde.
+        const cachedRoot = doc.getMap<string>('quiz-library');
+        doc.transact(() => {
+          cachedRoot.set('quizzes', '[]');
+          cachedRoot.set('home-presets', JSON.stringify(cachedPreset));
+        }, this);
+      }
+
+      readonly once = vi.fn((event: string, listener: () => void) => {
+        if (event === 'synced') persistenceSyncedListener = listener;
+      });
+    }
+
+    const internals = service as unknown as {
+      loadIndexedDbPersistenceCtor: () => Promise<unknown>;
+      loadWebsocketProviderCtor: () => Promise<unknown>;
+      serializeQuizDocuments: () => string;
+    };
+    internals.loadIndexedDbPersistenceCtor = vi.fn().mockResolvedValue(FakePersistence);
+    internals.loadWebsocketProviderCtor = vi.fn().mockResolvedValue(FakeProvider);
+
+    const remoteQuiz = service.createQuiz({ name: 'Autoritativer Remote-Stand' });
+    const remoteSerialized = internals.serializeQuizDocuments();
+    service.deleteQuiz(remoteQuiz.id);
+
+    service.activateSyncRoom(roomId, { markShared: true, shareToken: importedToken });
+    await vi.waitFor(() => expect(providerDoc).not.toBeNull());
+    expect(persistenceAttached).toBe(false);
+
+    const providerRoot = providerDoc!.getMap<string>('quiz-library');
+    providerRoot.set('quizzes', remoteSerialized);
+    providerRoot.set('home-presets', JSON.stringify(remotePreset));
+    const earlyLocalQuiz = service.createQuiz({ name: 'Frühe lokale Änderung' });
+    lifecycle.push('provider-sync');
+    providerSyncListener?.(true);
+
+    await vi.waitFor(() => expect(persistenceAttached).toBe(true));
+    expect(lifecycle).toEqual(['provider', 'provider-sync', 'provider-disconnect', 'persistence']);
+    expect(staleCacheReachedProvider).toBe(false);
+    const secondEarlyLocalQuiz = service.createQuiz({ name: 'Zweite frühe lokale Änderung' });
+    persistenceSyncedListener?.();
+    await vi.waitFor(() => expect(providerConnections).toBe(2));
+    expect(lifecycle).toContain('provider-reconnect');
+
+    expect(service.quizzes().map((quiz) => quiz.name)).toEqual(
+      expect.arrayContaining([
+        'Autoritativer Remote-Stand',
+        'Frühe lokale Änderung',
+        'Zweite frühe lokale Änderung',
+      ]),
+    );
+    expect(
+      (
+        JSON.parse(providerDoc!.getMap<string>('quiz-library').get('quizzes') ?? '[]') as Array<{
+          id: string;
+        }>
+      ).map((quiz) => quiz.id),
+    ).toEqual(expect.arrayContaining([remoteQuiz.id, earlyLocalQuiz.id, secondEarlyLocalQuiz.id]));
+    expect(JSON.parse(providerRoot.get('home-presets') ?? 'null')).toEqual(remotePreset);
+    expect(localStorage.getItem('home-theme')).toBe(remotePreset.theme);
+    expect(localStorage.getItem('home-preset')).toBe(remotePreset.preset);
+    expect(localStorage.getItem('home-preset-options-serious')).toBe(remotePreset.seriousOptions);
+    expect(localStorage.getItem('home-preset-options-spielerisch')).toBeNull();
+    expect(localStorage.getItem(`quiz-sync-share-token:${roomId}`)).toBe(importedToken);
+  });
+
+  it('schließt den Import trotz nicht verfügbarem localStorage für Provider-Presets ab', async () => {
+    const service = TestBed.inject(QuizStoreService);
+    const Y = await import('yjs');
+    const yDoc = new Y.Doc();
+    const yRoot = yDoc.getMap<string>('quiz-library');
+    const yLearningObjectivesRoot = yDoc.getMap<string>('quiz-learning-objectives-v1');
+    const roomId = '00000000-0000-4000-8000-000000000458';
+    const importedToken = `v1.${roomId}.1.${'f'.repeat(43)}`;
+    const remotePreset = {
+      theme: 'contrast',
+      preset: 'serious',
+      seriousOptions: 'remote-serious',
+      playfulOptions: null,
+    };
+    const reconnect = vi.fn().mockResolvedValue(undefined);
+    const internals = service as unknown as {
+      yDoc: InstanceType<typeof Y.Doc> | null;
+      yRoot: import('yjs').Map<string> | null;
+      yLearningObjectivesRoot: import('yjs').Map<string> | null;
+      pendingImportedShareToken: {
+        roomId: string;
+        token: string;
+        previousToken: string | null;
+      } | null;
+      pendingImportedQuizRestore: {
+        roomId: string;
+        baselineSerialized: string;
+        latestSerialized: string;
+        persistenceStarted: boolean;
+        persistenceSynced: boolean;
+        providerSynced: boolean;
+        providerPresetSerialized: string | null;
+        providerSerialized: string | null;
+      } | null;
+      handleInitialYjsSourceSynced: (
+        roomId: string,
+        source: 'persistence' | 'provider',
+        token?: string,
+      ) => void;
+      attachYjsWebSocketProviderIfNeeded: (generation: number, roomId: string) => Promise<void>;
+    };
+
+    service.syncRoomId.set(roomId);
+    service.syncShareToken.set(importedToken);
+    internals.yDoc = yDoc;
+    internals.yRoot = yRoot;
+    internals.yLearningObjectivesRoot = yLearningObjectivesRoot;
+    internals.pendingImportedShareToken = {
+      roomId,
+      token: importedToken,
+      previousToken: null,
+    };
+    internals.pendingImportedQuizRestore = {
+      roomId,
+      baselineSerialized: '[]',
+      latestSerialized: '[]',
+      persistenceStarted: true,
+      persistenceSynced: false,
+      providerSynced: true,
+      providerPresetSerialized: JSON.stringify(remotePreset),
+      providerSerialized: '[]',
+    };
+    internals.attachYjsWebSocketProviderIfNeeded = reconnect;
+    localStorage.setItem('home-theme', 'dark');
+    localStorage.setItem('home-preset', 'playful');
+    localStorage.setItem('home-preset-options-spielerisch', 'stale-playful');
+
+    const storageSpy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('Storage unavailable', 'SecurityError');
+    });
+    try {
+      expect(() => internals.handleInitialYjsSourceSynced(roomId, 'persistence')).not.toThrow();
+    } finally {
+      storageSpy.mockRestore();
+    }
+
+    expect(internals.pendingImportedShareToken).toBeNull();
+    expect(internals.pendingImportedQuizRestore).toBeNull();
+    expect(service.syncShareToken()).toBe(importedToken);
+    expect(JSON.parse(yRoot.get('home-presets') ?? 'null')).toEqual(remotePreset);
+    expect(localStorage.getItem('home-theme')).toBe('dark');
+    expect(localStorage.getItem('home-preset')).toBe('playful');
+    expect(reconnect).toHaveBeenCalledWith(expect.any(Number), roomId);
+  });
+
+  it('stellt den Provider nach einem ausbleibenden IndexedDB-Sync kontrolliert wieder her', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('indexedDB', {});
+    try {
+      const service = TestBed.inject(QuizStoreService);
+      const Y = await import('yjs');
+      const yDoc = new Y.Doc();
+      const yRoot = yDoc.getMap<string>('quiz-library');
+      const yLearningObjectivesRoot = yDoc.getMap<string>('quiz-learning-objectives-v1');
+      const roomId = '00000000-0000-4000-8000-000000000459';
+      const importedToken = `v1.${roomId}.1.${'a'.repeat(43)}`;
+      const lifecycle: string[] = [];
+      const clearPersistence = vi.fn().mockImplementation(async () => {
+        lifecycle.push('cache-cleared');
+      });
+      const reconnect = vi.fn().mockImplementation(async () => {
+        lifecycle.push('provider-reconnect');
+      });
+
+      class NeverSyncedPersistence {
+        readonly synced = false;
+        readonly clearData = clearPersistence;
+        readonly once = vi.fn();
+      }
+
+      const internals = service as unknown as {
+        yDoc: InstanceType<typeof Y.Doc> | null;
+        yRoot: import('yjs').Map<string> | null;
+        yLearningObjectivesRoot: import('yjs').Map<string> | null;
+        yPersistence: NeverSyncedPersistence | null;
+        yjsInitGeneration: number;
+        pendingImportedShareToken: {
+          roomId: string;
+          token: string;
+          previousToken: string | null;
+        } | null;
+        pendingImportedQuizRestore: {
+          roomId: string;
+          baselineSerialized: string;
+          latestSerialized: string;
+          persistenceStarted: boolean;
+          persistenceSynced: boolean;
+          providerSynced: boolean;
+          providerPresetSerialized: string | null;
+          providerSerialized: string | null;
+        } | null;
+        pendingImportedPersistenceSyncTimeoutId: ReturnType<typeof setTimeout> | null;
+        loadIndexedDbPersistenceCtor: () => Promise<unknown>;
+        attachYjsIndexedDbPersistence: (
+          roomId: string,
+          yDoc: InstanceType<typeof Y.Doc>,
+          generation: number,
+        ) => Promise<void>;
+        attachYjsWebSocketProviderIfNeeded: (generation: number, roomId: string) => Promise<void>;
+      };
+
+      service.syncRoomId.set(roomId);
+      service.syncShareToken.set(importedToken);
+      service.syncShareStatus.set('pending');
+      internals.yDoc = yDoc;
+      internals.yRoot = yRoot;
+      internals.yLearningObjectivesRoot = yLearningObjectivesRoot;
+      internals.pendingImportedShareToken = {
+        roomId,
+        token: importedToken,
+        previousToken: null,
+      };
+      internals.pendingImportedQuizRestore = {
+        roomId,
+        baselineSerialized: '[]',
+        latestSerialized: '[]',
+        persistenceStarted: true,
+        persistenceSynced: false,
+        providerSynced: true,
+        providerPresetSerialized: null,
+        providerSerialized: '[]',
+      };
+      internals.loadIndexedDbPersistenceCtor = vi.fn().mockResolvedValue(NeverSyncedPersistence);
+      internals.attachYjsWebSocketProviderIfNeeded = reconnect;
+
+      await internals.attachYjsIndexedDbPersistence(roomId, yDoc, internals.yjsInitGeneration);
+      expect(internals.yPersistence).toBeInstanceOf(NeverSyncedPersistence);
+
+      await vi.advanceTimersByTimeAsync(5000);
+
+      expect(clearPersistence).toHaveBeenCalledOnce();
+      expect(internals.yPersistence).toBeNull();
+      expect(internals.pendingImportedPersistenceSyncTimeoutId).toBeNull();
+      expect(internals.pendingImportedShareToken).toBeNull();
+      expect(internals.pendingImportedQuizRestore).toBeNull();
+      expect(service.syncShareStatus()).toBe('ready');
+      expect(reconnect).toHaveBeenCalledWith(internals.yjsInitGeneration, roomId);
+      expect(lifecycle).toEqual(['cache-cleared', 'provider-reconnect']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('bestätigt den Import nicht, wenn sich der defekte IndexedDB-Cache nicht entfernen lässt', async () => {
+    const deleteRequest = {
+      onsuccess: null as ((event: Event) => void) | null,
+      onerror: null as ((event: Event) => void) | null,
+    };
+    const deleteDatabase = vi.fn(() => {
+      queueMicrotask(() => deleteRequest.onerror?.(new Event('error')));
+      return deleteRequest as unknown as IDBOpenDBRequest;
+    });
+    vi.stubGlobal('indexedDB', { deleteDatabase });
+
+    const service = TestBed.inject(QuizStoreService);
+    const Y = await import('yjs');
+    const yDoc = new Y.Doc();
+    const yRoot = yDoc.getMap<string>('quiz-library');
+    const yLearningObjectivesRoot = yDoc.getMap<string>('quiz-learning-objectives-v1');
+    const roomId = '00000000-0000-4000-8000-000000000460';
+    const importedToken = `v1.${roomId}.1.${'b'.repeat(43)}`;
+    const clearPersistence = vi.fn().mockRejectedValue(new DOMException('delete failed'));
+    const persistence = { clearData: clearPersistence };
+    const internals = service as unknown as {
+      yDoc: InstanceType<typeof Y.Doc> | null;
+      yRoot: import('yjs').Map<string> | null;
+      yLearningObjectivesRoot: import('yjs').Map<string> | null;
+      yPersistence: typeof persistence | null;
+      yjsInitGeneration: number;
+      pendingImportedShareToken: {
+        roomId: string;
+        token: string;
+        previousToken: string | null;
+      } | null;
+      pendingImportedQuizRestore: {
+        roomId: string;
+        baselineSerialized: string;
+        latestSerialized: string;
+        persistenceStarted: boolean;
+        persistenceSynced: boolean;
+        providerSynced: boolean;
+        providerPresetSerialized: string | null;
+        providerSerialized: string | null;
+      } | null;
+      recoverPendingImportedPersistenceFailure: (
+        roomId: string,
+        yDoc: InstanceType<typeof Y.Doc>,
+        generation: number,
+        persistence: typeof persistence,
+      ) => Promise<void>;
+    };
+
+    service.syncRoomId.set(roomId);
+    service.syncShareToken.set(importedToken);
+    service.syncShareStatus.set('pending');
+    internals.yDoc = yDoc;
+    internals.yRoot = yRoot;
+    internals.yLearningObjectivesRoot = yLearningObjectivesRoot;
+    internals.yPersistence = persistence;
+    internals.pendingImportedShareToken = {
+      roomId,
+      token: importedToken,
+      previousToken: null,
+    };
+    internals.pendingImportedQuizRestore = {
+      roomId,
+      baselineSerialized: '[]',
+      latestSerialized: '[]',
+      persistenceStarted: true,
+      persistenceSynced: false,
+      providerSynced: true,
+      providerPresetSerialized: null,
+      providerSerialized: '[]',
+    };
+
+    await internals.recoverPendingImportedPersistenceFailure(
+      roomId,
+      yDoc,
+      internals.yjsInitGeneration,
+      persistence,
+    );
+
+    expect(clearPersistence).toHaveBeenCalledOnce();
+    expect(deleteDatabase).toHaveBeenCalledWith('arsnova-quiz-library-v1:' + roomId);
+    expect(internals.yDoc).toBeNull();
+    expect(internals.pendingImportedShareToken).not.toBeNull();
+    expect(internals.pendingImportedQuizRestore).not.toBeNull();
+    expect(service.syncShareStatus()).toBe('pending');
+  });
+
   it('beendet den Provider dauerhaft bei einem serverseitig abgelehnten Sync-Token', () => {
     const service = TestBed.inject(QuizStoreService);
     const roomId = service.syncRoomId();
@@ -2146,5 +2734,847 @@ describe('QuizStoreService', () => {
       'Startfrage?',
     ]);
     expect(payload.nicknameTheme).toBe('KINDERGARTEN');
+  });
+
+  it('persistiert Lernziele im raumgebundenen Sidecar und remappt sie bei Export, Import und Duplikat', () => {
+    const service = TestBed.inject(QuizStoreService);
+    const created = service.createQuiz({ name: 'Lernziel-Quiz' });
+    const question = service.addQuestion(created.id, {
+      text: 'Was ist Kapselung?',
+      type: 'SINGLE_CHOICE',
+      difficulty: 'MEDIUM',
+      answers: [
+        { text: 'Ein Entwurfsprinzip', isCorrect: true },
+        { text: 'Ein Protokoll', isCorrect: false },
+      ],
+    });
+    const objective = service.saveQuizLearningObjective(created.id, {
+      text: 'Kapselung erklären',
+      scope: { kind: 'question-set', sourceQuestionIds: [question.id] },
+      confirmationState: 'confirmed',
+    });
+
+    const roomId = localStorage.getItem('quiz-sync-room-id');
+    const stored = JSON.parse(
+      localStorage.getItem(`quiz-learning-objectives-v1:${roomId}`) ?? '[]',
+    ) as Array<{ quizId: string; objectives: Array<{ id: string }> }>;
+    expect(stored).toContainEqual(
+      expect.objectContaining({
+        quizId: created.id,
+        objectives: [expect.objectContaining({ id: objective.id })],
+      }),
+    );
+
+    const exported = service.exportQuiz(created.id);
+    expect(exported.exportVersion).toBe(2);
+    if (exported.exportVersion !== 2) throw new Error('V2-Export erwartet');
+    expect(exported.quiz.sourceQuizId).toBe(created.id);
+    expect(exported.quiz.questions[0]?.sourceQuestionId).toBe(question.id);
+    expect(exported.quiz.learningObjectives.objectives[0]?.id).toBe(objective.id);
+
+    const duplicated = service.duplicateQuiz(created.id);
+    const duplicateQuestionId = duplicated.questions[0]?.id;
+    const duplicatedObjective = service.getLearningObjectiveBundle(duplicated.id).objectives[0];
+    expect(duplicatedObjective?.id).not.toBe(objective.id);
+    expect(duplicatedObjective?.scope).toEqual({
+      kind: 'question-set',
+      sourceQuestionIds: [duplicateQuestionId],
+    });
+
+    const imported = service.importQuiz(exported).quiz;
+    const importedQuestionId = imported.questions[0]?.id;
+    const importedObjective = service.getLearningObjectiveBundle(imported.id).objectives[0];
+    expect(imported.id).not.toBe(created.id);
+    expect(importedQuestionId).not.toBe(question.id);
+    expect(importedObjective?.id).not.toBe(objective.id);
+    expect(importedObjective?.scope).toEqual({
+      kind: 'question-set',
+      sourceQuestionIds: [importedQuestionId],
+    });
+  });
+
+  it('unterscheidet beim Upload einen fehlenden Sidecar von einem bewusst leeren Bundle', () => {
+    const service = TestBed.inject(QuizStoreService);
+    const created = service.createQuiz({ name: 'Leere Lernziele' });
+    service.addQuestion(created.id, {
+      text: 'Frage?',
+      type: 'SINGLE_CHOICE',
+      difficulty: 'EASY',
+      answers: [
+        { text: 'Ja', isCorrect: true },
+        { text: 'Nein', isCorrect: false },
+      ],
+    });
+
+    expect(service.getUploadPayload(created.id).learningObjectives).toBeUndefined();
+    const objective = service.saveQuizLearningObjective(created.id, {
+      text: 'Die Frage einordnen',
+      scope: { kind: 'quiz-wide' },
+      confirmationState: 'draft',
+    });
+    service.deleteQuizLearningObjective(created.id, objective.id, objective.revision);
+
+    expect(service.getUploadPayload(created.id).learningObjectives).toEqual(
+      expect.objectContaining({ quizId: created.id, objectives: [] }),
+    );
+  });
+
+  it('lässt Lernziele mit deaktivierten Pflichtreferenzen vollständig aus und warnt', () => {
+    const service = TestBed.inject(QuizStoreService);
+    const created = service.createQuiz({ name: 'Upload-Filter' });
+    const disabledQuestion = service.addQuestion(created.id, {
+      text: 'Deaktivierte Frage?',
+      type: 'SINGLE_CHOICE',
+      difficulty: 'EASY',
+      answers: [
+        { text: 'A', isCorrect: true },
+        { text: 'B', isCorrect: false },
+      ],
+    });
+    service.addQuestion(created.id, {
+      text: 'Aktive Frage?',
+      type: 'SINGLE_CHOICE',
+      difficulty: 'EASY',
+      answers: [
+        { text: 'A', isCorrect: true },
+        { text: 'B', isCorrect: false },
+      ],
+    });
+    service.saveQuizLearningObjective(created.id, {
+      text: 'Nur die deaktivierte Aufgabe verstehen',
+      scope: { kind: 'question-set', sourceQuestionIds: [disabledQuestion.id] },
+      confirmationState: 'draft',
+    });
+    service.setQuestionEnabled(created.id, disabledQuestion.id, false);
+
+    const payload = service.getUploadPayload(created.id);
+    expect(payload.learningObjectives).toEqual(
+      expect.objectContaining({ quizId: created.id, objectives: [] }),
+    );
+    expect(service.takeUploadLearningObjectiveWarning()).toContain('1');
+    expect(service.takeUploadLearningObjectiveWarning()).toBeNull();
+  });
+
+  it('fordert bei lokalen Lernziel-Updates immer die erwartete Revision', () => {
+    const service = TestBed.inject(QuizStoreService);
+    const created = service.createQuiz({ name: 'CAS' });
+    const objective = service.saveQuizLearningObjective(created.id, {
+      text: 'Ausgangstext',
+      scope: { kind: 'quiz-wide' },
+      confirmationState: 'draft',
+    });
+
+    expect(() =>
+      service.saveQuizLearningObjective(
+        created.id,
+        {
+          text: 'Staler Text',
+          scope: { kind: 'quiz-wide' },
+          confirmationState: 'draft',
+        },
+        { objectiveId: objective.id },
+      ),
+    ).toThrow(/Revisionsstand/);
+  });
+
+  it('markiert modellabgeleitete Ziele nur bei semantischen Quellenänderungen als prüfbedürftig', () => {
+    const service = TestBed.inject(QuizStoreService);
+    const created = service.createQuiz({ name: 'Stale-Markierung' });
+    service.addQuestion(created.id, {
+      text: 'Was ist Polymorphie?',
+      type: 'SINGLE_CHOICE',
+      difficulty: 'EASY',
+      answers: [
+        { text: 'Viele Formen', isCorrect: true },
+        { text: 'Ein Datentyp', isCorrect: false },
+      ],
+    });
+    service.addQuestion(created.id, {
+      text: 'Welche Aussage bleibt erhalten?',
+      type: 'SINGLE_CHOICE',
+      difficulty: 'EASY',
+      answers: [
+        { text: 'Diese', isCorrect: true },
+        { text: 'Keine', isCorrect: false },
+      ],
+    });
+    const exported = service.exportQuiz(created.id);
+    if (exported.exportVersion !== 2) throw new Error('V2-Export erwartet');
+    const sourceQuestionId = exported.quiz.questions[0]!.sourceQuestionId;
+    exported.quiz.learningObjectives = {
+      schemaVersion: 1,
+      quizId: created.id,
+      revision: 1,
+      objectives: [
+        {
+          id: 'd5d550ca-15df-4878-84d7-a2417597f52e',
+          revision: 1,
+          text: 'Polymorphie erklären',
+          scope: { kind: 'question-set', sourceQuestionIds: [sourceQuestionId] },
+          origin: {
+            kind: 'model-derived',
+            modelId: 'model',
+            modelVersion: '1',
+            derivationVersion: '1',
+            derivedFromSourceQuestionIds: [sourceQuestionId],
+            sourceDigest: 'a'.repeat(64),
+          },
+          confirmation: {
+            state: 'confirmed',
+            confirmedAt: '2026-10-04T12:00:00.000Z',
+            confirmedRevision: 1,
+          },
+          createdAt: '2026-10-04T12:00:00.000Z',
+          updatedAt: '2026-10-04T12:00:00.000Z',
+        },
+      ],
+    };
+    const imported = service.importQuiz(exported).quiz;
+    const importedQuestion = imported.questions[0]!;
+
+    service.updateQuestion(imported.id, importedQuestion.id, {
+      text: importedQuestion.text,
+      type: importedQuestion.type,
+      difficulty: 'HARD',
+      timer: 90,
+      answers: importedQuestion.answers.map(({ text, isCorrect }) => ({ text, isCorrect })),
+    });
+    expect(service.getLearningObjectiveBundle(imported.id).objectives[0]?.confirmation.state).toBe(
+      'confirmed',
+    );
+
+    service.updateQuestion(imported.id, importedQuestion.id, {
+      text: 'Was bedeutet Polymorphie?',
+      type: importedQuestion.type,
+      difficulty: 'HARD',
+      timer: 90,
+      answers: importedQuestion.answers.map(({ text, isCorrect }) => ({ text, isCorrect })),
+    });
+    expect(service.getLearningObjectiveBundle(imported.id).objectives[0]?.confirmation).toEqual(
+      expect.objectContaining({ state: 'needs-review', reason: 'source-content-changed' }),
+    );
+
+    const staleExport = service.exportQuiz(imported.id);
+    const staleImport = service.importQuiz(staleExport).quiz;
+    const staleDuplicate = service.duplicateQuiz(imported.id);
+    expect(service.getLearningObjectiveBundle(staleImport.id).objectives[0]?.confirmation).toEqual(
+      expect.objectContaining({ state: 'needs-review', reason: 'source-content-changed' }),
+    );
+    expect(
+      service.getLearningObjectiveBundle(staleDuplicate.id).objectives[0]?.confirmation,
+    ).toEqual(expect.objectContaining({ state: 'needs-review', reason: 'source-content-changed' }));
+
+    service.deleteQuestion(imported.id, importedQuestion.id);
+    const removed = service.getLearningObjectiveBundle(imported.id).objectives[0]!;
+    expect(removed.confirmation).toEqual(
+      expect.objectContaining({ state: 'needs-review', reason: 'source-reference-removed' }),
+    );
+    const editedDraft = service.saveQuizLearningObjective(
+      imported.id,
+      {
+        text: 'Polymorphie trotz fehlender Quelle prüfen',
+        scope: removed.scope,
+        confirmationState: 'draft',
+      },
+      { objectiveId: removed.id, expectedRevision: removed.revision },
+    );
+    expect(editedDraft.confirmation).toEqual(
+      expect.objectContaining({ state: 'needs-review', reason: 'source-reference-removed' }),
+    );
+
+    const removedSourceId =
+      editedDraft.origin.kind === 'model-derived'
+        ? editedDraft.origin.derivedFromSourceQuestionIds[0]
+        : null;
+    const deletedReferenceExport = service.exportQuiz(imported.id);
+    const deletedReferenceImport = service.importQuiz(deletedReferenceExport).quiz;
+    const remappedDeletedReference = service.getLearningObjectiveBundle(deletedReferenceImport.id)
+      .objectives[0]!;
+    expect(remappedDeletedReference.confirmation).toEqual(
+      expect.objectContaining({ state: 'needs-review', reason: 'source-reference-removed' }),
+    );
+    expect(
+      remappedDeletedReference.origin.kind === 'model-derived'
+        ? remappedDeletedReference.origin.derivedFromSourceQuestionIds[0]
+        : null,
+    ).not.toBe(removedSourceId);
+  });
+
+  it('markiert auch ein bestätigtes manuelles Ziel nach Löschen seiner Aufgabe als prüfbedürftig', () => {
+    const service = TestBed.inject(QuizStoreService);
+    const created = service.createQuiz({ name: 'Manueller Verweis' });
+    const question = service.addQuestion(created.id, {
+      text: 'Zu löschende Aufgabe?',
+      type: 'SINGLE_CHOICE',
+      difficulty: 'EASY',
+      answers: [
+        { text: 'A', isCorrect: true },
+        { text: 'B', isCorrect: false },
+      ],
+    });
+    service.addQuestion(created.id, {
+      text: 'Verbleibende Aufgabe?',
+      type: 'SINGLE_CHOICE',
+      difficulty: 'EASY',
+      answers: [
+        { text: 'A', isCorrect: true },
+        { text: 'B', isCorrect: false },
+      ],
+    });
+    service.saveQuizLearningObjective(created.id, {
+      text: 'Aufgabe verstehen',
+      scope: { kind: 'question-set', sourceQuestionIds: [question.id] },
+      confirmationState: 'confirmed',
+    });
+
+    service.deleteQuestion(created.id, question.id);
+
+    expect(service.getLearningObjectiveBundle(created.id).objectives[0]?.confirmation).toEqual(
+      expect.objectContaining({ state: 'needs-review', reason: 'source-reference-removed' }),
+    );
+    const exported = service.exportQuiz(created.id);
+    const imported = service.importQuiz(exported).quiz;
+    const importedObjective = service.getLearningObjectiveBundle(imported.id).objectives[0]!;
+    expect(importedObjective.confirmation).toEqual(
+      expect.objectContaining({ state: 'needs-review', reason: 'source-reference-removed' }),
+    );
+    expect(
+      importedObjective.scope.kind === 'question-set'
+        ? importedObjective.scope.sourceQuestionIds[0]
+        : null,
+    ).not.toBe(question.id);
+  });
+
+  it('behandelt Marker plus leere Yjs-Map als autoritatives Entfernen statt einen stale Mirror wiederzubeleben', async () => {
+    const service = TestBed.inject(QuizStoreService);
+    const created = service.createQuiz({ name: 'Autoritativ leer' });
+    service.addQuestion(created.id, {
+      text: 'Frage?',
+      type: 'SINGLE_CHOICE',
+      difficulty: 'EASY',
+      answers: [
+        { text: 'A', isCorrect: true },
+        { text: 'B', isCorrect: false },
+      ],
+    });
+    service.saveQuizLearningObjective(created.id, {
+      text: 'Lokaler stale Stand',
+      scope: { kind: 'quiz-wide' },
+      confirmationState: 'draft',
+    });
+
+    const Y = await import('yjs');
+    const yDoc = new Y.Doc();
+    const yRoot = yDoc.getMap<string>('quiz-library');
+    const yObjectives = yDoc.getMap<string>('quiz-learning-objectives-v1');
+    yRoot.set('quizzes', localStorage.getItem(QUIZ_STORAGE_KEY) ?? '[]');
+    yRoot.set('quiz-learning-objectives-v1-initialized', '1');
+    const internals = service as unknown as {
+      yDoc: InstanceType<typeof Y.Doc>;
+      yRoot: import('yjs').Map<string>;
+      yLearningObjectivesRoot: import('yjs').Map<string>;
+      syncFromYjsOrSeed: () => void;
+      finishLearningObjectiveYjsRestore: () => void;
+    };
+    // Dieser Test modelliert einen bereits vorhandenen, aber veralteten Mirror,
+    // nicht eine neue Bearbeitung während der initialen Wiederherstellung.
+    internals.finishLearningObjectiveYjsRestore();
+    internals.yDoc = yDoc;
+    internals.yRoot = yRoot;
+    internals.yLearningObjectivesRoot = yObjectives;
+    internals.syncFromYjsOrSeed();
+
+    expect(service.getUploadPayload(created.id).learningObjectives).toBeUndefined();
+  });
+
+  it('führt eine lokale Lernzieländerung während der initialen Yjs-Wiederherstellung kausal zusammen', async () => {
+    const service = TestBed.inject(QuizStoreService);
+    const created = service.createQuiz({ name: 'Frühe Bearbeitung' });
+    service.addQuestion(created.id, {
+      text: 'Frage?',
+      type: 'SINGLE_CHOICE',
+      difficulty: 'EASY',
+      answers: [
+        { text: 'A', isCorrect: true },
+        { text: 'B', isCorrect: false },
+      ],
+    });
+    const original = service.saveQuizLearningObjective(created.id, {
+      text: 'Ausgangsfassung',
+      scope: { kind: 'quiz-wide' },
+      confirmationState: 'draft',
+    });
+    const remoteBaseline = service.getLearningObjectiveBundle(created.id);
+
+    const Y = await import('yjs');
+    const yDoc = new Y.Doc();
+    const yRoot = yDoc.getMap<string>('quiz-library');
+    const yObjectives = yDoc.getMap<string>('quiz-learning-objectives-v1');
+    yRoot.set('quizzes', localStorage.getItem(QUIZ_STORAGE_KEY) ?? '[]');
+    yRoot.set('quiz-learning-objectives-v1-initialized', '1');
+    yObjectives.set(created.id, JSON.stringify(remoteBaseline));
+    const internals = service as unknown as {
+      yDoc: InstanceType<typeof Y.Doc> | null;
+      yRoot: import('yjs').Map<string> | null;
+      yLearningObjectivesRoot: import('yjs').Map<string> | null;
+      syncRoomId: () => string;
+      beginLearningObjectiveYjsRestore: (roomId: string) => void;
+      finishLearningObjectiveYjsRestore: () => void;
+      syncFromYjsOrSeed: () => void;
+    };
+    internals.finishLearningObjectiveYjsRestore();
+    internals.yDoc = null;
+    internals.yRoot = null;
+    internals.yLearningObjectivesRoot = null;
+    internals.beginLearningObjectiveYjsRestore(internals.syncRoomId());
+
+    service.saveQuizLearningObjective(
+      created.id,
+      {
+        text: 'Direkt nach dem Öffnen bearbeitet',
+        scope: { kind: 'quiz-wide' },
+        confirmationState: 'confirmed',
+      },
+      { objectiveId: original.id, expectedRevision: original.revision },
+    );
+
+    internals.yDoc = yDoc;
+    internals.yRoot = yRoot;
+    internals.yLearningObjectivesRoot = yObjectives;
+    internals.syncFromYjsOrSeed();
+
+    expect(service.getLearningObjectiveBundle(created.id).objectives[0]).toEqual(
+      expect.objectContaining({
+        id: original.id,
+        revision: 2,
+        text: 'Direkt nach dem Öffnen bearbeitet',
+        confirmation: expect.objectContaining({ state: 'confirmed' }),
+      }),
+    );
+    expect(service.learningObjectiveSyncConflicts()).toEqual([]);
+  });
+
+  it('seedet einen frischen unmarkierten Yjs-Sidecar aus dem lokalen Mirror', async () => {
+    const service = TestBed.inject(QuizStoreService);
+    const created = service.createQuiz({ name: 'Frischer Sidecar' });
+    service.addQuestion(created.id, {
+      text: 'Frage?',
+      type: 'SINGLE_CHOICE',
+      difficulty: 'EASY',
+      answers: [
+        { text: 'A', isCorrect: true },
+        { text: 'B', isCorrect: false },
+      ],
+    });
+    service.saveQuizLearningObjective(created.id, {
+      text: 'Lokales Ziel',
+      scope: { kind: 'quiz-wide' },
+      confirmationState: 'draft',
+    });
+
+    const Y = await import('yjs');
+    const yDoc = new Y.Doc();
+    const yRoot = yDoc.getMap<string>('quiz-library');
+    const yObjectives = yDoc.getMap<string>('quiz-learning-objectives-v1');
+    yRoot.set('quizzes', localStorage.getItem(QUIZ_STORAGE_KEY) ?? '[]');
+    const internals = service as unknown as {
+      yDoc: InstanceType<typeof Y.Doc>;
+      yRoot: import('yjs').Map<string>;
+      yLearningObjectivesRoot: import('yjs').Map<string>;
+      syncFromYjsOrSeed: () => void;
+    };
+    internals.yDoc = yDoc;
+    internals.yRoot = yRoot;
+    internals.yLearningObjectivesRoot = yObjectives;
+    internals.syncFromYjsOrSeed();
+
+    expect(yRoot.get('quiz-learning-objectives-v1-initialized')).toBe('1');
+    expect(yObjectives.get(created.id)).toBe('oplog-v1');
+    expect(yDoc.getMap(`quiz-learning-objectives-v1-oplog:${created.id}`).size).toBeGreaterThan(0);
+  });
+
+  it('behält bei einem beschädigten Remote-Sidecar den letzten gültigen Stand ohne ihn zu überschreiben', async () => {
+    const service = TestBed.inject(QuizStoreService);
+    const created = service.createQuiz({ name: 'Beschädigter Sidecar' });
+    service.addQuestion(created.id, {
+      text: 'Frage?',
+      type: 'SINGLE_CHOICE',
+      difficulty: 'EASY',
+      answers: [
+        { text: 'A', isCorrect: true },
+        { text: 'B', isCorrect: false },
+      ],
+    });
+    service.saveQuizLearningObjective(created.id, {
+      text: 'Gültiger lokaler Stand',
+      scope: { kind: 'quiz-wide' },
+      confirmationState: 'draft',
+    });
+
+    const Y = await import('yjs');
+    const yDoc = new Y.Doc();
+    const yRoot = yDoc.getMap<string>('quiz-library');
+    const yObjectives = yDoc.getMap<string>('quiz-learning-objectives-v1');
+    yRoot.set('quizzes', localStorage.getItem(QUIZ_STORAGE_KEY) ?? '[]');
+    yRoot.set('quiz-learning-objectives-v1-initialized', '1');
+    yObjectives.set(created.id, '{kaputt');
+    const internals = service as unknown as {
+      yDoc: InstanceType<typeof Y.Doc>;
+      yRoot: import('yjs').Map<string>;
+      yLearningObjectivesRoot: import('yjs').Map<string>;
+      syncFromYjsOrSeed: () => void;
+      writeYjsSnapshot: () => void;
+    };
+    internals.yDoc = yDoc;
+    internals.yRoot = yRoot;
+    internals.yLearningObjectivesRoot = yObjectives;
+    internals.syncFromYjsOrSeed();
+    internals.writeYjsSnapshot();
+
+    expect(service.getLearningObjectiveBundle(created.id).objectives[0]?.text).toBe(
+      'Gültiger lokaler Stand',
+    );
+    expect(yObjectives.get(created.id)).toBe('{kaputt');
+  });
+
+  it('führt gleichzeitige Änderungen an verschiedenen Lernzielen aus dem Yjs-Oplog zusammen', async () => {
+    const service = TestBed.inject(QuizStoreService);
+    const quiz = service.createQuiz({ name: 'CRDT-Merge' });
+    const first = service.saveQuizLearningObjective(quiz.id, {
+      text: 'Erstes Ziel',
+      scope: { kind: 'quiz-wide' },
+      confirmationState: 'draft',
+    });
+    const second = service.saveQuizLearningObjective(quiz.id, {
+      text: 'Zweites Ziel',
+      scope: { kind: 'quiz-wide' },
+      confirmationState: 'draft',
+    });
+    const baseline = service.getLearningObjectiveBundle(quiz.id);
+    const Y = await import('yjs');
+    const yDoc = new Y.Doc();
+    const yRoot = yDoc.getMap<string>('quiz-library');
+    const yObjectives = yDoc.getMap<string>('quiz-learning-objectives-v1');
+    yRoot.set('quizzes', localStorage.getItem(QUIZ_STORAGE_KEY) ?? '[]');
+    yRoot.set('quiz-learning-objectives-v1-initialized', '1');
+    yObjectives.set(quiz.id, JSON.stringify(baseline));
+    const internals = service as unknown as {
+      yDoc: InstanceType<typeof Y.Doc>;
+      yRoot: import('yjs').Map<string>;
+      yLearningObjectivesRoot: import('yjs').Map<string>;
+      syncFromYjsOrSeed: () => void;
+      applyYjsLearningObjectivesSnapshot: () => void;
+    };
+    internals.yDoc = yDoc;
+    internals.yRoot = yRoot;
+    internals.yLearningObjectivesRoot = yObjectives;
+    internals.syncFromYjsOrSeed();
+
+    const operations = yDoc.getMap<string>(`quiz-learning-objectives-v1-oplog:${quiz.id}`);
+    const seedByObjective = new Map<string, string>();
+    for (const [operationId, raw] of operations.entries()) {
+      seedByObjective.set((JSON.parse(raw) as { objectiveId: string }).objectiveId, operationId);
+    }
+    const addBranch = (objective: typeof first, text: string, parentOperationId: string) => {
+      const operationId = crypto.randomUUID();
+      const next = { ...objective, revision: 2, text, updatedAt: objective.updatedAt };
+      operations.set(
+        operationId,
+        JSON.stringify({
+          schemaVersion: 1,
+          operationId,
+          quizId: quiz.id,
+          objectiveId: objective.id,
+          kind: 'upsert',
+          expectedRevision: 1,
+          resultingRevision: 2,
+          bundleResultRevision: baseline.revision + 1,
+          parentOperationIds: [parentOperationId],
+          writtenAt: objective.updatedAt,
+          objective: next,
+        }),
+      );
+    };
+    addBranch(first, 'Erstes Ziel – Gerät A', seedByObjective.get(first.id)!);
+    addBranch(second, 'Zweites Ziel – Gerät B', seedByObjective.get(second.id)!);
+
+    internals.applyYjsLearningObjectivesSnapshot();
+
+    expect(
+      service
+        .getLearningObjectiveBundle(quiz.id)
+        .objectives.map(({ text }) => text)
+        .sort(),
+    ).toEqual(['Erstes Ziel – Gerät A', 'Zweites Ziel – Gerät B']);
+    expect(service.learningObjectiveSyncConflicts()).toEqual([]);
+  });
+
+  it('bewahrt divergente kausale Köpfe auf, löst sie bewusst und ignoriert Zukunftsuhren für Autorität', async () => {
+    const service = TestBed.inject(QuizStoreService);
+    const quiz = service.createQuiz({ name: 'CRDT-Konflikt' });
+    const original = service.saveQuizLearningObjective(quiz.id, {
+      text: 'Ausgang',
+      scope: { kind: 'quiz-wide' },
+      confirmationState: 'draft',
+    });
+    const baseline = service.getLearningObjectiveBundle(quiz.id);
+    const Y = await import('yjs');
+    const yDoc = new Y.Doc();
+    const yRoot = yDoc.getMap<string>('quiz-library');
+    const yObjectives = yDoc.getMap<string>('quiz-learning-objectives-v1');
+    yRoot.set('quizzes', localStorage.getItem(QUIZ_STORAGE_KEY) ?? '[]');
+    yRoot.set('quiz-learning-objectives-v1-initialized', '1');
+    yObjectives.set(quiz.id, JSON.stringify(baseline));
+    const internals = service as unknown as {
+      yDoc: InstanceType<typeof Y.Doc>;
+      yRoot: import('yjs').Map<string>;
+      yLearningObjectivesRoot: import('yjs').Map<string>;
+      syncFromYjsOrSeed: () => void;
+      applyYjsLearningObjectivesSnapshot: () => void;
+    };
+    internals.yDoc = yDoc;
+    internals.yRoot = yRoot;
+    internals.yLearningObjectivesRoot = yObjectives;
+    internals.syncFromYjsOrSeed();
+    const operations = yDoc.getMap<string>(`quiz-learning-objectives-v1-oplog:${quiz.id}`);
+    const [seedOperationId] = [...operations.keys()];
+    const addOperation = (
+      operationId: string,
+      parentOperationIds: string[],
+      revision: number,
+      text: string,
+      updatedAt: string,
+    ) => {
+      const objective = { ...original, revision, text, updatedAt };
+      operations.set(
+        operationId,
+        JSON.stringify({
+          schemaVersion: 1,
+          operationId,
+          quizId: quiz.id,
+          objectiveId: original.id,
+          kind: 'upsert',
+          expectedRevision: revision - 1,
+          resultingRevision: revision,
+          bundleResultRevision: baseline.revision + revision - 1,
+          parentOperationIds,
+          writtenAt: updatedAt,
+          objective,
+        }),
+      );
+    };
+    const branchA2 = '10000000-0000-4000-8000-000000000002';
+    const branchB2 = '20000000-0000-4000-8000-000000000002';
+    addOperation(branchA2, [seedOperationId!], 2, 'Fassung A2', original.updatedAt);
+    addOperation(branchB2, [seedOperationId!], 2, 'Fassung B2', '2099-01-01T00:00:00.000Z');
+    internals.applyYjsLearningObjectivesSnapshot();
+
+    expect(
+      service
+        .learningObjectiveSyncConflicts()[0]
+        ?.alternatives.map((entry) => entry.objective?.text),
+    ).toEqual(['Fassung A2', 'Fassung B2']);
+
+    const branchA3 = '10000000-0000-4000-8000-000000000003';
+    addOperation(branchA3, [branchA2], 3, 'Fassung A3', original.updatedAt);
+    internals.applyYjsLearningObjectivesSnapshot();
+    const conflict = service.learningObjectiveSyncConflicts()[0]!;
+    expect(conflict.revision).toBe(3);
+    expect(conflict.alternatives.map((entry) => entry.objective?.text)).toEqual([
+      'Fassung A3',
+      'Fassung B2',
+    ]);
+    expect(conflict.alternatives.map((entry) => entry.objective?.text)).not.toContain('Fassung A2');
+
+    service.resolveQuizLearningObjectiveSyncConflict(quiz.id, original.id, branchB2);
+
+    const resolved = service.getLearningObjectiveBundle(quiz.id).objectives[0]!;
+    expect(resolved).toEqual(expect.objectContaining({ text: 'Fassung B2', revision: 4 }));
+    expect(Date.parse(resolved.updatedAt)).toBeGreaterThanOrEqual(
+      Date.parse('2099-01-01T00:00:00.000Z'),
+    );
+    expect(service.learningObjectiveSyncConflicts()).toEqual([]);
+    const resolution = [...operations.values()]
+      .map((raw) => JSON.parse(raw) as { resultingRevision: number; parentOperationIds: string[] })
+      .find((operation) => operation.resultingRevision === 4)!;
+    expect(resolution.parentOperationIds).toEqual([branchA3, branchB2].sort());
+  });
+
+  it('übersetzt einen späten Legacy-Bundle-Write in Konfliktoperationen ohne parallele Ziele zu löschen', async () => {
+    const service = TestBed.inject(QuizStoreService);
+    const quiz = service.createQuiz({ name: 'CRDT-Mischversion' });
+    const original = service.saveQuizLearningObjective(quiz.id, {
+      text: 'Ausgang',
+      scope: { kind: 'quiz-wide' },
+      confirmationState: 'draft',
+    });
+    const baseline = service.getLearningObjectiveBundle(quiz.id);
+    const Y = await import('yjs');
+    const yDoc = new Y.Doc();
+    const yRoot = yDoc.getMap<string>('quiz-library');
+    const yObjectives = yDoc.getMap<string>('quiz-learning-objectives-v1');
+    yRoot.set('quizzes', localStorage.getItem(QUIZ_STORAGE_KEY) ?? '[]');
+    yRoot.set('quiz-learning-objectives-v1-initialized', '1');
+    yObjectives.set(quiz.id, JSON.stringify(baseline));
+    const internals = service as unknown as {
+      yDoc: InstanceType<typeof Y.Doc>;
+      yRoot: import('yjs').Map<string>;
+      yLearningObjectivesRoot: import('yjs').Map<string>;
+      syncFromYjsOrSeed: () => void;
+      migrateLegacyLearningObjectiveEntries: () => void;
+      applyYjsLearningObjectivesSnapshot: () => void;
+    };
+    internals.yDoc = yDoc;
+    internals.yRoot = yRoot;
+    internals.yLearningObjectivesRoot = yObjectives;
+    internals.syncFromYjsOrSeed();
+
+    const operations = yDoc.getMap<string>(`quiz-learning-objectives-v1-oplog:${quiz.id}`);
+    const seedOperationId = [...operations.entries()]
+      .map(
+        ([operationId, raw]) => [operationId, JSON.parse(raw) as { objectiveId: string }] as const,
+      )
+      .find(([, operation]) => operation.objectiveId === original.id)?.[0];
+    expect(seedOperationId).toBeTruthy();
+
+    const branchAId = '40000000-0000-4000-8000-000000000002';
+    const branchA = { ...original, revision: 2, text: 'Fassung aus dem Oplog' };
+    operations.set(
+      branchAId,
+      JSON.stringify({
+        schemaVersion: 1,
+        operationId: branchAId,
+        quizId: quiz.id,
+        objectiveId: original.id,
+        kind: 'upsert',
+        expectedRevision: 1,
+        resultingRevision: 2,
+        bundleResultRevision: baseline.revision + 1,
+        parentOperationIds: [seedOperationId!],
+        writtenAt: branchA.updatedAt,
+        objective: branchA,
+      }),
+    );
+    const parallelObjectiveId = '50000000-0000-4000-8000-000000000001';
+    const parallelOperationId = '50000000-0000-4000-8000-000000000002';
+    const parallelObjective = {
+      ...original,
+      id: parallelObjectiveId,
+      revision: 1,
+      text: 'Parallel neu angelegt',
+    };
+    operations.set(
+      parallelOperationId,
+      JSON.stringify({
+        schemaVersion: 1,
+        operationId: parallelOperationId,
+        quizId: quiz.id,
+        objectiveId: parallelObjectiveId,
+        kind: 'upsert',
+        expectedRevision: null,
+        resultingRevision: 1,
+        bundleResultRevision: baseline.revision + 1,
+        parentOperationIds: [],
+        writtenAt: parallelObjective.updatedAt,
+        objective: parallelObjective,
+      }),
+    );
+
+    const legacyBranch = { ...original, revision: 2, text: 'Fassung vom alten Client' };
+    yObjectives.set(
+      quiz.id,
+      JSON.stringify({
+        ...baseline,
+        revision: baseline.revision + 1,
+        objectives: [legacyBranch],
+      }),
+    );
+    internals.migrateLegacyLearningObjectiveEntries();
+    internals.applyYjsLearningObjectivesSnapshot();
+
+    expect(yObjectives.get(quiz.id)).toBe('oplog-v1');
+    expect(service.getLearningObjectiveBundle(quiz.id).objectives).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: parallelObjectiveId })]),
+    );
+    expect(
+      service
+        .learningObjectiveSyncConflicts()[0]
+        ?.alternatives.map((alternative) => alternative.objective?.text),
+    ).toEqual(expect.arrayContaining(['Fassung aus dem Oplog', 'Fassung vom alten Client']));
+  });
+
+  it('bereinigt beim späten Beitritt verwaiste Legacy-Ziele mit Tombstones ohne stale Wiederbelebung', async () => {
+    vi.useFakeTimers();
+    try {
+      const service = TestBed.inject(QuizStoreService);
+      const quiz = service.createQuiz({ name: 'Legacy-Löschung' });
+      const objective = service.saveQuizLearningObjective(quiz.id, {
+        text: 'Nicht wiederbeleben',
+        scope: { kind: 'quiz-wide' },
+        confirmationState: 'draft',
+      });
+      const bundle = service.getLearningObjectiveBundle(quiz.id);
+      const Y = await import('yjs');
+      const yDoc = new Y.Doc();
+      const yRoot = yDoc.getMap<string>('quiz-library');
+      const yObjectives = yDoc.getMap<string>('quiz-learning-objectives-v1');
+      yRoot.set('quizzes', '[]');
+      yRoot.set('quiz-learning-objectives-v1-initialized', '1');
+      yObjectives.set(quiz.id, JSON.stringify(bundle));
+      const internals = service as unknown as {
+        yDoc: InstanceType<typeof Y.Doc>;
+        yRoot: import('yjs').Map<string>;
+        yLearningObjectivesRoot: import('yjs').Map<string>;
+        quizDocuments: { set: (value: unknown[]) => void };
+        librarySharingMode: { set: (value: 'shared') => void };
+        lastSerializedQuizDocuments: string;
+        syncFromYjsOrSeed: () => void;
+        applyYjsLearningObjectivesSnapshot: () => void;
+      };
+      internals.yDoc = yDoc;
+      internals.yRoot = yRoot;
+      internals.yLearningObjectivesRoot = yObjectives;
+      internals.quizDocuments.set([]);
+      internals.librarySharingMode.set('shared');
+      internals.lastSerializedQuizDocuments = 'not-the-remote-payload';
+      internals.syncFromYjsOrSeed();
+
+      vi.advanceTimersByTime(1500);
+
+      expect(yObjectives.has(quiz.id)).toBe(false);
+      expect(service.getLearningObjectiveBundle(quiz.id).objectives).toEqual([]);
+      const operations = yDoc.getMap<string>(`quiz-learning-objectives-v1-oplog:${quiz.id}`);
+      const tombstone = [...operations.values()]
+        .map((raw) => JSON.parse(raw) as { kind: string; resultingRevision: number })
+        .find((operation) => operation.kind === 'delete');
+      expect(tombstone).toEqual(expect.objectContaining({ kind: 'delete', resultingRevision: 2 }));
+
+      const staleOperationId = '30000000-0000-4000-8000-000000000001';
+      operations.set(
+        staleOperationId,
+        JSON.stringify({
+          schemaVersion: 1,
+          operationId: staleOperationId,
+          quizId: quiz.id,
+          objectiveId: objective.id,
+          kind: 'upsert',
+          expectedRevision: 0,
+          resultingRevision: 1,
+          bundleResultRevision: 1,
+          parentOperationIds: [],
+          writtenAt: '2199-01-01T00:00:00.000Z',
+          objective,
+        }),
+      );
+      yObjectives.set(quiz.id, 'oplog-v1');
+      internals.applyYjsLearningObjectivesSnapshot();
+
+      expect(service.getLearningObjectiveBundle(quiz.id).objectives).toEqual([]);
+      expect(service.learningObjectiveSyncConflicts()[0]?.alternatives).toEqual(
+        expect.arrayContaining([expect.objectContaining({ operationId: staleOperationId })]),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
