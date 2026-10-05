@@ -7,6 +7,7 @@ transport=${OPEN_WEIGHT_LLM_TRANSPORT:-unix}
 case "$transport" in
   unix)
     socket_path=${OPEN_WEIGHT_LLM_SOCKET_PATH:-/run/open-weight-llm/llm.sock}
+    [ "$(stat --format='%a' "$socket_path" 2>/dev/null || true)" = 770 ] || exit 1
     exec curl --fail --silent --show-error --max-time 4 \
       --unix-socket "$socket_path" \
       --header "Authorization: Bearer $token" \

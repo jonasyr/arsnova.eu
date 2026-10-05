@@ -41,6 +41,7 @@ test('lokales und produktives Laborprofil bleiben privat und explizit optional',
   assertLabHardening(extractServiceBlock(local, 'open-weight-llm'), 'local');
   assert.match(extractServiceBlock(local, 'app'), /OPEN_WEIGHT_LLM_ENABLED:/);
   assert.match(extractServiceBlock(local, 'app'), /open_weight_llm_socket/);
+  assert.match(extractServiceBlock(local, 'app'), /group_add:\s*\n\s+- '65532'/);
 
   const production = read('docker-compose.prod.yml');
   const productionRuntime = extractServiceBlock(production, 'open-weight-llm');
@@ -50,6 +51,7 @@ test('lokales und produktives Laborprofil bleiben privat und explizit optional',
   assert.doesNotMatch(productionRuntime, /DATABASE_URL|JWT_SECRET|ADMIN_/);
   const app = extractServiceBlock(production, 'app');
   assert.match(app, /open_weight_llm_socket/);
+  assert.match(app, /group_add:\s*\n\s+- '65532'/);
   assert.doesNotMatch(app, /OPEN_WEIGHT_LLM_ENABLED:\s*['"]?true/);
   assert.doesNotMatch(
     app,

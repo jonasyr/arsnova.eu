@@ -86,6 +86,8 @@ npm run docker:up:llm
 
 Die App im Compose-Netz nutzt `/run/open-weight-llm/llm.sock`. Host-npm auf macOS kann diesen Docker-Volume-Socket nicht sehen und verwendet stattdessen `OPEN_WEIGHT_LLM_URL=http://127.0.0.1:8080` mit einer nur an Loopback gebundenen Runtime.
 
+Der Socket wird innerhalb des ausschließlich zwischen Runtime und App geteilten Named Volume mit Gruppe `65532` und Modus `0770` erzeugt. Die App erhält diese ID nur als zusätzliche Gruppe. Das ist erforderlich, weil Runtime und App absichtlich unter verschiedenen numerischen UID laufen und Linux für `connect()` Schreibrecht auf dem Socket-Inode verlangt. Readiness wird erst nach dem Setzen des Modus gemeldet. Das Volume ist nicht an den Host publiziert; zusätzlich erzwingen die auftragsrelevanten Endpunkte weiterhin das separate Bearer-Credential.
+
 Für diesen Host-npm-Pfad muss in Docker Desktop Host Networking aktiviert sein. Danach startet das gesonderte Profil den Container ausführbar an Loopback:
 
 ```bash
@@ -134,7 +136,7 @@ Der `/health`-Endpunkt des gepinnten llama.cpp-Builds erzwingt selbst keinen API
 
 ## Vollständig protokollierte lokale Modellprüfung vom 2026-10-05
 
-Messgrenze: Apple M2 Pro, 12 Kerne, 16 GB RAM; Docker-Linux `arm64`; Containerlimit 4 CPU / 5 GiB; CPU-only; Unix-Socket; finale Runtime-Image-ID `sha256:b53c8233a91413e428b406f70056c28a7d90d5ff41d3726919156a211bd063a5`; verifiziertes GGUF mit SHA-256 `3605803b982cb64aead44f6c1b2ae36e3acdb41d8e46c8a94c6533bc4c67e597`. Die Prüfung ist ein Runtime- und Vertragsnachweis, keine Produktions- oder Qualitätsabnahme der drei Consumer.
+Messgrenze: Apple M2 Pro, 12 Kerne, 16 GB RAM; Docker-Linux `arm64`; Containerlimit 4 CPU / 5 GiB; CPU-only; Unix-Socket; verifiziertes GGUF mit SHA-256 `3605803b982cb64aead44f6c1b2ae36e3acdb41d8e46c8a94c6533bc4c67e597`. Die beiden Reproduktionsläufe liefen auf Runtime-Image-ID `sha256:b53c8233a91413e428b406f70056c28a7d90d5ff41d3726919156a211bd063a5`. Nach der abschließenden Socket-Gruppenfreigabe wurde derselbe vollständige Aufruf zusätzlich auf der finalen Runtime-Image-ID `sha256:1ea83a0b3831bb7b575f131615a453b63b7f7c0c3b5feedcdfc612760abee633` wiederholt. Die Prüfung ist ein Runtime- und Vertragsnachweis, keine Produktions- oder Qualitätsabnahme der drei Consumer.
 
 Die vollständige Wire-Anfrage liegt als versionierte Fixture unter [`scripts/open-weight-llm/fixtures/topic-label-reproduction-request.json`](../../scripts/open-weight-llm/fixtures/topic-label-reproduction-request.json). Ein Backend-Regressionstest vergleicht die geparste Fixture strukturgleich mit der tatsächlichen Translator-Ausgabe, damit Prompt, Schema und Parameter nicht unbemerkt auseinanderlaufen.
 
@@ -196,6 +198,18 @@ Vollständiger, unveränderter HTTP-Antwortbody:
 
 HTTP-Status 200; vom aufrufenden `curl` gemessene Ende-zu-Ende-Zeit 1,011660 Sekunden. Der Server meldete 142 gecachte Prompttokens.
 
+### Abschließender Cross-UID-Lauf auf dem finalen Image
+
+Dieser Lauf verwendete dieselbe versionierte Wire-Anfrage. Der Clientprozess lief als Produktions-App-UID/GID `1000:1000` mit ausschließlich der zusätzlichen Socket-Gruppe `65532`; der Socket meldete UID/GID `65532:65532` und Modus `0770`.
+
+Vollständiger, unveränderter HTTP-Antwortbody:
+
+```text
+{"choices":[{"finish_reason":"stop","index":0,"message":{"role":"assistant","content":"{\"schemaVersion\":1,\"taskType\":\"topic_label\",\"label\":\"lineare-funktionen\",\"sourceIds\":[\"s1\",\"s2\"]}"}}],"created":1791200544,"model":"qwen3-4b-instruct-2507-q4_k_m","system_fingerprint":"b10524-9ee9fc04c","object":"chat.completion","usage":{"completion_tokens":31,"prompt_tokens":143,"total_tokens":174,"prompt_tokens_details":{"cached_tokens":0}},"id":"chatcmpl-H5waRe4xnEv6Po0POi3EMbreoatZiVuY","timings":{"cache_n":0,"prompt_n":143,"prompt_ms":2647.132,"prompt_per_token_ms":18.511412587412586,"prompt_per_second":54.0207288491847,"predicted_n":31,"predicted_ms":1047.317,"predicted_per_token_ms":34.91056666666667,"predicted_per_second":28.644622401813393}}
+```
+
+HTTP-Status 200; vom aufrufenden `curl` gemessene Ende-zu-Ende-Zeit 3,763011 Sekunden.
+
 Zur Wiederholung wird dieselbe Fixture zweimal nacheinander an einen gemäß dieser Seite gestarteten Container gesendet:
 
 ```bash
@@ -207,9 +221,9 @@ docker exec -i arsnova-v3-open-weight-llm sh -c \
   < scripts/open-weight-llm/fixtures/topic-label-reproduction-request.json
 ```
 
-Der im Nachweis verwendete isolierte Container war zusätzlich effektiv als UID/GID `65532:65532`, read-only, `network_mode: none`, 128 PIDs, `cap_drop: ALL`, `no-new-privileges` und `healthy` geprüft. Am geschützten Slot-Endpunkt lieferte das exakte Test-Credential HTTP 200, ein anderes formal gültiges Credential HTTP 401. Der `/health`-Endpunkt bleibt, wie oben beschrieben, nur eine Readiness-Sonde.
+Der finale isolierte Container war zusätzlich effektiv als UID/GID `65532:65532`, read-only, `network_mode: none`, 128 PIDs, `cap_drop: ALL`, `no-new-privileges` und `healthy` geprüft. Am geschützten Slot-Endpunkt lieferte das exakte Credential unter der abweichenden App-UID und gemeinsamen Socket-Gruppe HTTP 200, ein anderes formal gültiges Credential HTTP 401. Ein anschließendes `SIGTERM` wurde sauber an den Server weitergegeben; der Container beendete sich innerhalb der Grace Period mit Exitcode 0 und ohne OOM. Der `/health`-Endpunkt bleibt, wie oben beschrieben, nur eine Readiness-Sonde.
 
-Die beiden Läufe belegen Schemaerzwingung und Ausführbarkeit des kurzen Labelauftrags. Sie belegen nicht Summary-Prefill auf der echten 8-vCPU-Inferenzbox, Lernzielqualität, p95 unter Last, Produktions-RSS oder fachliche Freigabe. Diese Nachweise bleiben vor Aktivierung beziehungsweise in den jeweiligen Consumer-Slices offen.
+Die drei Läufe belegen Schemaerzwingung und Ausführbarkeit des kurzen Labelauftrags. Sie belegen nicht Summary-Prefill auf der echten 8-vCPU-Inferenzbox, Lernzielqualität, p95 unter Last, Produktions-RSS oder fachliche Freigabe. Diese Nachweise bleiben vor Aktivierung beziehungsweise in den jeweiligen Consumer-Slices offen.
 
 ## Verifikation
 

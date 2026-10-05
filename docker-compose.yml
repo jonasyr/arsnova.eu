@@ -41,6 +41,8 @@ services:
       dockerfile: Dockerfile
     container_name: arsnova-v3-app
     restart: always
+    group_add:
+      - '65532'
     ports:
       - '3000:3000'
       - '3001:3001'

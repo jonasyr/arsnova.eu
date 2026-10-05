@@ -63,7 +63,38 @@ case "$transport" in
         ;;
     esac
     rm -f "$socket_path"
-    exec "$@" --host "$socket_path"
+    "$@" --host "$socket_path" &
+    server_pid=$!
+
+    forward_stop() {
+      trap - TERM INT HUP
+      kill -TERM "$server_pid" 2>/dev/null || true
+      set +e
+      wait "$server_pid"
+      exit $?
+    }
+    trap forward_stop TERM INT HUP
+
+    # llama-server creates the socket only after it starts and fixes its mode
+    # to 0755. AF_UNIX connect() requires write permission on the socket inode,
+    # so grant it to the shared runtime group before health can become ready.
+    while [ ! -S "$socket_path" ]; do
+      if ! kill -0 "$server_pid" 2>/dev/null; then
+        set +e
+        wait "$server_pid"
+        server_status=$?
+        set -e
+        exit "$server_status"
+      fi
+      sleep 0.1
+    done
+    chmod 0770 "$socket_path"
+
+    set +e
+    wait "$server_pid"
+    server_status=$?
+    set -e
+    exit "$server_status"
     ;;
   http)
     bind_address=${OPEN_WEIGHT_LLM_BIND_ADDRESS:-}

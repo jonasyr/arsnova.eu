@@ -52,6 +52,12 @@ test('Entry-Point erzwingt Auth, CPU-only, einen Slot und die vereinbarten Hartf
   assert.match(entrypoint, /export LC_ALL=C/);
   assert.match(entrypoint, /validate_open_weight_llm_token/);
   assert.match(entrypoint, /validate_open_weight_llm_bind_address/);
+  assert.match(
+    entrypoint,
+    /"\$@" --host "\$socket_path" &[\s\S]*chmod 0770 "\$socket_path"[\s\S]*wait "\$server_pid"/,
+  );
+  const healthcheck = readFileSync(join(runtimeRoot, 'healthcheck.sh'), 'utf8');
+  assert.match(healthcheck, /stat --format='%a'[\s\S]*= 770/);
   assert.doesNotMatch(entrypoint, /--(?:model-url|hf-repo|hf-file)\b/);
   for (const script of [
     'entrypoint.sh',

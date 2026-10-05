@@ -182,6 +182,8 @@ services:
     image: ${ARSNOVA_IMAGE:?ARSNOVA_IMAGE must be set to a digest image ref}
     container_name: arsnova-v3-app
     restart: always
+    group_add:
+      - '65532'
     read_only: true
     cap_drop:
       - ALL
