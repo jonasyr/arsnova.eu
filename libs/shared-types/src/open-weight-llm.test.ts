@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   hasOnlyAllowedOpenWeightLlmReferences,
+  OPEN_WEIGHT_LLM_MAX_REQUEST_BYTES,
   OPEN_WEIGHT_LLM_SCHEMA_VERSION,
+  OpenWeightLlmLearningObjectivesRequestSchema,
   OpenWeightLlmLearningObjectivesOutputSchema,
   OpenWeightLlmOutputSchema,
   OpenWeightLlmRequestSchema,
@@ -60,6 +62,54 @@ describe('open-weight LLM contracts', () => {
     expect(() =>
       OpenWeightLlmRequestSchema.parse({ ...labelRequest, participantId: 'leak' }),
     ).toThrow();
+  });
+
+  it('begrenzt jeden Auftrag als UTF-8-Bytebudget für das 4K-Kontextfenster', () => {
+    const oversizedLearningRequest = {
+      ...learningRequest,
+      questions: Array.from({ length: 2 }, (_, index) => ({
+        ...learningRequest.questions[0]!,
+        id: `22222222-2222-4222-8222-${String(index + 1).padStart(12, '0')}`,
+        // Jede Aufgabe bleibt einzeln unter den Feldgrenzen; zusammen belegen
+        // 1,200 Emoji-Bytes je Aufgabe plus den übrigen JSON-Vertrag.
+        text: '🧪'.repeat(300),
+      })),
+    };
+    const oversizedLabelRequest = {
+      ...labelRequest,
+      sources: Array.from({ length: 6 }, (_, index) => ({
+        id: `source-${index}`,
+        text: 'x'.repeat(500),
+      })),
+    };
+    const oversizedSummaryRequest = {
+      ...summaryRequest,
+      sources: Array.from({ length: 6 }, (_, index) => ({
+        id: `qa-question:${index}`,
+        kind: 'qa-question' as const,
+        text: 'x'.repeat(500),
+      })),
+    };
+
+    for (const request of [
+      oversizedLearningRequest,
+      oversizedLabelRequest,
+      oversizedSummaryRequest,
+    ]) {
+      const result = OpenWeightLlmRequestSchema.safeParse(request);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues.some((issue) => issue.message.includes('UTF-8-Bytes'))).toBe(
+          true,
+        );
+      }
+      expect(new TextEncoder().encode(JSON.stringify(request)).byteLength).toBeGreaterThan(
+        OPEN_WEIGHT_LLM_MAX_REQUEST_BYTES,
+      );
+    }
+    expect(
+      OpenWeightLlmLearningObjectivesRequestSchema.safeParse(oversizedLearningRequest).success,
+    ).toBe(false);
   });
 
   it('verwirft Antworten mit falschem Auftragstyp oder unbekannten Feldern', () => {

@@ -18,6 +18,8 @@ Runtime R stellt eine gemeinsame, private CPU-Runtime für drei getrennte techni
 
 Die versionierten Zod-Verträge liegen in `libs/shared-types/src/open-weight-llm.ts`. Der Backend-Client übersetzt ausschließlich diese Verträge nach llama.cpp Chat Completions, prüft die strukturierte Antwort erneut und verwirft unbekannte Quellen- oder Aufgabenreferenzen. Runtime R verdrahtet noch keinen Auftrag in eine Produktoberfläche. Daher entsteht durch diesen Slice allein keine neue sichtbare Funktion.
 
+Jeder Auftrag ist zusätzlich auf 2.500 UTF-8-Bytes für die vollständig serialisierte User-Nachricht begrenzt. Zusammen mit der festen System-/Chat-Schablone und dem größten Ausgabebudget von 768 Tokens bleibt damit selbst der Byte-Fallback konservativ unter dem festen Kontextfenster von 4.096 Tokens. Künftige Consumer müssen größere Quellen- oder Quizmengen deterministisch in mehrere Aufträge teilen; die Runtime nimmt keinen scheinbar gültigen, aber unausführbaren Großauftrag an.
+
 `OPEN_WEIGHT_LLM_ENABLED` bleibt standardmäßig `false` und ist unabhängig von `NLP_ENABLED`, `QA_NLP_ENABLED`, `WORD_CLOUD_SEMANTIC_ENABLED` und `QA_SUMMARY_ENABLED`. Es gibt keinen SaaS-Fallback.
 
 ## Gepinnte Artefakte
@@ -63,7 +65,7 @@ npm run llm:prod -- up -d
 npm run llm:prod -- ps
 ```
 
-Der Wrapper lehnt Tag-only-Images, öffentliche oder Loopback-Bind-Adressen, kurze Credentials, relative Modellpfade und beim Erstellen oder Starten einen falschen GGUF-Digest ab. Reine Inspektions- und Rollback-Befehle wie `ps`, `logs`, `stop` oder `down` bleiben auch bei einem fehlenden oder defekten Modell ausführbar.
+Der Wrapper lehnt beim Erstellen oder Starten Tag-only-Images, öffentliche oder Loopback-Bind-Adressen, kurze Credentials, relative Modellpfade und einen falschen GGUF-Digest ab. Reine Inspektions- und Rollback-Befehle wie `ps`, `logs`, `stop` oder `down` bleiben auch bei einer fehlgeschlagenen Credential-Rotation sowie einem fehlenden oder defekten Modell ausführbar.
 
 Auf dem App-Host werden anschließend nur diese Werte gesetzt:
 

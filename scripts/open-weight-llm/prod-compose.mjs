@@ -5,7 +5,7 @@ import { BlockList, isIP } from 'node:net';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse } from 'dotenv';
-import { shouldVerifyOpenWeightLlmModel } from './prod-compose-policy.mjs';
+import { shouldValidateOpenWeightLlmStart } from './prod-compose-policy.mjs';
 
 const privateAddresses = new BlockList();
 privateAddresses.addSubnet('10.0.0.0', 8, 'ipv4');
@@ -33,20 +33,19 @@ function main() {
   const modelDirectory = env.OPEN_WEIGHT_LLM_MODEL_DIR?.trim() ?? '';
   const composeArguments = process.argv.slice(2);
 
-  if (!/@sha256:[a-f0-9]{64}$/.test(image)) {
-    throw new Error('OPEN_WEIGHT_LLM_IMAGE must be pinned by sha256 digest');
-  }
-  if (!isIP(bindAddress) || !isPrivateAddress(bindAddress)) {
-    throw new Error('OPEN_WEIGHT_LLM_BIND_ADDRESS must be a private IP literal');
-  }
-  if (token.length < 32 || token.length > 512 || !/^[A-Za-z0-9._~-]+$/.test(token)) {
-    throw new Error('OPEN_WEIGHT_LLM_TOKEN must contain 32 to 512 URL-safe ASCII characters');
-  }
-  if (!modelDirectory.startsWith('/')) {
-    throw new Error('OPEN_WEIGHT_LLM_MODEL_DIR must be absolute');
-  }
-
-  if (shouldVerifyOpenWeightLlmModel(composeArguments)) {
+  if (shouldValidateOpenWeightLlmStart(composeArguments)) {
+    if (!/@sha256:[a-f0-9]{64}$/.test(image)) {
+      throw new Error('OPEN_WEIGHT_LLM_IMAGE must be pinned by sha256 digest');
+    }
+    if (!isIP(bindAddress) || !isPrivateAddress(bindAddress)) {
+      throw new Error('OPEN_WEIGHT_LLM_BIND_ADDRESS must be a private IP literal');
+    }
+    if (token.length < 32 || token.length > 512 || !/^[A-Za-z0-9._~-]+$/.test(token)) {
+      throw new Error('OPEN_WEIGHT_LLM_TOKEN must contain 32 to 512 URL-safe ASCII characters');
+    }
+    if (!modelDirectory.startsWith('/')) {
+      throw new Error('OPEN_WEIGHT_LLM_MODEL_DIR must be absolute');
+    }
     const verification = spawnSync(
       process.execPath,
       [

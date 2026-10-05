@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
-import { shouldVerifyOpenWeightLlmModel } from '../open-weight-llm/prod-compose-policy.mjs';
+import { shouldValidateOpenWeightLlmStart } from '../open-weight-llm/prod-compose-policy.mjs';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '../..');
 
@@ -91,13 +91,18 @@ test('zweiter Produktionshost verlangt Digest-Image und bindet ohne Port-Mapping
   assert.doesNotMatch(wrapper, /addSubnet\('127\.0\.0\.0'/);
 });
 
-test('Produktionswrapper prüft das Modell beim Start, blockiert aber keinen Rollback', () => {
+test('Produktionswrapper validiert Startkonfiguration, blockiert aber keinen Rollback', () => {
   for (const command of ['up', 'create', 'start', 'restart', 'run']) {
-    assert.equal(shouldVerifyOpenWeightLlmModel([command, 'open-weight-llm']), true, command);
+    assert.equal(shouldValidateOpenWeightLlmStart([command, 'open-weight-llm']), true, command);
   }
   for (const command of ['stop', 'down', 'ps', 'logs', 'config', 'exec']) {
-    assert.equal(shouldVerifyOpenWeightLlmModel([command, 'open-weight-llm']), false, command);
+    assert.equal(shouldValidateOpenWeightLlmStart([command, 'open-weight-llm']), false, command);
   }
+  const wrapper = read('scripts/open-weight-llm/prod-compose.mjs');
+  assert.match(
+    wrapper,
+    /if \(shouldValidateOpenWeightLlmStart\(composeArguments\)\) \{[\s\S]*OPEN_WEIGHT_LLM_TOKEN must contain[\s\S]*verify-model\.mjs[\s\S]*\n {2}\}/,
+  );
 });
 
 test('der normale Deploypfad startet die LLM-Runtime nicht', () => {

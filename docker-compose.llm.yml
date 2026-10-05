@@ -1,6 +1,7 @@
 # Kanonische Story-8.9d-Topologie: eigener privater CPU-Host.
 # Ausschließlich über scripts/open-weight-llm/prod-compose.mjs bedienen; der
-# Wrapper prüft Image-Digest, private Bind-Adresse, Credential und GGUF-Digest.
+# Wrapper prüft beim Erstellen/Starten Image-Digest, private Bind-Adresse,
+# Credential und GGUF-Digest; Rollback-/Inspektionsbefehle bleiben ausführbar.
 services:
   open-weight-llm:
     profiles: ['llm']

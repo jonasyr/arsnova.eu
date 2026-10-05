@@ -239,6 +239,27 @@ describe('openWeightLlmClient', () => {
     },
   );
 
+  it('weist einen kontextsprengenden Auftrag vor Config, Slot und Modellaufruf ab', async () => {
+    const config = vi.fn(() => defaultConfig);
+    const request = vi.fn();
+    resetOpenWeightLlmClientForTests({ config, request });
+    const oversizedRequest = {
+      ...requests.learning_objectives,
+      questions: [
+        {
+          ...requests.learning_objectives.questions[0],
+          text: '🧪'.repeat(700),
+        },
+      ],
+    } satisfies OpenWeightLlmLearningObjectivesRequest;
+
+    await expect(runOpenWeightLlm(oversizedRequest)).resolves.toEqual({
+      status: 'invalid_response',
+    });
+    expect(config).not.toHaveBeenCalled();
+    expect(request).not.toHaveBeenCalled();
+  });
+
   it('lehnt falschen Auftragstyp ab', async () => {
     resetOpenWeightLlmClientForTests({
       config: () => defaultConfig,

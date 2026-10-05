@@ -456,7 +456,7 @@ npm run typecheck
 npm run build:prod
 ```
 
-Die modellfreien Tests sind über `npm test` und `npm run test:coverage` in die Standard-CI eingebunden. Sie prüfen Pins und Hartflags, Unix- und Loopback-HTTP-Labor, Zwei-Host-Compose, CSV-sichere Credentials, private IPv4-/IPv6-Zielauflösung, DNS-Abbruch und -Timeout, drei versionierte Auftragsschemas, alle Belegungsreihenfolgen, Triple-Concurrency, höchstens einen Modell-POST, Circuit Breaker, Fallback beziehungsweise manuellen Retry und Live-Hotpath-Isolation. Der reale lokale Modellnachweis mit Digests, Hardware und Messgrenze steht in [open-weight-llm-runtime.md](features/open-weight-llm-runtime.md). Er ersetzt weder die Summary-Prefill-Abnahme auf der 8-vCPU-Box noch Consumer-Qualitäts- oder Produktivtests.
+Die modellfreien Tests sind über `npm test` und `npm run test:coverage` in die Standard-CI eingebunden. Sie prüfen Pins und Hartflags, Unix- und Loopback-HTTP-Labor, Zwei-Host-Compose, CSV-sichere Credentials, rollbackfähige Operatorbefehle bei ungültigem Credential, private IPv4-/IPv6-Zielauflösung, DNS-Abbruch und -Timeout, drei versionierte Auftragsschemas samt 2.500-Byte-Kontextgrenze, alle Belegungsreihenfolgen, Triple-Concurrency, höchstens einen Modell-POST, Circuit Breaker, Fallback beziehungsweise manuellen Retry und Live-Hotpath-Isolation. Der reale lokale Modellnachweis mit Digests, Hardware und Messgrenze steht in [open-weight-llm-runtime.md](features/open-weight-llm-runtime.md). Er ersetzt weder die Summary-Prefill-Abnahme auf der 8-vCPU-Box noch Consumer-Qualitäts- oder Produktivtests.
 
 Für W2.4a zusätzlich:
 

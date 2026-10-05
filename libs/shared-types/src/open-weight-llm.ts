@@ -24,6 +24,13 @@ import {
  * where the two contracts meet.
  */
 export const OPEN_WEIGHT_LLM_SCHEMA_VERSION = 1 as const;
+/**
+ * Upper bound for the complete UTF-8 JSON user message sent to llama.cpp.
+ * Together with the fixed system/chat overhead and the largest 768-token
+ * completion budget, 2,500 worst-case byte-fallback tokens stay below the
+ * runtime's fixed 4,096-token context. Consumers must batch larger inputs.
+ */
+export const OPEN_WEIGHT_LLM_MAX_REQUEST_BYTES = 2_500;
 export const OPEN_WEIGHT_LLM_TASK_TYPES = [
   'topic_label',
   'qa_summary',
@@ -35,6 +42,16 @@ export type OpenWeightLlmTaskType = z.infer<typeof OpenWeightLlmTaskTypeSchema>;
 const OpenWeightLlmSchemaVersionField = z.literal(OPEN_WEIGHT_LLM_SCHEMA_VERSION);
 const RuntimeSourceIdSchema = z.string().trim().min(1).max(80);
 const RuntimeSourceTextSchema = z.string().trim().min(1).max(500);
+
+function enforceRuntimeRequestByteLimit(value: unknown, ctx: z.RefinementCtx): void {
+  const bytes = new TextEncoder().encode(JSON.stringify(value)).byteLength;
+  if (bytes > OPEN_WEIGHT_LLM_MAX_REQUEST_BYTES) {
+    ctx.addIssue({
+      code: 'custom',
+      message: `Open-Weight-LLM-Auftrag darf maximal ${OPEN_WEIGHT_LLM_MAX_REQUEST_BYTES} UTF-8-Bytes groß sein; größere Eingaben müssen deterministisch aufgeteilt werden.`,
+    });
+  }
+}
 
 export const OpenWeightLlmTopicLabelRequestSchema = z
   .object({
@@ -54,13 +71,16 @@ export const OpenWeightLlmTopicLabelRequestSchema = z
       .min(1)
       .max(40),
   })
-  .strict();
+  .strict()
+  .superRefine(enforceRuntimeRequestByteLimit);
 export type OpenWeightLlmTopicLabelRequest = z.infer<typeof OpenWeightLlmTopicLabelRequestSchema>;
 
 export const OpenWeightLlmSummaryRequestSchema = QaSummaryInferenceRequestSchema.extend({
   schemaVersion: OpenWeightLlmSchemaVersionField,
   taskType: z.literal('qa_summary'),
-}).strict();
+})
+  .strict()
+  .superRefine(enforceRuntimeRequestByteLimit);
 export type OpenWeightLlmSummaryRequest = z.infer<typeof OpenWeightLlmSummaryRequestSchema>;
 
 export const OpenWeightLlmLearningQuestionSchema = z
@@ -90,12 +110,13 @@ export const OpenWeightLlmLearningObjectivesRequestSchema = z
     requestId: z.uuid(),
     questions: z.array(OpenWeightLlmLearningQuestionSchema).min(1).max(QUIZ_UPLOAD_MAX_QUESTIONS),
   })
-  .strict();
+  .strict()
+  .superRefine(enforceRuntimeRequestByteLimit);
 export type OpenWeightLlmLearningObjectivesRequest = z.infer<
   typeof OpenWeightLlmLearningObjectivesRequestSchema
 >;
 
-export const OpenWeightLlmRequestSchema = z.discriminatedUnion('taskType', [
+export const OpenWeightLlmRequestSchema = z.union([
   OpenWeightLlmTopicLabelRequestSchema,
   OpenWeightLlmSummaryRequestSchema,
   OpenWeightLlmLearningObjectivesRequestSchema,
