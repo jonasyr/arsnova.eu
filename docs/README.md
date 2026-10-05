@@ -96,7 +96,7 @@ Formale A11y-Abnahmedokumentation (2026-07-27):
 - **Moderationskompass (Story 8.9a):** [features/moderation-compass.md](features/moderation-compass.md)
 - **Q&A-NLP-Kaskade (Story 8.9b, Gatekeeper plus k-NN-Fallback):** [features/qa-nlp-moderation.md](features/qa-nlp-moderation.md)
 - **Moderationszusammenfassung (Story 8.9c, Slices 1–3, Kill-Switch default aus):** [features/qa-summary.md](features/qa-summary.md)
-- **Moderations-Prompt-Kontext (#456, Slices 1–5: Vertrag, autorisierte Fachfragmente, Lernzielpersistenz/-UI und explizite Runtime-Ableitung; noch keine vollständige Produktivintegration):** [features/moderation-prompt-context.md](features/moderation-prompt-context.md) · [Lernzielableitung](features/learning-objective-derivation.md) · [ADR-0036](architecture/decisions/0036-learning-objective-storage-and-live-projection.md)
+- **Moderations-Prompt-Kontext (#456, Slices 1–6: Vertrag, autorisierte Fachfragmente, Lernzielpersistenz/-UI, explizite Runtime-Ableitung sowie interner Builder/Packer/Cache; noch keine vollständige Produktivintegration):** [features/moderation-prompt-context.md](features/moderation-prompt-context.md) · [Lernzielableitung](features/learning-objective-derivation.md) · [ADR-0036](architecture/decisions/0036-learning-objective-storage-and-live-projection.md)
 - **Private Open-Weight-Runtime (Story 8.9d, technisch implementiert, produktiv default aus):** [Betriebsdoku](features/open-weight-llm-runtime.md) · [ADR-0035](architecture/decisions/0035-self-hosted-llm-runtime-llama-cpp-over-ollama.md) · [Lehrmatrix 8.9a–d](didaktik/MODERATIONSKOMPASS-8.9A-D-MODULE-UND-PRAKTIKA.md)
 - **Session-Ergebnisbericht (PDF, Story 4.7):** [features/session-export-pdf.md](features/session-export-pdf.md)
 - **Session-Lebenszyklus, Teilnahmeprofil und Retention (Epic #405 / #407 / #409 / #412):** [features/session-lifecycle.md](features/session-lifecycle.md)
@@ -108,14 +108,15 @@ Formale A11y-Abnahmedokumentation (2026-07-27):
 
 **Ergänzung 2026-09-13:** Das Statistik-Modul ist mit Kerncurriculum, vollständigem Materialindex, Runbook und dokumentiertem QA-Status in die Landkarte aufgenommen.
 
-**Ergänzung 2026-10-05:** Für #456 sind Slices 1–5 umgesetzt: versionierter
+**Ergänzung 2026-10-05:** Für #456 sind Slices 1–6 umgesetzt: versionierter
 Moderationskontext, autorisierte Fachfragmente, Lernzielpersistenz und -UI sowie die ausdrücklich
-gestartete Ableitung prüfbarer Entwürfe über die private Runtime. Kanonisch:
+gestartete Ableitung prüfbarer Entwürfe über die private Runtime. Der interne N10-Builder sowie
+deterministisches Packing, Tokenbudget, Hash und Cache sind ebenfalls implementiert. Kanonisch:
 [features/moderation-prompt-context.md](features/moderation-prompt-context.md),
 [features/learning-objective-derivation.md](features/learning-objective-derivation.md) und
 [ADR-0036](architecture/decisions/0036-learning-objective-storage-and-live-projection.md).
-Vollständiger Builder, Tokenpacker und Adapterintegration bleiben Slices 6 und 7 vorbehalten;
-Slice 8 übernimmt Gesamtintegration und reale Abschlussabnahme.
+Summary-Adapterintegration, hostgeschützte Vorschau und erneute Auslieferungsprüfung bleiben
+Slice 7 vorbehalten; Slice 8 übernimmt Gesamtintegration und reale Abschlussabnahme.
 
 **Ergänzung 2026-10-03:** Story **1.14d** ist für Host-Freitext im Repo implementiert und verwendet denselben privaten Encoder- und Clusteringpfad wie **1.14c**. `de`/`en` nutzen den Encoder, `fr`/`es` den lexikalischen Backend-Fallback; unter italienischer UI bleibt der Fallback lokal und sendet ohne gewählte unterstützte Wolkensprache keinen Backendauftrag. `WORD_CLOUD_SEMANTIC_ENABLED` bleibt standardmäßig aus; eine Produktivaktivierung ist nicht belegt.
 
