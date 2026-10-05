@@ -8,6 +8,7 @@ import {
   GetQaPresentProjectionInputSchema,
   GetQaQuestionsInputSchema,
   GetQaSummaryRuntimeInputSchema,
+  GetQaSummaryContextPreviewInputSchema,
   ModerateQaQuestionInputSchema,
   QA_LIST_PAGE_SIZE_OPTIONS,
   QA_MAX_QUESTIONS_PER_PARTICIPANT,
@@ -17,7 +18,8 @@ import {
   QaQuestionDTOSchema,
   QaQuestionsInvalidationDTOSchema,
   QaQuestionsListDTOSchema,
-  QaSummaryRuntimeDTOSchema,
+  QaSummaryContextPreviewDTOSchema,
+  QaSummaryRuntimeCompatibleDTOSchema,
   QaVoteInputSchema,
   QaVoteOutputSchema,
   RedactQaPassagesInputSchema,
@@ -44,6 +46,8 @@ import { enqueueQaNlpJob, invalidateQaNlpForQuestion } from '../lib/qaNlpQueue';
 import { isQaSummaryEnabled } from '../lib/qaSummaryConfig';
 import {
   getQaSummaryRuntime,
+  getQaSummaryRuntimeFresh,
+  getQaSummaryContextPreview,
   invalidateQaSummaryForSession,
   requestQaSummary,
 } from '../lib/qaSummaryQueue';
@@ -1498,7 +1502,7 @@ export const qaRouter = router({
 
   summaryRuntime: publicProcedure
     .input(GetQaSummaryRuntimeInputSchema)
-    .output(QaSummaryRuntimeDTOSchema)
+    .output(QaSummaryRuntimeCompatibleDTOSchema)
     .query(async ({ input, ctx }) => {
       const session = await prisma.session.findUnique({
         where: { id: input.sessionId },
@@ -1507,14 +1511,33 @@ export const qaRouter = router({
       if (!session) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Session nicht gefunden.' });
       }
-      await assertHostSessionAccessFromContext(ctx, session.code);
+      const hostToken = await assertHostSessionAccessFromContext(ctx, session.code);
       assertQaHostContentReadAllowed(session);
-      return getQaSummaryRuntime(input.sessionId);
+      const current = getQaSummaryRuntime(input.sessionId);
+      return getQaSummaryRuntimeFresh(input.sessionId, current.result?.locale ?? 'de', {
+        hostToken,
+      });
+    }),
+
+  summaryContextPreview: publicProcedure
+    .input(GetQaSummaryContextPreviewInputSchema)
+    .output(QaSummaryContextPreviewDTOSchema)
+    .query(async ({ input, ctx }) => {
+      const session = await prisma.session.findUnique({
+        where: { id: input.sessionId },
+        select: { id: true, code: true, status: true, endedAt: true, expiresAt: true },
+      });
+      if (!session) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Session nicht gefunden.' });
+      }
+      const hostToken = await assertHostSessionAccessFromContext(ctx, session.code);
+      assertQaHostContentReadAllowed(session);
+      return getQaSummaryContextPreview(input.sessionId, input.locale, { hostToken });
     }),
 
   requestSummary: publicProcedure
     .input(RequestQaSummaryInputSchema)
-    .output(QaSummaryRuntimeDTOSchema)
+    .output(QaSummaryRuntimeCompatibleDTOSchema)
     .mutation(async ({ input, ctx }) => {
       const session = await prisma.session.findUnique({
         where: { id: input.sessionId },
@@ -1533,7 +1556,7 @@ export const qaRouter = router({
       if (!session) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Session nicht gefunden.' });
       }
-      await assertHostSessionAccessFromContext(ctx, session.code);
+      const hostToken = await assertHostSessionAccessFromContext(ctx, session.code);
       assertQaSessionOpenForParticipants(session);
       if (!isQaSummaryEnabled()) {
         throw new TRPCError({
@@ -1541,7 +1564,7 @@ export const qaRouter = router({
           message: 'Die Moderationszusammenfassung ist nicht aktiviert.',
         });
       }
-      return requestQaSummary(input.sessionId, input.locale);
+      return requestQaSummary(input.sessionId, input.locale, { hostToken });
     }),
 
   moderate: hostProcedure

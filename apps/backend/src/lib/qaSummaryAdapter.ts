@@ -1,6 +1,7 @@
 import {
   QaSummaryInferenceRequestSchema,
   QaSummaryModelOutputSchema,
+  type QaSummaryInferenceRequest,
   type QaSummaryModelOutput,
 } from '@arsnova/shared-types';
 import {
@@ -71,17 +72,39 @@ function failedOutputFromCaughtError(error: unknown): QaSummaryModelOutput {
 export async function runQaSummaryInference(
   snapshot: QaSummaryAnalysisSnapshot,
   snapshotHash: string,
+  options: { readonly signal?: AbortSignal } = {},
 ): Promise<QaSummaryModelOutput> {
   try {
-    return await runQaSummaryInferenceUnchecked(snapshot, snapshotHash);
+    const request = QaSummaryInferenceRequestSchema.parse({
+      locale: snapshot.locale,
+      snapshotHash,
+      sources: snapshot.sources.map((source) => ({
+        id: source.id,
+        kind: source.kind,
+        text: source.text,
+      })),
+    });
+    return await runQaSummaryLegacyRequestUnchecked(request, options);
   } catch (error) {
     return failedOutputFromCaughtError(error);
   }
 }
 
-async function runQaSummaryInferenceUnchecked(
-  snapshot: QaSummaryAnalysisSnapshot,
-  snapshotHash: string,
+export async function runQaSummaryLegacyRequest(
+  rawRequest: QaSummaryInferenceRequest,
+  options: { readonly signal?: AbortSignal } = {},
+): Promise<QaSummaryModelOutput> {
+  try {
+    const request = QaSummaryInferenceRequestSchema.parse(rawRequest);
+    return await runQaSummaryLegacyRequestUnchecked(request, options);
+  } catch (error) {
+    return failedOutputFromCaughtError(error);
+  }
+}
+
+async function runQaSummaryLegacyRequestUnchecked(
+  request: QaSummaryInferenceRequest,
+  options: { readonly signal?: AbortSignal },
 ): Promise<QaSummaryModelOutput> {
   const config = hooks.config();
   if (!config.inferenceUrl) {
@@ -101,19 +124,6 @@ async function runQaSummaryInferenceUnchecked(
     );
   }
 
-  const request = QaSummaryInferenceRequestSchema.safeParse({
-    locale: snapshot.locale,
-    snapshotHash,
-    sources: snapshot.sources.map((source) => ({
-      id: source.id,
-      kind: source.kind,
-      text: source.text,
-    })),
-  });
-  if (!request.success) {
-    return unconfiguredOutput('stub:invalid-input', 'Die Zusammenfassungsanfrage war ungültig.');
-  }
-
   const headers: Record<string, string> = {
     'content-type': 'application/json',
     accept: 'application/json',
@@ -122,13 +132,14 @@ async function runQaSummaryInferenceUnchecked(
     headers.authorization = `Bearer ${config.inferenceToken}`;
   }
 
-  const signal = AbortSignal.timeout(config.timeoutMs);
+  const timeoutSignal = AbortSignal.timeout(config.timeoutMs);
+  const signal = options.signal ? AbortSignal.any([options.signal, timeoutSignal]) : timeoutSignal;
   let response: Awaited<ReturnType<QaSummaryFetch>>;
   try {
     response = await hooks.fetch(config.inferenceUrl, {
       method: 'POST',
       headers,
-      body: JSON.stringify(request.data),
+      body: JSON.stringify(request),
       signal,
     });
   } catch (error) {

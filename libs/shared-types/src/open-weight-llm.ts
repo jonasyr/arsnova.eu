@@ -6,6 +6,14 @@ import {
   QaSummaryModelOutputSchema,
 } from './schemas';
 import {
+  QA_SUMMARY_V2_SCHEMA_VERSION,
+  QaSummaryInferenceRequestV2Schema,
+  QaSummaryInferenceResponseV2Schema,
+  hasOnlyAllowedQaSummaryV2References,
+  type QaSummaryInferenceRequestV2,
+  type QaSummaryInferenceResponseV2,
+} from './qa-summary-v2';
+import {
   LEARNING_OBJECTIVE_MAX_OBJECTIVES,
   LEARNING_OBJECTIVE_MAX_REFERENCES,
   LEARNING_OBJECTIVE_TEXT_MAX_LENGTH,
@@ -21,6 +29,7 @@ import { QUIZ_QUESTION_TEXT_MAX_LENGTH, QUIZ_UPLOAD_MAX_QUESTIONS } from './quiz
  * where the two contracts meet.
  */
 export const OPEN_WEIGHT_LLM_SCHEMA_VERSION = 1 as const;
+export const OPEN_WEIGHT_LLM_SUMMARY_SCHEMA_VERSION_V2 = QA_SUMMARY_V2_SCHEMA_VERSION;
 /**
  * Upper bound for the complete UTF-8 JSON user message sent to llama.cpp.
  * Together with the fixed system/chat overhead and the largest 768-token
@@ -80,6 +89,14 @@ export const OpenWeightLlmSummaryRequestSchema = QaSummaryInferenceRequestSchema
   .superRefine(enforceRuntimeRequestByteLimit);
 export type OpenWeightLlmSummaryRequest = z.infer<typeof OpenWeightLlmSummaryRequestSchema>;
 
+/**
+ * Full-context Summary-Auftrag. Anders als V1 ist sein Budget bereits durch
+ * `ModerationPromptContextV1.budget` begrenzt und erhält deshalb bewusst nicht
+ * die historische 2.500-Byte-Gesamtgrenze.
+ */
+export const OpenWeightLlmSummaryRequestV2Schema = QaSummaryInferenceRequestV2Schema;
+export type OpenWeightLlmSummaryRequestV2 = QaSummaryInferenceRequestV2;
+
 export const OpenWeightLlmLearningQuestionSchema = z
   .object({
     id: QuizSourceQuestionIdSchema,
@@ -115,6 +132,7 @@ export type OpenWeightLlmLearningObjectivesRequest = z.infer<
 
 export const OpenWeightLlmRequestSchema = z.union([
   OpenWeightLlmTopicLabelRequestSchema,
+  OpenWeightLlmSummaryRequestV2Schema,
   OpenWeightLlmSummaryRequestSchema,
   OpenWeightLlmLearningObjectivesRequestSchema,
 ]);
@@ -138,6 +156,9 @@ export const OpenWeightLlmSummaryOutputSchema = z
   })
   .strict();
 export type OpenWeightLlmSummaryOutput = z.infer<typeof OpenWeightLlmSummaryOutputSchema>;
+
+export const OpenWeightLlmSummaryOutputV2Schema = QaSummaryInferenceResponseV2Schema;
+export type OpenWeightLlmSummaryOutputV2 = QaSummaryInferenceResponseV2;
 
 export const OpenWeightLlmLearningObjectiveSuggestionSchema = z
   .object({
@@ -163,8 +184,11 @@ export type OpenWeightLlmLearningObjectivesOutput = z.infer<
   typeof OpenWeightLlmLearningObjectivesOutputSchema
 >;
 
-export const OpenWeightLlmOutputSchema = z.discriminatedUnion('taskType', [
+// V1 und V2 teilen absichtlich `taskType: qa_summary`; eine taskType-basierte
+// discriminatedUnion könnte die Versionskonsistenz daher nicht ausdrücken.
+export const OpenWeightLlmOutputSchema = z.union([
   OpenWeightLlmTopicLabelOutputSchema,
+  OpenWeightLlmSummaryOutputV2Schema,
   OpenWeightLlmSummaryOutputSchema,
   OpenWeightLlmLearningObjectivesOutputSchema,
 ]);
@@ -231,6 +255,12 @@ export function hasOnlyAllowedOpenWeightLlmReferences(
     }
     case 'qa_summary': {
       if (output.taskType !== 'qa_summary') return false;
+      if (request.schemaVersion !== output.schemaVersion) return false;
+      if (request.schemaVersion === OPEN_WEIGHT_LLM_SUMMARY_SCHEMA_VERSION_V2) {
+        if (output.schemaVersion !== OPEN_WEIGHT_LLM_SUMMARY_SCHEMA_VERSION_V2) return false;
+        return hasOnlyAllowedQaSummaryV2References(request, output.output);
+      }
+      if (output.schemaVersion !== OPEN_WEIGHT_LLM_SCHEMA_VERSION) return false;
       const allowed = new Set(request.sources.map((source) => source.id));
       return [...output.result.statements, ...output.result.suggestedNextSteps].every((statement) =>
         statement.sourceIds.every((sourceId) => allowed.has(sourceId)),

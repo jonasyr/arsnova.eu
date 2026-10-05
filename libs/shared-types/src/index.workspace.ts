@@ -14,6 +14,7 @@ export * from './word-cloud-analysis-text';
 export * from './word-cloud-semantic';
 export * from './qa-summary-rank';
 export * from './qa-summary-visibility';
+export * from './qa-summary-v2';
 export * from './product-feedback';
 export * from './host-pairing';
 export * from './learning-objectives';

@@ -16,6 +16,7 @@ export * from './word-cloud-semantic.js';
 export * from './qa-summary-rank.js';
 export * from './qa-summary-scan.js';
 export * from './qa-summary-visibility.js';
+export * from './qa-summary-v2.js';
 export * from './product-feedback.js';
 export * from './host-pairing.js';
 export * from './learning-objectives.js';

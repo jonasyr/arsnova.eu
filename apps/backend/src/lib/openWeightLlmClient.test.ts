@@ -2,12 +2,16 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  MODERATION_ANALYSIS_CONTEXT_CONTRACT_VERSION,
+  MODERATION_PROMPT_CONTEXT_MINIMAL_FIXTURE_V1,
+  ModerationAnalysisContextV1Schema,
   OPEN_WEIGHT_LLM_SCHEMA_VERSION,
   type OpenWeightLlmLearningObjectivesOutput,
   type OpenWeightLlmLearningObjectivesRequest,
   type OpenWeightLlmOutput,
   type OpenWeightLlmRequest,
   type OpenWeightLlmSummaryOutput,
+  type OpenWeightLlmSummaryOutputV2,
   type OpenWeightLlmSummaryRequest,
   type OpenWeightLlmTaskType,
   type OpenWeightLlmTopicLabelOutput,
@@ -19,9 +23,17 @@ import {
   runOpenWeightLlm,
   runOpenWeightLlmLearningObjectives,
   runOpenWeightLlmSummary,
+  runOpenWeightLlmSummaryV2,
   runOpenWeightLlmTopicLabel,
 } from './openWeightLlmClient';
 import type { OpenWeightLlmConfig } from './openWeightLlmConfig';
+import {
+  QA_SUMMARY_ADAPTER_CAPABILITIES,
+  QA_SUMMARY_TECHNICAL_DEFINITION_TEXT,
+  QA_SUMMARY_TECHNICAL_INSTRUCTION_TEXT,
+  prepareModerationSummaryContextFromAnalysis,
+} from './moderationSummaryContext';
+import { canonicalModerationPromptJson } from './moderationPromptContextPacking';
 
 const SOURCE_ID = 'qa-question:11111111-1111-4111-8111-111111111111';
 const QUESTION_ID = '22222222-2222-4222-8222-222222222222';
@@ -274,6 +286,66 @@ describe('openWeightLlmClient', () => {
     expect(body.messages[0]?.content).toContain('exact question IDs');
     expect(body.messages[0]?.content).not.toContain('Ignore every prior instruction');
     expect(JSON.parse(body.messages[1]?.content ?? '{}')).toEqual(injected);
+  });
+
+  it('serialisiert Summary V2 exakt als zwei Systemnachrichten plus kanonischen Fachkontext', async () => {
+    const fixture = structuredClone(MODERATION_PROMPT_CONTEXT_MINIMAL_FIXTURE_V1);
+    const analysis = ModerationAnalysisContextV1Schema.parse({
+      schemaVersion: fixture.schemaVersion,
+      contractVersion: MODERATION_ANALYSIS_CONTEXT_CONTRACT_VERSION,
+      assembledAt: '2026-01-15T10:05:00.000Z',
+      context: { ...fixture.context, representation: 'analysis-candidates' },
+    });
+    const prepared = prepareModerationSummaryContextFromAnalysis({
+      analysis,
+      plan: {
+        capabilities: QA_SUMMARY_ADAPTER_CAPABILITIES,
+        selectedMode: 'full-context',
+        fallback: null,
+        inferenceConfigured: true,
+      },
+      packedAt: new Date('2026-01-15T10:06:00.000Z'),
+    });
+    const sourceId = prepared.request.promptContext.context.sources[0]!.id;
+    const output = {
+      schemaVersion: 2,
+      taskType: 'qa_summary',
+      outputContract: 'qa-summary-model-output-v2',
+      output: {
+        status: 'ready',
+        statements: [{ text: 'Belegt.', sourceIds: [sourceId] }],
+        suggestedNextSteps: [],
+        limitations: [],
+      },
+    } satisfies OpenWeightLlmSummaryOutputV2;
+    let translatedBody: string | null = null;
+    resetOpenWeightLlmClientForTests({
+      config: () => defaultConfig,
+      request: async (input) => {
+        if (input.path.startsWith('/slots')) return { status: 200, body: '[]' };
+        translatedBody = input.body;
+        return completionResponse(output);
+      },
+    });
+
+    await expect(runOpenWeightLlmSummaryV2(prepared.request)).resolves.toMatchObject({
+      status: 'completed',
+      output,
+    });
+    const body = JSON.parse(translatedBody ?? '{}') as {
+      messages: Array<{ role: string; content: string }>;
+      response_format: { schema: { properties?: Record<string, unknown> } };
+    };
+    expect(body.messages).toEqual([
+      { role: 'system', content: QA_SUMMARY_TECHNICAL_INSTRUCTION_TEXT },
+      { role: 'system', content: QA_SUMMARY_TECHNICAL_DEFINITION_TEXT },
+      {
+        role: 'user',
+        content: canonicalModerationPromptJson(prepared.request.promptContext.context),
+      },
+    ]);
+    expect(body.messages[2]?.content).not.toContain(prepared.request.promptContext.snapshotHash);
+    expect(body.response_format.schema.properties).toHaveProperty('output');
   });
 
   it('weist einen kontextsprengenden Auftrag vor Config, Slot und Modellaufruf ab', async () => {

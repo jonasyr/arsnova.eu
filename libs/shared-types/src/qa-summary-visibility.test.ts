@@ -55,6 +55,14 @@ describe('qa-summary-visibility', () => {
     ).toBe(false);
     expect(
       shouldShowQaSummaryCard({
+        enabled: true,
+        inferenceConfigured: false,
+        fallbackAvailable: true,
+        visibleQuestionCount: 5,
+      }),
+    ).toBe(true);
+    expect(
+      shouldShowQaSummaryCard({
         enabled: false,
         inferenceConfigured: true,
         visibleQuestionCount: 5,
@@ -111,5 +119,13 @@ describe('qa-summary-visibility', () => {
         visibleQuestionCount: 8,
       }),
     ).toBe(false);
+    expect(
+      canRequestQaSummary({
+        enabled: true,
+        inferenceConfigured: false,
+        fallbackAvailable: true,
+        visibleQuestionCount: 8,
+      }),
+    ).toBe(true);
   });
 });
