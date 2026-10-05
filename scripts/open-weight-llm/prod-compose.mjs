@@ -19,60 +19,68 @@ function isPrivateAddress(address) {
     : family === 6 && privateAddresses.check(address, 'ipv6');
 }
 
-const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-const envPath = resolve(repositoryRoot, '.env.llm');
-if (!existsSync(envPath)) {
-  throw new Error('Missing .env.llm; copy .env.llm.example and set operator values');
-}
-const env = { ...process.env, ...parse(readFileSync(envPath)) };
-const image = env.OPEN_WEIGHT_LLM_IMAGE?.trim() ?? '';
-const bindAddress = env.OPEN_WEIGHT_LLM_BIND_ADDRESS?.trim() ?? '';
-const token = env.OPEN_WEIGHT_LLM_TOKEN ?? '';
-const modelDirectory = env.OPEN_WEIGHT_LLM_MODEL_DIR?.trim() ?? '';
+const MODEL_REQUIRED_COMMANDS = new Set(['create', 'restart', 'run', 'start', 'up']);
 
-if (!/@sha256:[a-f0-9]{64}$/.test(image)) {
-  throw new Error('OPEN_WEIGHT_LLM_IMAGE must be pinned by sha256 digest');
-}
-if (!isIP(bindAddress) || !isPrivateAddress(bindAddress)) {
-  throw new Error('OPEN_WEIGHT_LLM_BIND_ADDRESS must be a private IP literal');
-}
-if (
-  token.length < 32 ||
-  token.length > 512 ||
-  [...token].some((character) => {
-    const codePoint = character.codePointAt(0) ?? 0;
-    return codePoint < 33 || codePoint > 126;
-  })
-) {
-  throw new Error('OPEN_WEIGHT_LLM_TOKEN must contain 32 to 512 visible ASCII characters');
-}
-if (!modelDirectory.startsWith('/')) {
-  throw new Error('OPEN_WEIGHT_LLM_MODEL_DIR must be absolute');
+export function shouldVerifyOpenWeightLlmModel(argumentsToCompose) {
+  return argumentsToCompose.some((argument) => MODEL_REQUIRED_COMMANDS.has(argument));
 }
 
-const verification = spawnSync(
-  process.execPath,
-  [
-    resolve(repositoryRoot, 'scripts/open-weight-llm/verify-model.mjs'),
-    resolve(repositoryRoot, 'docker/open-weight-llm/model-manifest.json'),
-    resolve(modelDirectory, 'Qwen3-4B-Instruct-2507-Q4_K_M.gguf'),
-  ],
-  { env, stdio: 'inherit' },
-);
-if (verification.status !== 0) process.exit(verification.status ?? 1);
+function main() {
+  const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+  const envPath = resolve(repositoryRoot, '.env.llm');
+  if (!existsSync(envPath)) {
+    throw new Error('Missing .env.llm; copy .env.llm.example and set operator values');
+  }
+  const env = { ...process.env, ...parse(readFileSync(envPath)) };
+  const image = env.OPEN_WEIGHT_LLM_IMAGE?.trim() ?? '';
+  const bindAddress = env.OPEN_WEIGHT_LLM_BIND_ADDRESS?.trim() ?? '';
+  const token = env.OPEN_WEIGHT_LLM_TOKEN ?? '';
+  const modelDirectory = env.OPEN_WEIGHT_LLM_MODEL_DIR?.trim() ?? '';
+  const composeArguments = process.argv.slice(2);
 
-const compose = spawnSync(
-  'docker',
-  [
-    'compose',
-    '-f',
-    resolve(repositoryRoot, 'docker-compose.llm.yml'),
-    '--env-file',
-    envPath,
-    '--profile',
-    'llm',
-    ...process.argv.slice(2),
-  ],
-  { env, stdio: 'inherit' },
-);
-process.exit(compose.status ?? 1);
+  if (!/@sha256:[a-f0-9]{64}$/.test(image)) {
+    throw new Error('OPEN_WEIGHT_LLM_IMAGE must be pinned by sha256 digest');
+  }
+  if (!isIP(bindAddress) || !isPrivateAddress(bindAddress)) {
+    throw new Error('OPEN_WEIGHT_LLM_BIND_ADDRESS must be a private IP literal');
+  }
+  if (token.length < 32 || token.length > 512 || !/^[A-Za-z0-9._~-]+$/.test(token)) {
+    throw new Error('OPEN_WEIGHT_LLM_TOKEN must contain 32 to 512 URL-safe ASCII characters');
+  }
+  if (!modelDirectory.startsWith('/')) {
+    throw new Error('OPEN_WEIGHT_LLM_MODEL_DIR must be absolute');
+  }
+
+  if (shouldVerifyOpenWeightLlmModel(composeArguments)) {
+    const verification = spawnSync(
+      process.execPath,
+      [
+        resolve(repositoryRoot, 'scripts/open-weight-llm/verify-model.mjs'),
+        resolve(repositoryRoot, 'docker/open-weight-llm/model-manifest.json'),
+        resolve(modelDirectory, 'Qwen3-4B-Instruct-2507-Q4_K_M.gguf'),
+      ],
+      { env, stdio: 'inherit' },
+    );
+    if (verification.status !== 0) process.exit(verification.status ?? 1);
+  }
+
+  const compose = spawnSync(
+    'docker',
+    [
+      'compose',
+      '-f',
+      resolve(repositoryRoot, 'docker-compose.llm.yml'),
+      '--env-file',
+      envPath,
+      '--profile',
+      'llm',
+      ...composeArguments,
+    ],
+    { env, stdio: 'inherit' },
+  );
+  process.exit(compose.status ?? 1);
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main();
+}

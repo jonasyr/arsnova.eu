@@ -58,8 +58,11 @@ export function isOpenWeightLlmEnabled(value = process.env['OPEN_WEIGHT_LLM_ENAB
   return value === 'true';
 }
 
-function normalizeHostname(hostname: string): string {
-  return hostname.trim().toLowerCase().replace(/\.+$/, '');
+export function normalizeOpenWeightLlmHostname(hostname: string): string {
+  const normalized = hostname.trim().toLowerCase().replace(/\.+$/, '');
+  return normalized.startsWith('[') && normalized.endsWith(']')
+    ? normalized.slice(1, -1)
+    : normalized;
 }
 
 function ipv4MappedFromIpv6(host: string): string | null {
@@ -67,7 +70,7 @@ function ipv4MappedFromIpv6(host: string): string | null {
 }
 
 export function isBlockedOpenWeightLlmHost(hostname: string): boolean {
-  const host = normalizeHostname(hostname);
+  const host = normalizeOpenWeightLlmHostname(hostname);
   return (
     [...BLOCKED_SAAS_HOSTS].some(
       (blockedHost) => host === blockedHost || host.endsWith(`.${blockedHost}`),
@@ -77,7 +80,7 @@ export function isBlockedOpenWeightLlmHost(hostname: string): boolean {
 
 /** Accept exactly loopback, RFC1918 or Unique-Local IPv6 addresses. */
 export function isPrivateOpenWeightLlmAddress(address: string): boolean {
-  const host = normalizeHostname(address);
+  const host = normalizeOpenWeightLlmHostname(address);
   const mappedIpv4 = ipv4MappedFromIpv6(host);
   if (mappedIpv4) {
     return PRIVATE_RUNTIME_ADDRESSES.check(mappedIpv4, 'ipv4');
@@ -128,12 +131,8 @@ export function resolveOpenWeightLlmSocketPath(
 function resolveOpenWeightLlmToken(configuredValue: string | undefined): string | null {
   if (!configuredValue?.trim()) return null;
   const value = configuredValue;
-  const containsUnsupportedCharacter = [...value].some((character) => {
-    const codePoint = character.codePointAt(0) ?? 0;
-    return codePoint < 33 || codePoint > 126;
-  });
-  if (value.length < 32 || value.length > 512 || containsUnsupportedCharacter) {
-    throw new Error('OPEN_WEIGHT_LLM_TOKEN muss 32 bis 512 sichtbare ASCII-Zeichen enthalten');
+  if (value.length < 32 || value.length > 512 || !/^[A-Za-z0-9._~-]+$/.test(value)) {
+    throw new Error('OPEN_WEIGHT_LLM_TOKEN muss 32 bis 512 URL-sichere ASCII-Zeichen enthalten');
   }
   return value;
 }

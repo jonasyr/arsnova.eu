@@ -1,6 +1,7 @@
 import { lookup as dnsLookup } from 'node:dns/promises';
 import { request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
+import { isIP } from 'node:net';
 import type { LookupAddress } from 'node:dns';
 import { z } from 'zod';
 import {
@@ -24,6 +25,7 @@ import {
 import {
   isBlockedOpenWeightLlmHost,
   isPrivateOpenWeightLlmAddress,
+  normalizeOpenWeightLlmHostname,
   OPEN_WEIGHT_LLM_CIRCUIT_FAILURE_THRESHOLD,
   OPEN_WEIGHT_LLM_CIRCUIT_OPEN_MS,
   resolveOpenWeightLlmConfig,
@@ -172,16 +174,22 @@ function classifyCaughtError(
 
 async function resolvePrivateTarget(
   transport: OpenWeightLlmTransport,
+  signal: AbortSignal,
 ): Promise<LookupAddress | null> {
   if (transport.kind === 'unix') return null;
   const parsed = new URL(transport.baseUrl);
-  if (isBlockedOpenWeightLlmHost(parsed.hostname)) {
+  const hostname = normalizeOpenWeightLlmHostname(parsed.hostname);
+  if (isBlockedOpenWeightLlmHost(hostname)) {
     throw new Error('blocked runtime host');
   }
-  if (isPrivateOpenWeightLlmAddress(parsed.hostname)) {
-    return { address: parsed.hostname, family: parsed.hostname.includes(':') ? 6 : 4 };
+  const literalFamily = isIP(hostname);
+  if (literalFamily !== 0) {
+    if (!isPrivateOpenWeightLlmAddress(hostname)) {
+      throw new Error('runtime IP literal is not private');
+    }
+    return { address: hostname, family: literalFamily };
   }
-  const addresses = await hooks.resolveHostname(parsed.hostname);
+  const addresses = await waitForAbort(hooks.resolveHostname(hostname), signal);
   if (
     addresses.length === 0 ||
     addresses.some(({ address }) => !isPrivateOpenWeightLlmAddress(address))
@@ -189,6 +197,24 @@ async function resolvePrivateTarget(
     throw new Error('runtime host did not resolve exclusively to private addresses');
   }
   return addresses[0] ?? null;
+}
+
+function waitForAbort<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) return Promise.reject(signal.reason);
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(signal.reason);
+    signal.addEventListener('abort', onAbort, { once: true });
+    operation.then(
+      (value) => {
+        signal.removeEventListener('abort', onAbort);
+        resolve(value);
+      },
+      (error: unknown) => {
+        signal.removeEventListener('abort', onAbort);
+        reject(error);
+      },
+    );
+  });
 }
 
 function outputSchemaFor(taskType: OpenWeightLlmTaskType) {
@@ -306,7 +332,7 @@ export async function runOpenWeightLlm(
 
   let result: OpenWeightLlmRunResult;
   try {
-    const resolvedAddress = await resolvePrivateTarget(config.transport);
+    const resolvedAddress = await resolvePrivateTarget(config.transport, signal);
     const headers = {
       accept: 'application/json',
       authorization: `Bearer ${config.token}`,
@@ -418,6 +444,7 @@ function defaultRuntimeRequest(input: RuntimeTransportRequest): Promise<RuntimeT
       input.transport.kind === 'http'
         ? new URL(input.transport.baseUrl)
         : new URL('http://localhost');
+    const targetHostname = normalizeOpenWeightLlmHostname(parsed.hostname);
     const requestFn = parsed.protocol === 'https:' ? httpsRequest : httpRequest;
     const headers: Record<string, string> = { ...input.headers };
     if (input.transport.kind === 'http') headers.host = parsed.host;
@@ -436,7 +463,7 @@ function defaultRuntimeRequest(input: RuntimeTransportRequest): Promise<RuntimeT
             protocol: parsed.protocol,
             hostname: input.resolvedAddress?.address,
             port: parsed.port || undefined,
-            servername: parsed.hostname,
+            servername: isIP(targetHostname) === 0 ? targetHostname : undefined,
             path: input.path,
             method: input.method,
             headers,

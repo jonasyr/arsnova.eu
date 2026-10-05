@@ -20,6 +20,8 @@ describe('openWeightLlmConfig', () => {
     expect(resolveOpenWeightLlmUrl('http://runtime.internal:8080/')).toBe(
       'http://runtime.internal:8080',
     );
+    expect(resolveOpenWeightLlmUrl('http://[::1]:8080')).toBe('http://[::1]:8080');
+    expect(resolveOpenWeightLlmUrl('http://[fd00::20]:8080')).toBe('http://[fd00::20]:8080');
     expect(() => resolveOpenWeightLlmUrl('ftp://10.20.30.40/model')).toThrow();
     expect(() => resolveOpenWeightLlmUrl('http://user:secret@10.20.30.40:8080')).toThrow();
     expect(() => resolveOpenWeightLlmUrl('http://10.20.30.40:8080/v1')).toThrow();
@@ -37,6 +39,8 @@ describe('openWeightLlmConfig', () => {
       '192.168.10.20',
       '::1',
       'fd12:3456::7',
+      '[::1]',
+      '[fd12:3456::7]',
       '::ffff:127.0.0.1',
     ]) {
       expect(isPrivateOpenWeightLlmAddress(address), address).toBe(true);
@@ -86,7 +90,7 @@ describe('openWeightLlmConfig', () => {
     });
   });
 
-  it('verwirft zu kurze oder nicht als sichtbares ASCII darstellbare Runtime-Credentials', () => {
+  it('verwirft zu kurze oder nicht URL-sichere Runtime-Credentials', () => {
     expect(() => resolveOpenWeightLlmConfig({ OPEN_WEIGHT_LLM_TOKEN: 'zu-kurz' })).toThrow(
       /32 bis 512/,
     );
@@ -95,9 +99,15 @@ describe('openWeightLlmConfig', () => {
     ).toThrow(/32 bis 512/);
     expect(() =>
       resolveOpenWeightLlmConfig({ OPEN_WEIGHT_LLM_TOKEN: `${'x'.repeat(32)} geteilt` }),
-    ).toThrow(/sichtbare ASCII/);
+    ).toThrow(/URL-sichere ASCII/);
     expect(() =>
       resolveOpenWeightLlmConfig({ OPEN_WEIGHT_LLM_TOKEN: `${'x'.repeat(32)}ä` }),
-    ).toThrow(/sichtbare ASCII/);
+    ).toThrow(/URL-sichere ASCII/);
+    expect(() =>
+      resolveOpenWeightLlmConfig({ OPEN_WEIGHT_LLM_TOKEN: `a,${'x'.repeat(32)}` }),
+    ).toThrow(/URL-sichere ASCII/);
+    expect(() =>
+      resolveOpenWeightLlmConfig({ OPEN_WEIGHT_LLM_TOKEN: `"${'x'.repeat(32)}"` }),
+    ).toThrow(/URL-sichere ASCII/);
   });
 });

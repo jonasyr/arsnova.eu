@@ -54,7 +54,7 @@ Der normale `scripts/deploy.sh`-Pfad startet die Runtime absichtlich nicht.
 
 1. Eigenes Runtime-Image aus `docker/open-weight-llm/Dockerfile` bauen, in die interne Registry pushen und den Registry-Digest festhalten.
 2. Das geprüfte GGUF unter einem absoluten Hostpfad ablegen.
-3. `.env.llm.example` nach `.env.llm` kopieren. `.env.llm` ist git-ignoriert. Image nur als `...@sha256:<digest>`, private Bind-Adresse und separates Secret mit 32–512 sichtbaren ASCII-Zeichen ohne Leerraum setzen.
+3. `.env.llm.example` nach `.env.llm` kopieren. `.env.llm` ist git-ignoriert. Image nur als `...@sha256:<digest>`, private Bind-Adresse und separates Secret mit 32–512 Zeichen aus `A–Z`, `a–z`, `0–9`, `.`, `_`, `~`, `-` setzen. Kommas sind ausgeschlossen, damit llama.cpp den Wert nicht als mehrere API-Schlüssel interpretiert.
 4. Konfiguration prüfen und bewusst starten:
 
 ```bash
@@ -63,7 +63,7 @@ npm run llm:prod -- up -d
 npm run llm:prod -- ps
 ```
 
-Der Wrapper lehnt Tag-only-Images, öffentliche oder Loopback-Bind-Adressen, kurze Credentials, relative Modellpfade und einen falschen GGUF-Digest ab.
+Der Wrapper lehnt Tag-only-Images, öffentliche oder Loopback-Bind-Adressen, kurze Credentials, relative Modellpfade und beim Erstellen oder Starten einen falschen GGUF-Digest ab. Reine Inspektions- und Rollback-Befehle wie `ps`, `logs`, `stop` oder `down` bleiben auch bei einem fehlenden oder defekten Modell ausführbar.
 
 Auf dem App-Host werden anschließend nur diese Werte gesetzt:
 
@@ -86,13 +86,32 @@ npm run docker:up:llm
 
 Die App im Compose-Netz nutzt `/run/open-weight-llm/llm.sock`. Host-npm auf macOS kann diesen Docker-Volume-Socket nicht sehen und verwendet stattdessen `OPEN_WEIGHT_LLM_URL=http://127.0.0.1:8080` mit einer nur an Loopback gebundenen Runtime.
 
+Für diesen Host-npm-Pfad muss in Docker Desktop Host Networking aktiviert sein. Danach startet das gesonderte Profil den Container ausführbar an Loopback:
+
+```bash
+OPEN_WEIGHT_LLM_MODEL_DIR=/absoluter/pfad/zum/modell \
+OPEN_WEIGHT_LLM_TOKEN=<lokales-url-sicheres-secret-mit-32-bis-512-zeichen> \
+npm run docker:up:llm:http
+```
+
+Das per npm gestartete Backend erhält passend dazu:
+
+```dotenv
+OPEN_WEIGHT_LLM_ENABLED=true
+OPEN_WEIGHT_LLM_URL=http://127.0.0.1:8080
+OPEN_WEIGHT_LLM_SOCKET_PATH=
+OPEN_WEIGHT_LLM_TOKEN=<dasselbe-lokale-secret>
+```
+
+Das Profil `llm-http` ist ausschließlich ein lokaler Laborpfad. Der Produktionswrapper akzeptiert weiterhin weder Loopback noch Wildcards, sondern nur eine private RFC1918-/ULA-Adresse des zweiten Hosts.
+
 ## Laufzeitvertrag
 
 - global höchstens ein App-Auftrag gleichzeitig über alle drei Auftragstypen;
 - vor jedem Modellaufruf `GET /slots?fail_on_no_slot=1`;
 - maximal ein POST nach erfolgreicher Slot-Sonde, keine App-interne Modellqueue;
 - belegter Slot: Label und Summary liefern sofort ihren fachlichen Fallback, Lernzielableitung `{ status: "busy", retry: "manual" }`;
-- Caller-Abbruch und auftragsspezifisches Timeout brechen den HTTP-Aufruf ab und lösen das globale Inflight in `finally`;
+- Caller-Abbruch und auftragsspezifisches Timeout begrenzen bereits die DNS-Auflösung, brechen danach den HTTP-Aufruf ab und lösen das globale Inflight in `finally`; verspätete DNS-Ergebnisse starten keinen Request;
 - Circuit Breaker öffnet nach drei Timeout-/Verfügbarkeits-/Antwortfehlern für 30 Sekunden;
 - URL-Hostnamen werden aufgelöst und auf ausschließlich Loopback/RFC1918/ULA geprüft; die Anfrage wird an die geprüfte IP gepinnt;
 - Telemetrie enthält nur Auftragstyp, Modellalias, Laufzeit und Tokenzahlen, keine Prompttexte.
@@ -142,8 +161,7 @@ Ein Warm-Lauf mit 148 gecachten Prompttokens dauerte 1.120 ms. Die Messung beleg
 ## Verifikation
 
 ```bash
-npm run test:open-weight-llm
-npm run test:open-weight-llm-compose
+npm run test:open-weight-llm:all
 npm test -w @arsnova/shared-types -- src/open-weight-llm.test.ts
 npm test -w @arsnova/backend -- --run \
   src/lib/openWeightLlmConfig.test.ts \

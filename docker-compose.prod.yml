@@ -165,10 +165,10 @@ services:
     volumes:
       - open_weight_llm_socket:/run/open-weight-llm
       - ${OPEN_WEIGHT_LLM_MODEL_DIR:-./models/open-weight-llm}:/models:ro
-    env_file:
-      - .env.production
     environment:
       OPEN_WEIGHT_LLM_TRANSPORT: unix
+      OPEN_WEIGHT_LLM_SOCKET_PATH: /run/open-weight-llm/llm.sock
+      OPEN_WEIGHT_LLM_TOKEN: ${OPEN_WEIGHT_LLM_TOKEN:-}
       OPEN_WEIGHT_LLM_THREADS: '4'
     healthcheck:
       test: ['CMD', '/opt/arsnova/healthcheck.sh']

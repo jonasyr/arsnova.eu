@@ -186,6 +186,44 @@ services:
       retries: 5
     stop_grace_period: 10s
 
+  # Explizites HTTP-Labor für einen per npm gestarteten Backendprozess auf dem
+  # Docker-Host. Benötigt Docker-Host-Networking und bindet nur an Loopback.
+  # Nicht für Produktion verwenden; dort gilt docker-compose.llm.yml.
+  open-weight-llm-http:
+    profiles: ['llm-http']
+    build:
+      context: ./docker/open-weight-llm
+      dockerfile: Dockerfile
+    image: arsnova-open-weight-llm:llama-b10524
+    container_name: arsnova-v3-open-weight-llm-http
+    restart: unless-stopped
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    network_mode: host
+    pids_limit: 128
+    mem_limit: 5g
+    cpus: '4.0'
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=128m,mode=1777
+    volumes:
+      - ${OPEN_WEIGHT_LLM_MODEL_DIR:-./models/open-weight-llm}:/models:ro
+    environment:
+      OPEN_WEIGHT_LLM_TRANSPORT: http
+      OPEN_WEIGHT_LLM_BIND_ADDRESS: 127.0.0.1
+      OPEN_WEIGHT_LLM_TOKEN: ${OPEN_WEIGHT_LLM_TOKEN:-local-runtime-token-change-me-000000000000}
+      OPEN_WEIGHT_LLM_THREADS: '4'
+    healthcheck:
+      test: ['CMD', '/opt/arsnova/healthcheck.sh']
+      interval: 15s
+      timeout: 5s
+      start_period: 180s
+      retries: 5
+    stop_grace_period: 10s
+
 volumes:
   postgres_data:
   redis_data:

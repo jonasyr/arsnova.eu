@@ -446,8 +446,7 @@ Kill-Switch default aus (`QA_SUMMARY_ENABLED=false`). On-demand, quellengebunden
 ### Private Open-Weight-LLM-Runtime (Story 8.9d)
 
 ```bash
-npm run test:open-weight-llm
-npm run test:open-weight-llm-compose
+npm run test:open-weight-llm:all
 npm test -w @arsnova/shared-types -- src/open-weight-llm.test.ts
 npm test -w @arsnova/backend -- --run \
   src/lib/openWeightLlmConfig.test.ts \
@@ -457,7 +456,7 @@ npm run typecheck
 npm run build:prod
 ```
 
-Die modellfreien Tests prüfen Pins und Hartflags, Labor-/Zwei-Host-Compose, private Zielauflösung, drei versionierte Auftragsschemas, alle Belegungsreihenfolgen, Triple-Concurrency, höchstens einen Modell-POST, Abbruch/Timeout, Circuit Breaker, Fallback beziehungsweise manuellen Retry und Live-Hotpath-Isolation. Der reale lokale Modellnachweis mit Digests, Hardware und Messgrenze steht in [open-weight-llm-runtime.md](features/open-weight-llm-runtime.md). Er ersetzt weder die Summary-Prefill-Abnahme auf der 8-vCPU-Box noch Consumer-Qualitäts- oder Produktivtests.
+Die modellfreien Tests sind über `npm test` und `npm run test:coverage` in die Standard-CI eingebunden. Sie prüfen Pins und Hartflags, Unix- und Loopback-HTTP-Labor, Zwei-Host-Compose, CSV-sichere Credentials, private IPv4-/IPv6-Zielauflösung, DNS-Abbruch und -Timeout, drei versionierte Auftragsschemas, alle Belegungsreihenfolgen, Triple-Concurrency, höchstens einen Modell-POST, Circuit Breaker, Fallback beziehungsweise manuellen Retry und Live-Hotpath-Isolation. Der reale lokale Modellnachweis mit Digests, Hardware und Messgrenze steht in [open-weight-llm-runtime.md](features/open-weight-llm-runtime.md). Er ersetzt weder die Summary-Prefill-Abnahme auf der 8-vCPU-Box noch Consumer-Qualitäts- oder Produktivtests.
 
 Für W2.4a zusätzlich:
 

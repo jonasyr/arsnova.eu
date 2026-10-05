@@ -90,7 +90,7 @@ const outputs = {
 const defaultConfig: OpenWeightLlmConfig = {
   enabled: true,
   transport: { kind: 'http', baseUrl: 'http://127.0.0.1:8080' },
-  token: 'runtime-secret',
+  token: 'runtime-secret-000000000000000000',
   model: 'qwen3-4b-instruct-2507-q4_k_m',
   timeoutsMs: { topic_label: 1_000, qa_summary: 1_000, learning_objectives: 1_000 },
   maxOutputTokens: { topic_label: 96, qa_summary: 640, learning_objectives: 768 },
@@ -114,8 +114,10 @@ function successfulTransport() {
       body: string | null;
       method: 'GET' | 'POST';
       resolvedAddress: { address: string; family: number } | null;
+      headers: Readonly<Record<string, string>>;
     }) => {
       if (input.path.startsWith('/slots')) return { status: 200, body: '[]' };
+      expect(input.headers.authorization).toBe(`Bearer ${defaultConfig.token}`);
       const payload = JSON.parse(input.body ?? '{}') as {
         messages: Array<{ role: string; content: string }>;
         response_format: { type: string; schema: { properties?: Record<string, unknown> } };
@@ -312,6 +314,101 @@ describe('openWeightLlmClient', () => {
       });
       expect(blockedRequest).not.toHaveBeenCalled();
     }
+  });
+
+  it.each([
+    ['http://[::1]:8080', '::1'],
+    ['http://[fd00::20]:8080', 'fd00::20'],
+  ])('normalisiert das private IPv6-Literal %s vor dem Transport', async (baseUrl, address) => {
+    const request = successfulTransport();
+    const resolveHostname = vi.fn();
+    resetOpenWeightLlmClientForTests({
+      config: () => ({ ...defaultConfig, transport: { kind: 'http', baseUrl } }),
+      resolveHostname,
+      request,
+    });
+    await expect(runOpenWeightLlm(requests.topic_label)).resolves.toMatchObject({
+      status: 'completed',
+    });
+    expect(resolveHostname).not.toHaveBeenCalled();
+    expect(request.mock.calls[0]?.[0].resolvedAddress).toEqual({ address, family: 6 });
+  });
+
+  it('lehnt ein öffentliches IPv6-Literal vor DNS und Transport ab', async () => {
+    const resolveHostname = vi.fn();
+    const request = vi.fn();
+    resetOpenWeightLlmClientForTests({
+      config: () => ({
+        ...defaultConfig,
+        transport: { kind: 'http', baseUrl: 'http://[2001:4860:4860::8888]:8080' },
+      }),
+      resolveHostname,
+      request,
+    });
+    await expect(runOpenWeightLlm(requests.topic_label)).resolves.toEqual({
+      status: 'unavailable',
+    });
+    expect(resolveHostname).not.toHaveBeenCalled();
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it('begrenzt die DNS-Phase durch das Auftrags-Timeout und gibt den Slot frei', async () => {
+    let firstLookup = true;
+    const request = successfulTransport();
+    resetOpenWeightLlmClientForTests({
+      config: () => ({
+        ...defaultConfig,
+        transport: { kind: 'http', baseUrl: 'http://runtime.internal:8080' },
+        timeoutsMs: { topic_label: 10, qa_summary: 10, learning_objectives: 10 },
+      }),
+      resolveHostname: async () => {
+        if (firstLookup) {
+          firstLookup = false;
+          return new Promise<never>(() => undefined);
+        }
+        return [{ address: '10.20.30.40', family: 4 }];
+      },
+      request,
+    });
+    await expect(runOpenWeightLlm(requests.topic_label)).resolves.toEqual({ status: 'timeout' });
+    expect(request).not.toHaveBeenCalled();
+    await expect(runOpenWeightLlm(requests.topic_label)).resolves.toMatchObject({
+      status: 'completed',
+    });
+  });
+
+  it('bricht eine hängende DNS-Phase durch den Caller ab und ignoriert ihr spätes Ergebnis', async () => {
+    let releaseFirstLookup:
+      ((addresses: Array<{ address: string; family: 4 }>) => void) | undefined;
+    let firstLookup = true;
+    const request = successfulTransport();
+    resetOpenWeightLlmClientForTests({
+      config: () => ({
+        ...defaultConfig,
+        transport: { kind: 'http', baseUrl: 'http://runtime.internal:8080' },
+      }),
+      resolveHostname: async () => {
+        if (firstLookup) {
+          firstLookup = false;
+          return new Promise((resolve) => {
+            releaseFirstLookup = resolve;
+          });
+        }
+        return [{ address: '10.20.30.40', family: 4 }];
+      },
+      request,
+    });
+    const controller = new AbortController();
+    const aborted = runOpenWeightLlm(requests.topic_label, { signal: controller.signal });
+    await waitFor(() => releaseFirstLookup !== undefined);
+    controller.abort();
+    await expect(aborted).resolves.toEqual({ status: 'aborted' });
+    releaseFirstLookup?.([{ address: '10.20.30.40', family: 4 }]);
+    await Promise.resolve();
+    expect(request).not.toHaveBeenCalled();
+    await expect(runOpenWeightLlm(requests.topic_label)).resolves.toMatchObject({
+      status: 'completed',
+    });
   });
 
   it('benötigt Credential und einen explizit aktivierten Transport', async () => {

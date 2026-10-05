@@ -318,12 +318,13 @@ keine Produktivaktivierung oder fachliche Freigabe der drei Consumer von selbst.
 
 - Kanonische Produktion: zweiter privater Host, privates HTTP, Credential, kein öffentlicher
   Port. Unix-Socket nur Same-Host-Labor. macOS-Dev: Loopback-HTTP, nicht Docker-Volume-Socket.
-- URL-Ziele nach Auflösung nur Loopback/RFC1918/ULA; SaaS-Hosts gesperrt; Token nicht in der URL.
+- URL-Ziele nach Auflösung nur Loopback/RFC1918/ULA; DNS-Auflösung unterliegt demselben Caller-Abbruch und Auftrags-Timeout wie der Request; SaaS-Hosts gesperrt; Token nicht in der URL. Das einzelne Credential verwendet ausschließlich `A–Z`, `a–z`, `0–9`, `.`, `_`, `~`, `-`, damit llama.cpp es nicht als CSV-Schlüsselliste zerlegt.
 - Kein LLM auf dem Live-Host neben Node/PostgreSQL/Redis, auch nicht „streng gedeckelt“ zusammen
   mit spaCy- und Encoder-Sidecar (Voranalyse §5.2, Kapazitätsschätzung).
 - Eigenes Compose-Profil `llm` und eigenes Image, getrennt von `SPACY_IMAGE` /
   `WORD_CLOUD_ENCODER_IMAGE` / `ARSNOVA_IMAGE`; `deploy.sh` startet es nicht automatisch.
-  Image-Digest pinnen; GGUF als Volume, nicht CI-Layer.
+  Image-Digest pinnen; GGUF als Volume, nicht CI-Layer. Der Runtime-Container erhält ausschließlich
+  seine eigenen Variablen und insbesondere keine App-, Datenbank-, Admin- oder Capability-Secrets.
 - `OPEN_WEIGHT_LLM_ENABLED` ist der fünfte Kill-Switch; siehe Matrix in §2.6.
 - `--parallel 1`, `--ctx-size` gepinnt, `--n-predict` gedeckelt, `--no-webui`, `--slots`,
   `--api-key`, `--reasoning off`, `--n-gpu-layers 0`, `--slot-prompt-similarity 0`. Ein

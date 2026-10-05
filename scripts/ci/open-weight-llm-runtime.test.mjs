@@ -50,15 +50,48 @@ test('Entry-Point erzwingt Auth, CPU-only, einen Slot und die vereinbarten Hartf
   assert.match(entrypoint, /OPEN_WEIGHT_LLM_TOKEN/);
   assert.match(entrypoint, /OPEN_WEIGHT_LLM_THREADS must be an integer from 1 to 4/);
   assert.match(entrypoint, /export LC_ALL=C/);
-  assert.match(entrypoint, /\[:graph:\]/);
+  assert.match(entrypoint, /validate_open_weight_llm_token/);
+  assert.match(entrypoint, /validate_open_weight_llm_bind_address/);
   assert.doesNotMatch(entrypoint, /--(?:model-url|hf-repo|hf-file)\b/);
-  assert.match(entrypoint, /10\.\* \| 192\.168\.\*/);
-  assert.match(entrypoint, /172\.1\[6-9\]\.\*/);
-  assert.match(entrypoint, /\[fF\]\[cCdD\]\*:\*/);
-  assert.match(entrypoint, /explicit private address/);
-  for (const script of ['entrypoint.sh', 'healthcheck.sh']) {
+  for (const script of [
+    'entrypoint.sh',
+    'healthcheck.sh',
+    'validate-bind.sh',
+    'validate-token.sh',
+  ]) {
     const syntax = spawnSync('sh', ['-n', join(runtimeRoot, script)], { encoding: 'utf8' });
     assert.equal(syntax.status, 0, syntax.stderr);
+  }
+});
+
+test('Single-Key-Credential bleibt CSV-sicher und wird unverändert akzeptiert', () => {
+  const validator = join(runtimeRoot, 'validate-token.sh');
+  const validate = (token) =>
+    spawnSync(
+      'sh',
+      ['-c', '. "$1"; validate_open_weight_llm_token "$2"', 'validator', validator, token],
+      { encoding: 'utf8' },
+    );
+  const validToken = 'runtime-secret-000000000000000000';
+  assert.equal(validate(validToken).status, 0);
+  for (const token of [`a,${'x'.repeat(32)}`, `"${'x'.repeat(32)}"`, `${'x'.repeat(32)} y`]) {
+    assert.equal(validate(token).status, 64, token);
+  }
+});
+
+test('HTTP-Bind erlaubt lokales Loopback und private Ziele, aber keine Wildcard oder Public-IP', () => {
+  const validator = join(runtimeRoot, 'validate-bind.sh');
+  const validate = (address) =>
+    spawnSync(
+      'sh',
+      ['-c', '. "$1"; validate_open_weight_llm_bind_address "$2"', 'validator', validator, address],
+      { encoding: 'utf8' },
+    );
+  for (const address of ['127.0.0.1', '::1', '10.0.0.20', '192.168.2.20', 'fd00::20']) {
+    assert.equal(validate(address).status, 0, address);
+  }
+  for (const address of ['', '0.0.0.0', '::', '8.8.8.8', '2001:4860:4860::8888']) {
+    assert.equal(validate(address).status, 64, address);
   }
 });
 

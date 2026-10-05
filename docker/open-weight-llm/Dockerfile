@@ -12,8 +12,8 @@ RUN groupadd --gid 65532 arsnova-llm \
     && mkdir -p /opt/arsnova /run/open-weight-llm \
     && chown 65532:65532 /run/open-weight-llm
 
-COPY entrypoint.sh healthcheck.sh model.sha256 /opt/arsnova/
-RUN chmod 0555 /opt/arsnova/entrypoint.sh /opt/arsnova/healthcheck.sh \
+COPY entrypoint.sh healthcheck.sh validate-bind.sh validate-token.sh model.sha256 /opt/arsnova/
+RUN chmod 0555 /opt/arsnova/entrypoint.sh /opt/arsnova/healthcheck.sh /opt/arsnova/validate-bind.sh /opt/arsnova/validate-token.sh \
     && chmod 0444 /opt/arsnova/model.sha256
 
 USER 65532:65532
