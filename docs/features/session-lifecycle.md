@@ -314,7 +314,7 @@ Writer-Drain des Produktions-Deployments liegt. Ein lokaler 10er-Batch mit
 10,45 Sekunden auf 193 Millisekunden; der Purge bleibt damit deutlich unter
 Prismas 5-Sekunden-Limit für interaktive Transaktionen.
 
-Alle drei Migrationen bleiben bei einem App-Rollback vorwärts angewandt. Ein
+Alle vier Migrationen bleiben bei einem App-Rollback vorwärts angewandt. Ein
 Schema-Downgrade ist nicht vorgesehen; das Rückrollen erfolgt ausschließlich
 über das App-Image.
 
