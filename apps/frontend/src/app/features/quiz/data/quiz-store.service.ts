@@ -20,7 +20,9 @@ import {
   NicknameThemeEnum,
   QuizImportSchema,
   QuizExportSchema,
+  QuizLearningObjectiveBundleV1Schema,
   QuizUploadInputSchema,
+  LEARNING_OBJECTIVE_REVISION_MAX,
   QUIZ_EXPORT_VERSION,
   QUIZ_UPLOAD_MAX_QUESTIONS,
   SHORT_TEXT_DEFAULT_EVALUATION_KIND,
@@ -44,6 +46,10 @@ import {
   type QuestionNumericToleranceMode,
   type QuizPreset,
   type QuizExport,
+  type QuizLearningObjectiveBundleV1,
+  type LearningObjectiveNeedsReviewReason,
+  type QuizLearningObjectiveScope,
+  type QuizLearningObjectiveV1,
   type QuizUploadInput,
   type ShortAnswerEvaluationMode,
   type ShortTextEvaluationKind,
@@ -209,6 +215,12 @@ export interface QuizSummary {
 export interface QuizImportResult {
   quiz: QuizDocument;
   warnings: QuizImportWarning[];
+}
+
+export interface SaveQuizLearningObjectiveInput {
+  text: string;
+  scope: QuizLearningObjectiveScope;
+  confirmationState: 'draft' | 'confirmed';
 }
 
 /**
@@ -555,6 +567,16 @@ const QUIZ_STORAGE_LEGACY_KEY = QUIZ_STORAGE_KEY;
 const QUIZ_YDOC_NAME = 'arsnova-quiz-library-v1';
 const QUIZ_YDOC_ROOT_KEY = 'quizzes';
 const QUIZ_YDOC_PRESET_KEY = 'home-presets';
+const QUIZ_LEARNING_OBJECTIVES_ROOT_KEY = 'quiz-learning-objectives-v1';
+const QUIZ_LEARNING_OBJECTIVES_INITIALIZED_KEY = 'quiz-learning-objectives-v1-initialized';
+const QUIZ_LEARNING_OBJECTIVES_STORAGE_PREFIX = 'quiz-learning-objectives-v1';
+const QUIZ_LEARNING_OBJECTIVES_OPLOG_MARKER = 'oplog-v1';
+const QUIZ_LEARNING_OBJECTIVES_OPLOG_PREFIX = 'quiz-learning-objectives-v1-oplog';
+const QUIZ_LEARNING_OBJECTIVES_OPLOG_HARD_LIMIT = 4096;
+const QUIZ_LEARNING_OBJECTIVES_OPLOG_RECENT_PER_OBJECTIVE = 8;
+const QUIZ_LEARNING_OBJECTIVES_DELETE_SETTLEMENT_MS = 1500;
+const QUIZ_IMPORTED_PERSISTENCE_SYNC_TIMEOUT_MS = 5000;
+const QUIZ_IMPORTED_PERSISTENCE_CLEAR_TIMEOUT_MS = 1000;
 const QUIZ_SYNC_ROOM_STORAGE_KEY = 'quiz-sync-room-id';
 const QUIZ_SYNC_METADATA_PREFIX = 'quiz-sync-meta';
 const QUIZ_SYNC_DEVICE_ID_KEY = 'quiz-sync-device-id';
@@ -570,6 +592,47 @@ const HOME_PRESET_STORAGE_KEY = 'home-preset';
 const HOME_PRESET_OPTIONS_SERIOUS_KEY = 'home-preset-options-serious';
 const HOME_PRESET_OPTIONS_PLAYFUL_KEY = 'home-preset-options-spielerisch';
 const PRESET_UPDATED_EVENT = 'arsnova:preset-updated';
+
+interface LearningObjectiveYjsOperation {
+  schemaVersion: 1;
+  operationId: string;
+  quizId: string;
+  objectiveId: string;
+  kind: 'upsert' | 'delete';
+  expectedRevision: number | null;
+  resultingRevision: number;
+  bundleResultRevision: number;
+  parentOperationIds: string[];
+  writtenAt: string;
+  objective?: QuizLearningObjectiveV1;
+}
+
+interface PendingInitialLearningObjectiveOperation {
+  operation: LearningObjectiveYjsOperation;
+  baseFingerprint: string | null;
+}
+
+export interface QuizLearningObjectiveSyncAlternative {
+  operationId: string;
+  kind: 'upsert' | 'delete';
+  objective: QuizLearningObjectiveV1 | null;
+}
+
+export interface QuizLearningObjectiveSyncConflict {
+  quizId: string;
+  objectiveId: string;
+  revision: number;
+  headOperationIds: string[];
+  alternatives: QuizLearningObjectiveSyncAlternative[];
+}
+
+interface MaterializedLearningObjectiveOperations {
+  bundle: QuizLearningObjectiveBundleV1;
+  conflicts: QuizLearningObjectiveSyncConflict[];
+  operationsByObjective: Map<string, LearningObjectiveYjsOperation[]>;
+  highestOperationsByObjective: Map<string, LearningObjectiveYjsOperation[]>;
+  malformed: boolean;
+}
 
 const QuizMetadataSchema = CreateQuizInputSchema.pick({
   name: true,
@@ -1091,6 +1154,9 @@ function demoQuizMatchesSeedPayload(document: QuizDocument, payload: unknown): b
 export class QuizStoreService implements OnDestroy {
   private readonly platformId = inject(PLATFORM_ID);
   private readonly quizDocuments = signal<QuizDocument[]>([]);
+  private readonly learningObjectiveBundles = signal<
+    Readonly<Record<string, QuizLearningObjectiveBundleV1>>
+  >({});
   readonly syncRoomId = signal('');
   readonly syncConnectionState = signal<SyncConnectionState>('disconnected');
   readonly librarySharingMode = signal<LibrarySharingMode>('local');
@@ -1116,7 +1182,9 @@ export class QuizStoreService implements OnDestroy {
   readonly syncPeerInfos = signal<SyncPeerInfo[]>([]);
   private yDoc: YDoc | null = null;
   private yRoot: YMapDoc<string> | null = null;
+  private yLearningObjectivesRoot: YMapDoc<string> | null = null;
   private yPersistence: IndexedDbPersistenceInstance | null = null;
+  private pendingImportedPersistenceSyncTimeoutId: ReturnType<typeof setTimeout> | null = null;
   private yProvider: WebsocketProviderInstance | null = null;
   private yjsModulePromise: Promise<YjsModule> | null = null;
   private indexedDbPersistencePromise: Promise<IndexedDbPersistenceCtor> | null = null;
@@ -1127,6 +1195,16 @@ export class QuizStoreService implements OnDestroy {
     token: string;
     previousToken: string | null;
   } | null = null;
+  private pendingImportedQuizRestore: {
+    roomId: string;
+    baselineSerialized: string;
+    latestSerialized: string;
+    persistenceStarted: boolean;
+    persistenceSynced: boolean;
+    providerSynced: boolean;
+    providerPresetSerialized: string | null;
+    providerSerialized: string | null;
+  } | null = null;
   private yjsInitGeneration = 0;
   private yjsProviderAttachGeneration = 0;
   private hostLibraryStarted = false;
@@ -1136,6 +1214,22 @@ export class QuizStoreService implements OnDestroy {
   private hasStoredSyncRoomId = false;
   private lastSerializedQuizDocuments = '[]';
   private lastSerializedRoomId = '';
+  private lastSerializedLearningObjectives = '[]';
+  private lastSerializedLearningObjectivesRoomId = '';
+  private malformedLearningObjectiveKeys = new Set<string>();
+  private isWritingYjsSnapshot = false;
+  private learningObjectiveYjsRestoreRoomId: string | null = null;
+  private learningObjectiveYjsRestorePending = false;
+  private pendingInitialLearningObjectiveMirror: Record<
+    string,
+    QuizLearningObjectiveBundleV1
+  > | null = null;
+  private pendingInitialLearningObjectiveOperations: PendingInitialLearningObjectiveOperation[] =
+    [];
+  private readonly pendingLearningObjectiveDeleteSettlements = new Map<
+    string,
+    ReturnType<typeof setTimeout>
+  >();
   private pendingSyncMetadataRoomId: string | null = null;
   private pendingSyncMetadataSnapshot: SyncMetadataSnapshot | null = null;
   private hasPendingSyncMetadataFlush = false;
@@ -1179,6 +1273,13 @@ export class QuizStoreService implements OnDestroy {
       lastServerQuizAccessProof: quiz.lastServerQuizAccessProof ?? null,
     })),
   );
+
+  /** Warning produced while preparing a live upload with omitted learning objectives. */
+  readonly uploadLearningObjectiveWarning = signal<string | null>(null);
+  /** Concurrent same-revision CRDT branches retained until a deliberate next revision resolves them. */
+  readonly learningObjectiveSyncConflicts = signal<QuizLearningObjectiveSyncConflict[]>([]);
+  /** Corrupt or over-limit sidecars stay untouched and keep the last validated local snapshot. */
+  readonly learningObjectiveSyncError = signal<string | null>(null);
 
   constructor() {
     const roomId = this.resolveInitialSyncRoomId();
@@ -1276,6 +1377,257 @@ export class QuizStoreService implements OnDestroy {
 
   getDemoQuizId(): string | null {
     return this.getQuizById(DEMO_QUIZ_ID) ? DEMO_QUIZ_ID : null;
+  }
+
+  learningObjectivesForQuiz(quizId: string): Signal<QuizLearningObjectiveBundleV1> {
+    return computed(
+      () =>
+        this.learningObjectiveBundles()[quizId] ?? {
+          schemaVersion: 1,
+          quizId,
+          revision: 0,
+          objectives: [],
+        },
+    );
+  }
+
+  getLearningObjectiveBundle(quizId: string): QuizLearningObjectiveBundleV1 {
+    return (
+      this.learningObjectiveBundles()[quizId] ?? {
+        schemaVersion: 1,
+        quizId,
+        revision: 0,
+        objectives: [],
+      }
+    );
+  }
+
+  saveQuizLearningObjective(
+    quizId: string,
+    input: SaveQuizLearningObjectiveInput,
+    options?: { objectiveId?: string; expectedRevision?: number },
+  ): QuizLearningObjectiveV1 {
+    const quiz = this.quizDocuments().find((candidate) => candidate.id === quizId);
+    if (!quiz) {
+      throw new Error($localize`:@@learningObjectives.quizMissing:Quiz nicht gefunden.`);
+    }
+
+    const bundle = this.getLearningObjectiveBundle(quizId);
+    if (
+      options?.objectiveId &&
+      this.learningObjectiveSyncConflicts().some(
+        (conflict) => conflict.quizId === quizId && conflict.objectiveId === options.objectiveId,
+      )
+    ) {
+      throw new Error(
+        $localize`:@@learningObjectives.syncConflictMustResolve:Wähle zuerst bewusst eine der synchronisierten Fassungen aus.`,
+      );
+    }
+    const existing = options?.objectiveId
+      ? bundle.objectives.find((objective) => objective.id === options.objectiveId)
+      : undefined;
+    if (options?.objectiveId && !existing) {
+      throw new Error($localize`:@@learningObjectives.objectiveMissing:Lernziel nicht gefunden.`);
+    }
+    if (existing && options?.expectedRevision === undefined) {
+      throw new Error(
+        $localize`:@@learningObjectives.expectedRevisionRequired:Änderungen an einem Lernziel benötigen den geladenen Revisionsstand.`,
+      );
+    }
+    if (
+      existing &&
+      options?.expectedRevision !== undefined &&
+      existing.revision !== options.expectedRevision
+    ) {
+      throw new Error(
+        $localize`:@@learningObjectives.localConflict:Das Lernziel wurde inzwischen geändert. Lade den aktuellen Stand und versuche es erneut.`,
+      );
+    }
+
+    const now = monotoneLearningObjectiveTimestamp(existing);
+    const revision = existing ? existing.revision + 1 : 1;
+    const knownQuestionIds = new Set(quiz.questions.map((question) => question.id));
+    const hasMissingScopeReference =
+      input.scope.kind === 'question-set' &&
+      input.scope.sourceQuestionIds.some((id) => !knownQuestionIds.has(id));
+    const hasMissingDerivationReference =
+      existing?.origin.kind === 'model-derived' &&
+      existing.origin.derivedFromSourceQuestionIds.some((id) => !knownQuestionIds.has(id));
+    const hasMissingReference = hasMissingScopeReference || hasMissingDerivationReference;
+    if (hasMissingReference && input.confirmationState === 'confirmed') {
+      throw new Error(
+        $localize`:@@learningObjectives.missingScopeCannotConfirm:Ein Lernziel mit fehlendem Aufgabenverweis kann nicht bestätigt werden.`,
+      );
+    }
+    const previousConfirmation = existing
+      ? existing.confirmation.state === 'needs-review'
+        ? existing.confirmation.previousConfirmation
+        : existing.confirmation.state === 'confirmed'
+          ? {
+              state: 'confirmed' as const,
+              revision: existing.confirmation.confirmedRevision,
+              confirmedAt: existing.confirmation.confirmedAt,
+            }
+          : { state: 'draft' as const, revision: existing.revision }
+      : { state: 'draft' as const, revision: 0 };
+    const objective: QuizLearningObjectiveV1 = {
+      id: existing?.id ?? generateUuid(),
+      revision,
+      text: input.text.trim(),
+      scope: input.scope,
+      origin: existing?.origin ?? { kind: 'manual' },
+      confirmation: hasMissingReference
+        ? {
+            state: 'needs-review',
+            previousConfirmation,
+            currentRevision: revision,
+            reason: 'source-reference-removed',
+          }
+        : input.confirmationState === 'confirmed'
+          ? { state: 'confirmed', confirmedAt: now, confirmedRevision: revision }
+          : { state: 'draft' },
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+    };
+
+    const nextBundle = QuizLearningObjectiveBundleV1Schema.parse({
+      ...bundle,
+      revision: bundle.revision + 1,
+      objectives: existing
+        ? bundle.objectives.map((candidate) =>
+            candidate.id === objective.id ? objective : candidate,
+          )
+        : [...bundle.objectives, objective],
+    });
+    this.malformedLearningObjectiveKeys.delete(quizId);
+    this.learningObjectiveBundles.update((current) => ({ ...current, [quizId]: nextBundle }));
+    this.markDemoQuizUserModified(quizId);
+    this.persistToStorage();
+    return objective;
+  }
+
+  deleteQuizLearningObjective(quizId: string, objectiveId: string, expectedRevision: number): void {
+    if (
+      this.learningObjectiveSyncConflicts().some(
+        (conflict) => conflict.quizId === quizId && conflict.objectiveId === objectiveId,
+      )
+    ) {
+      throw new Error(
+        $localize`:@@learningObjectives.syncConflictMustResolve:Wähle zuerst bewusst eine der synchronisierten Fassungen aus.`,
+      );
+    }
+    const bundle = this.getLearningObjectiveBundle(quizId);
+    const objective = bundle.objectives.find((candidate) => candidate.id === objectiveId);
+    if (!objective) {
+      throw new Error($localize`:@@learningObjectives.objectiveMissing:Lernziel nicht gefunden.`);
+    }
+    if (objective.revision !== expectedRevision) {
+      throw new Error(
+        $localize`:@@learningObjectives.localConflict:Das Lernziel wurde inzwischen geändert. Lade den aktuellen Stand und versuche es erneut.`,
+      );
+    }
+    const nextBundle = QuizLearningObjectiveBundleV1Schema.parse({
+      ...bundle,
+      revision: bundle.revision + 1,
+      objectives: bundle.objectives.filter((candidate) => candidate.id !== objectiveId),
+    });
+    this.malformedLearningObjectiveKeys.delete(quizId);
+    this.learningObjectiveBundles.update((current) => ({ ...current, [quizId]: nextBundle }));
+    this.markDemoQuizUserModified(quizId);
+    this.persistToStorage();
+  }
+
+  resolveQuizLearningObjectiveSyncConflict(
+    quizId: string,
+    objectiveId: string,
+    operationId: string,
+  ): void {
+    const conflict = this.learningObjectiveSyncConflicts().find(
+      (candidate) => candidate.quizId === quizId && candidate.objectiveId === objectiveId,
+    );
+    const alternative = conflict?.alternatives.find(
+      (candidate) => candidate.operationId === operationId,
+    );
+    if (!conflict || !alternative) {
+      throw new Error(
+        $localize`:@@learningObjectives.syncConflictGone:Der Synchronisierungskonflikt ist nicht mehr aktuell. Prüfe den neuesten Stand.`,
+      );
+    }
+    const bundle = this.getLearningObjectiveBundle(quizId);
+    const nextRevision = conflict.revision + 1;
+    if (nextRevision > LEARNING_OBJECTIVE_REVISION_MAX) {
+      throw new Error(
+        $localize`:@@learningObjectives.revisionLimit:Dieses Lernziel hat die maximale Revisionszahl erreicht.`,
+      );
+    }
+    const now = monotoneLearningObjectiveTimestamp(alternative.objective ?? undefined);
+    const chosen = alternative.objective
+      ? {
+          ...alternative.objective,
+          revision: nextRevision,
+          updatedAt: now,
+          confirmation:
+            alternative.objective.confirmation.state === 'confirmed'
+              ? {
+                  state: 'confirmed' as const,
+                  confirmedAt: now,
+                  confirmedRevision: nextRevision,
+                }
+              : alternative.objective.confirmation.state === 'needs-review'
+                ? {
+                    ...alternative.objective.confirmation,
+                    currentRevision: nextRevision,
+                  }
+                : { state: 'draft' as const },
+        }
+      : null;
+    const withoutConflicted = bundle.objectives.filter((objective) => objective.id !== objectiveId);
+    const nextBundle = QuizLearningObjectiveBundleV1Schema.parse({
+      ...bundle,
+      revision: Math.max(bundle.revision, conflict.revision) + 1,
+      objectives: chosen ? [...withoutConflicted, chosen] : withoutConflicted,
+    });
+    const operationMap = this.learningObjectiveOperationMap(quizId);
+    if (!operationMap || !this.yDoc || !this.yLearningObjectivesRoot) {
+      throw new Error(
+        $localize`:@@learningObjectives.syncUnavailable:Der Synchronisierungsstand ist nicht verfügbar. Versuche es nach dem erneuten Verbinden noch einmal.`,
+      );
+    }
+    const resolutionOperationId = generateUuid();
+    const resolution: LearningObjectiveYjsOperation = {
+      schemaVersion: 1,
+      operationId: resolutionOperationId,
+      quizId,
+      objectiveId,
+      kind: chosen ? 'upsert' : 'delete',
+      expectedRevision: conflict.revision,
+      resultingRevision: nextRevision,
+      bundleResultRevision: nextBundle.revision,
+      parentOperationIds: [...conflict.headOperationIds].sort(),
+      writtenAt: now,
+      ...(chosen ? { objective: chosen } : {}),
+    };
+    this.isWritingYjsSnapshot = true;
+    try {
+      this.yDoc.transact(() => {
+        if (!this.appendLearningObjectiveOperation(operationMap, resolution)) {
+          throw new Error('learning-objective-oplog-limit');
+        }
+        this.yLearningObjectivesRoot!.set(quizId, QUIZ_LEARNING_OBJECTIVES_OPLOG_MARKER);
+      }, this);
+    } finally {
+      this.isWritingYjsSnapshot = false;
+    }
+    this.learningObjectiveBundles.update((current) => ({ ...current, [quizId]: nextBundle }));
+    this.markDemoQuizUserModified(quizId);
+    this.persistToStorage();
+    this.applyYjsLearningObjectivesSnapshot();
+  }
+
+  takeUploadLearningObjectiveWarning(): string | null {
+    const warning = this.uploadLearningObjectiveWarning();
+    this.uploadLearningObjectiveWarning.set(null);
+    return warning;
   }
 
   private currentQuizUpdateSource(): Pick<
@@ -1405,26 +1757,48 @@ export class QuizStoreService implements OnDestroy {
     }
 
     const now = new Date().toISOString();
+    const copiedQuizId = generateUuid();
+    const questionIdMap = new Map<string, string>();
+    const copiedQuestions = document.questions.map((question) => {
+      const copiedQuestionId = generateUuid();
+      questionIdMap.set(question.id, copiedQuestionId);
+      return {
+        ...question,
+        id: copiedQuestionId,
+        answers: question.answers.map((answer) => ({
+          ...answer,
+          id: generateUuid(),
+        })),
+      };
+    });
     const copy: QuizDocument = {
       ...document,
-      id: generateUuid(),
+      id: copiedQuizId,
       name: buildCopyName(document.name),
       createdAt: now,
       updatedAt: now,
       ...this.currentQuizUpdateSource(),
       lastServerQuizId: null,
       lastServerQuizAccessProof: null,
-      questions: document.questions.map((question) => ({
-        ...question,
-        id: generateUuid(),
-        answers: question.answers.map((answer) => ({
-          ...answer,
-          id: generateUuid(),
-        })),
-      })),
+      questions: copiedQuestions,
     };
 
     this.quizDocuments.update((current) => [copy, ...current]);
+    const sourceBundle = this.learningObjectiveBundles()[quizId];
+    if (sourceBundle) {
+      const copiedBundle = remapLearningObjectiveBundle(
+        sourceBundle,
+        copiedQuizId,
+        questionIdMap,
+        now,
+      );
+      if (copiedBundle) {
+        this.learningObjectiveBundles.update((current) => ({
+          ...current,
+          [copiedQuizId]: copiedBundle,
+        }));
+      }
+    }
     this.persistToStorage();
     return copy;
   }
@@ -1480,6 +1854,13 @@ export class QuizStoreService implements OnDestroy {
 
     this.markDemoQuizUserModified(quizId);
     this.quizDocuments.update((current) => current.filter((quiz) => quiz.id !== quizId));
+    this.malformedLearningObjectiveKeys.delete(quizId);
+    this.learningObjectiveBundles.update((current) => {
+      if (!current[quizId]) return current;
+      const next = { ...current };
+      delete next[quizId];
+      return next;
+    });
     this.persistToStorage();
   }
 
@@ -1493,6 +1874,7 @@ export class QuizStoreService implements OnDestroy {
       exportVersion: QUIZ_EXPORT_VERSION,
       exportedAt: new Date().toISOString(),
       quiz: {
+        sourceQuizId: document.id,
         name: document.name,
         ...(document.description ? { description: document.description } : {}),
         ...(document.motifImageUrl ? { motifImageUrl: document.motifImageUrl } : {}),
@@ -1516,9 +1898,11 @@ export class QuizStoreService implements OnDestroy {
         nicknameTheme: document.settings.nicknameTheme,
         bonusTokenCount: document.settings.bonusTokenCount,
         readingPhaseEnabled: document.settings.readingPhaseEnabled,
+        learningObjectives: this.getLearningObjectiveBundle(document.id),
         questions: document.questions.map((question) => {
           const shortTextSettings = resolveQuestionShortTextSettings(question);
           return {
+            sourceQuestionId: question.id,
             text: question.text,
             type: question.type,
             difficulty: question.difficulty,
@@ -1660,6 +2044,7 @@ export class QuizStoreService implements OnDestroy {
    * Validiert gegen QuizUploadInputSchema; wirft bei ungültigen Daten.
    */
   getUploadPayload(quizId: string): QuizUploadInput {
+    this.uploadLearningObjectiveWarning.set(null);
     const document = this.composeQuizDocumentForLiveUpload(quizId);
     if (!document) {
       throw new Error('Quiz nicht gefunden.');
@@ -1677,6 +2062,34 @@ export class QuizStoreService implements OnDestroy {
         $localize`:@@quizStore.uploadNeedsActiveQuestion:Mindestens eine aktive Frage ist für den Live-Start nötig.`,
       );
     }
+
+    const activeQuestionIds = new Set(activeQuestions.map((question) => question.id));
+    const sourceBundle = this.learningObjectiveBundles()[quizId];
+    const uploadObjectives = sourceBundle?.objectives.filter((objective) => {
+      const scopedIds =
+        objective.scope.kind === 'question-set' ? objective.scope.sourceQuestionIds : [];
+      const derivationIds =
+        objective.origin.kind === 'model-derived'
+          ? objective.origin.derivedFromSourceQuestionIds
+          : [];
+      return [...scopedIds, ...derivationIds].every((id) => activeQuestionIds.has(id));
+    });
+    const omittedObjectiveCount =
+      sourceBundle && uploadObjectives
+        ? sourceBundle.objectives.length - uploadObjectives.length
+        : 0;
+    if (omittedObjectiveCount > 0) {
+      this.uploadLearningObjectiveWarning.set(
+        $localize`:@@learningObjectives.uploadOmitted:${omittedObjectiveCount}:count: Lernziel(e) wurden nicht live geschaltet, weil mindestens eine referenzierte Aufgabe fehlt oder deaktiviert ist.`,
+      );
+    }
+    const uploadBundle =
+      sourceBundle && uploadObjectives
+        ? QuizLearningObjectiveBundleV1Schema.parse({
+            ...sourceBundle,
+            objectives: uploadObjectives,
+          })
+        : undefined;
 
     const UPLOAD_DESCRIPTION_MAX = 5000;
     const description =
@@ -1698,6 +2111,7 @@ export class QuizStoreService implements OnDestroy {
 
     const payload: QuizUploadInput = {
       historyScopeId,
+      sourceQuizId: document.id,
       name: document.name,
       ...(description ? { description } : {}),
       motifImageUrl: normalizeMotifImageUrlInput(document.motifImageUrl) ?? null,
@@ -1722,7 +2136,9 @@ export class QuizStoreService implements OnDestroy {
       bonusTokenCount: document.settings.bonusTokenCount ?? undefined,
       readingPhaseEnabled: document.settings.readingPhaseEnabled,
       preset: document.settings.preset,
+      ...(uploadBundle ? { learningObjectives: uploadBundle } : {}),
       questions: activeQuestions.map((q, index) => ({
+        sourceQuestionId: q.id,
         text: q.text,
         type: q.type,
         difficulty: q.difficulty,
@@ -1854,8 +2270,10 @@ export class QuizStoreService implements OnDestroy {
     }
 
     const now = new Date().toISOString();
+    const importedQuizId = overrideId ?? generateUuid();
+    const importedQuestionIdMap = new Map<string, string>();
     const imported: QuizDocument = {
-      id: overrideId ?? generateUuid(),
+      id: importedQuizId,
       name: metadata.data.name,
       description: metadata.data.description ?? null,
       motifImageUrl: metadata.data.motifImageUrl ?? null,
@@ -1885,9 +2303,13 @@ export class QuizStoreService implements OnDestroy {
         readingPhaseEnabled: quizData.readingPhaseEnabled ?? true,
         preset: ((quizData as Record<string, unknown>)['preset'] as QuizPreset) ?? 'PLAYFUL',
       }),
-      questions: quizData.questions
+      questions: [...quizData.questions]
         .sort((a, b) => a.order - b.order)
         .map((question, index) => {
+          const importedQuestionId = generateUuid();
+          if ('sourceQuestionId' in question) {
+            importedQuestionIdMap.set(question.sourceQuestionId, importedQuestionId);
+          }
           const shortTextSettings = resolveQuestionShortTextSettings(question);
           const confidenceSettings = resolveQuestionConfidenceSettings(question);
           const isNumericEstimate = question.type === 'NUMERIC_ESTIMATE';
@@ -1895,7 +2317,7 @@ export class QuizStoreService implements OnDestroy {
           const isOrdering = question.type === 'ORDERING';
           const isCategorization = question.type === 'CATEGORIZATION';
           return {
-            id: generateUuid(),
+            id: importedQuestionId,
             text: question.text,
             type: question.type,
             difficulty: question.difficulty,
@@ -1954,7 +2376,27 @@ export class QuizStoreService implements OnDestroy {
         }),
     };
 
+    let importedBundle: QuizLearningObjectiveBundleV1 | null = null;
+    if ('learningObjectives' in quizData) {
+      importedBundle = remapLearningObjectiveBundle(
+        quizData.learningObjectives,
+        importedQuizId,
+        importedQuestionIdMap,
+        now,
+      );
+      if (!importedBundle) {
+        throw new Error(
+          $localize`:@@learningObjectives.importReferenceError:Import fehlgeschlagen: Lernzielreferenzen konnten nicht eindeutig zugeordnet werden.`,
+        );
+      }
+    }
     this.quizDocuments.update((current) => [imported, ...current]);
+    if (importedBundle) {
+      this.learningObjectiveBundles.update((current) => ({
+        ...current,
+        [importedQuizId]: importedBundle!,
+      }));
+    }
     this.persistToStorage();
     return {
       quiz: imported,
@@ -2092,6 +2534,12 @@ export class QuizStoreService implements OnDestroy {
         parsed.type === 'CATEGORIZATION' ? (parsed.categorizationShuffleItems ?? true) : undefined,
     };
 
+    if (
+      questionSemanticFingerprint(existingQuestion) !== questionSemanticFingerprint(updatedQuestion)
+    ) {
+      this.markLearningObjectivesForQuestion(quizId, questionId, 'source-content-changed');
+    }
+
     const updatedAt = new Date().toISOString();
     this.quizDocuments.update((current) =>
       current.map((quiz) => {
@@ -2143,6 +2591,7 @@ export class QuizStoreService implements OnDestroy {
       throw new Error('Frage nicht gefunden.');
     }
     this.markDemoQuizUserModified(quizId);
+    this.markLearningObjectivesForQuestion(quizId, questionId, 'source-reference-removed');
 
     const updatedAt = new Date().toISOString();
     this.quizDocuments.update((current) =>
@@ -2180,6 +2629,71 @@ export class QuizStoreService implements OnDestroy {
       }),
     );
     this.persistToStorage();
+  }
+
+  private markLearningObjectivesForQuestion(
+    quizId: string,
+    questionId: string,
+    reason: LearningObjectiveNeedsReviewReason,
+  ): void {
+    const bundle = this.learningObjectiveBundles()[quizId];
+    if (!bundle) return;
+    let changed = false;
+    const objectives = bundle.objectives.map((objective) => {
+      const isDerivedFromQuestion =
+        objective.origin.kind === 'model-derived' &&
+        objective.origin.derivedFromSourceQuestionIds.includes(questionId);
+      const isScopedToQuestion =
+        objective.scope.kind === 'question-set' &&
+        objective.scope.sourceQuestionIds.includes(questionId);
+      const isAffected =
+        reason === 'source-reference-removed'
+          ? isScopedToQuestion || isDerivedFromQuestion
+          : isDerivedFromQuestion;
+      if (!isAffected) {
+        return objective;
+      }
+      if (
+        objective.confirmation.state === 'needs-review' &&
+        (objective.confirmation.reason === reason ||
+          objective.confirmation.reason === 'source-reference-removed')
+      ) {
+        return objective;
+      }
+
+      const nextRevision = objective.revision + 1;
+      const previousConfirmation =
+        objective.confirmation.state === 'confirmed'
+          ? {
+              state: 'confirmed' as const,
+              revision: objective.confirmation.confirmedRevision,
+              confirmedAt: objective.confirmation.confirmedAt,
+            }
+          : objective.confirmation.state === 'draft'
+            ? { state: 'draft' as const, revision: objective.revision }
+            : objective.confirmation.previousConfirmation;
+      changed = true;
+      const updatedAt = monotoneLearningObjectiveTimestamp(objective);
+      return {
+        ...objective,
+        revision: nextRevision,
+        updatedAt,
+        confirmation: {
+          state: 'needs-review' as const,
+          previousConfirmation,
+          currentRevision: nextRevision,
+          reason,
+        },
+      };
+    });
+    if (!changed) return;
+
+    const nextBundle = QuizLearningObjectiveBundleV1Schema.parse({
+      ...bundle,
+      revision: bundle.revision + 1,
+      objectives,
+    });
+    this.learningObjectiveBundles.update((current) => ({ ...current, [quizId]: nextBundle }));
   }
 
   getQuizById(id: string): QuizDocument | null {
@@ -2348,14 +2862,18 @@ export class QuizStoreService implements OnDestroy {
       this.setLibrarySharingMode('shared');
     }
     if (sameRoom) {
+      let importedTokenChanged = false;
       if (options?.shareToken) {
-        const tokenChanged = this.acceptShareTokenMonotonically(
+        importedTokenChanged = this.acceptShareTokenMonotonically(
           normalizedRoomId,
           options.shareToken,
           'import',
         );
-        if (tokenChanged) {
-          this.teardownYjsProvider();
+        if (importedTokenChanged) {
+          // Recreate the document so an already restored IndexedDB snapshot
+          // cannot be mixed into the authoritative first provider snapshot.
+          this.teardownYjs();
+          void this.initYjsPersistence(normalizedRoomId);
         }
       } else {
         this.loadShareSecrets(normalizedRoomId);
@@ -2364,7 +2882,11 @@ export class QuizStoreService implements OnDestroy {
       if (shouldSecureAsOrigin) {
         this.recordSyncOriginIfMissing();
       }
-      if (options?.markShared) {
+      if (
+        options?.markShared &&
+        !importedTokenChanged &&
+        this.pendingImportedShareToken?.roomId !== normalizedRoomId
+      ) {
         void this.ensureShareRegisteredAndConnect();
       }
       return;
@@ -2394,6 +2916,19 @@ export class QuizStoreService implements OnDestroy {
     }
 
     this.loadFromStorage(normalizedRoomId, false);
+    if (this.pendingImportedShareToken?.roomId === normalizedRoomId) {
+      const serialized = this.serializeQuizDocuments();
+      this.pendingImportedQuizRestore = {
+        roomId: normalizedRoomId,
+        baselineSerialized: serialized,
+        latestSerialized: serialized,
+        persistenceStarted: false,
+        persistenceSynced: !hasIndexedDbSupport(),
+        providerSynced: false,
+        providerPresetSerialized: null,
+        providerSerialized: null,
+      };
+    }
     void this.initYjsPersistence(normalizedRoomId);
   }
 
@@ -2507,6 +3042,7 @@ export class QuizStoreService implements OnDestroy {
     if (!isPlatformBrowser(this.platformId)) return;
 
     const serialized = this.serializeQuizDocuments();
+    const serializedLearningObjectives = this.serializeLearningObjectiveBundles();
     const newLocalRoomId = generateUuid();
 
     this.teardownYjs();
@@ -2515,13 +3051,17 @@ export class QuizStoreService implements OnDestroy {
     this.storeSyncRoomId(newLocalRoomId);
     this.loadSyncMetadata(newLocalRoomId);
     this.persistLocalMirror(serialized);
+    this.persistLearningObjectiveMirror(serializedLearningObjectives);
     this.updateSerializedQuizCache(newLocalRoomId, serialized);
+    this.updateSerializedLearningObjectiveCache(newLocalRoomId, serializedLearningObjectives);
     this.ensureDemoQuiz();
     void this.initYjsPersistence(newLocalRoomId);
   }
 
   private loadFromStorage(roomId: string, allowLegacyFallback: boolean): void {
     if (!isPlatformBrowser(this.platformId)) return;
+
+    this.loadLearningObjectivesFromStorage(roomId);
 
     try {
       const storageKey = this.storageKeyForRoom(roomId);
@@ -2555,8 +3095,20 @@ export class QuizStoreService implements OnDestroy {
   private persistToStorage(): void {
     this.recordLocalChange();
     const serialized = this.serializeQuizDocuments();
+    const serializedLearningObjectives = this.serializeLearningObjectiveBundles();
+    if (
+      !this.isApplyingYjsSnapshot &&
+      this.pendingImportedShareToken?.roomId === this.syncRoomId()
+    ) {
+      const pendingRestore = this.pendingImportedQuizRestore;
+      if (pendingRestore?.roomId === this.syncRoomId()) {
+        pendingRestore.latestSerialized = serialized;
+      }
+    }
+    this.capturePendingInitialLearningObjectiveOperations();
     this.persistLocalMirror(serialized);
-    this.writeYjsSnapshot(serialized);
+    this.persistLearningObjectiveMirror(serializedLearningObjectives);
+    this.writeYjsSnapshot(serialized, serializedLearningObjectives);
   }
 
   private persistLocalMirror(serialized?: string): void {
@@ -2575,8 +3127,215 @@ export class QuizStoreService implements OnDestroy {
     }
   }
 
+  private loadLearningObjectivesFromStorage(roomId: string): void {
+    this.malformedLearningObjectiveKeys.clear();
+    try {
+      const raw = localStorage.getItem(this.learningObjectiveStorageKey(roomId));
+      if (!raw) {
+        this.learningObjectiveBundles.set({});
+        this.updateSerializedLearningObjectiveCache(roomId, '[]');
+        return;
+      }
+      const parsed = JSON.parse(raw) as unknown;
+      const bundles: Record<string, QuizLearningObjectiveBundleV1> = {};
+      if (Array.isArray(parsed)) {
+        for (const candidate of parsed) {
+          const result = QuizLearningObjectiveBundleV1Schema.safeParse(candidate);
+          if (result.success) bundles[result.data.quizId] = result.data;
+        }
+      }
+      this.learningObjectiveBundles.set(bundles);
+      const normalized = JSON.stringify(
+        Object.values(bundles).sort((a, b) => a.quizId.localeCompare(b.quizId)),
+      );
+      this.updateSerializedLearningObjectiveCache(roomId, normalized);
+      if (raw !== normalized) this.persistLearningObjectiveMirror(normalized);
+    } catch {
+      this.learningObjectiveBundles.set({});
+      this.updateSerializedLearningObjectiveCache(roomId, '[]');
+    }
+  }
+
+  private beginLearningObjectiveYjsRestore(roomId: string): void {
+    if (
+      this.learningObjectiveYjsRestorePending &&
+      this.learningObjectiveYjsRestoreRoomId === roomId
+    ) {
+      return;
+    }
+    this.learningObjectiveYjsRestoreRoomId = roomId;
+    this.learningObjectiveYjsRestorePending = true;
+    this.pendingInitialLearningObjectiveMirror = this.learningObjectiveBundles();
+    this.pendingInitialLearningObjectiveOperations = [];
+  }
+
+  /**
+   * Preserve edits made while y-indexeddb is still restoring its Y.Doc. The
+   * operations receive their causal parent only after the persisted oplog is
+   * available, so an early local edit becomes a normal branch/conflict instead
+   * of being replaced by the first remote snapshot.
+   */
+  private capturePendingInitialLearningObjectiveOperations(): void {
+    const previous = this.pendingInitialLearningObjectiveMirror;
+    if (!this.learningObjectiveYjsRestorePending || !previous) return;
+
+    const current = this.learningObjectiveBundles();
+    const quizIds = new Set([...Object.keys(previous), ...Object.keys(current)]);
+    for (const quizId of [...quizIds].sort()) {
+      const previousBundle = previous[quizId];
+      const currentBundle = current[quizId];
+      const previousById = new Map(
+        (previousBundle?.objectives ?? []).map((objective) => [objective.id, objective]),
+      );
+      const currentById = new Map(
+        (currentBundle?.objectives ?? []).map((objective) => [objective.id, objective]),
+      );
+      const objectiveIds = new Set([...previousById.keys(), ...currentById.keys()]);
+
+      for (const objectiveId of [...objectiveIds].sort()) {
+        const before = previousById.get(objectiveId);
+        const after = currentById.get(objectiveId);
+        if (
+          before &&
+          after &&
+          objectivePayloadFingerprint(before) === objectivePayloadFingerprint(after)
+        ) {
+          continue;
+        }
+        if (!before && !after) continue;
+
+        const operationId = generateUuid();
+        if (after) {
+          const expectedRevision = Math.max(0, after.revision - 1);
+          this.pendingInitialLearningObjectiveOperations.push({
+            operation: {
+              schemaVersion: 1,
+              operationId,
+              quizId,
+              objectiveId,
+              kind: 'upsert',
+              expectedRevision,
+              resultingRevision: after.revision,
+              bundleResultRevision: currentBundle?.revision ?? after.revision,
+              parentOperationIds: [],
+              writtenAt: after.updatedAt,
+              objective: after,
+            },
+            baseFingerprint:
+              before?.revision === expectedRevision ? objectivePayloadFingerprint(before) : null,
+          });
+          continue;
+        }
+
+        if (!before) continue;
+
+        if (before.revision >= LEARNING_OBJECTIVE_REVISION_MAX) {
+          this.learningObjectiveSyncError.set(
+            $localize`:@@learningObjectives.revisionLimit:Dieses Lernziel hat die maximale Revisionszahl erreicht.`,
+          );
+          continue;
+        }
+        this.pendingInitialLearningObjectiveOperations.push({
+          operation: {
+            schemaVersion: 1,
+            operationId,
+            quizId,
+            objectiveId,
+            kind: 'delete',
+            expectedRevision: before.revision,
+            resultingRevision: before.revision + 1,
+            bundleResultRevision:
+              currentBundle?.revision ??
+              Math.min(LEARNING_OBJECTIVE_REVISION_MAX, (previousBundle?.revision ?? 0) + 1),
+            parentOperationIds: [],
+            writtenAt: monotoneLearningObjectiveTimestamp(before),
+          },
+          baseFingerprint: objectivePayloadFingerprint(before),
+        });
+      }
+    }
+    this.pendingInitialLearningObjectiveMirror = current;
+  }
+
+  private flushPendingInitialLearningObjectiveOperations(): boolean {
+    if (!this.yDoc || !this.yLearningObjectivesRoot) return false;
+    if (this.pendingInitialLearningObjectiveOperations.length === 0) return true;
+
+    this.isWritingYjsSnapshot = true;
+    try {
+      this.yDoc.transact(() => {
+        for (const pending of this.pendingInitialLearningObjectiveOperations) {
+          const operationMap = this.learningObjectiveOperationMap(pending.operation.quizId);
+          if (!operationMap) throw new Error('learning-objective-oplog-unavailable');
+          if (operationMap.has(pending.operation.operationId)) continue;
+          const materialized = materializeLearningObjectiveOperations(
+            pending.operation.quizId,
+            operationMap,
+          );
+          if (operationMap.size > 0 && materialized.malformed) {
+            throw new Error('learning-objective-oplog-invalid');
+          }
+          const parentOperationIds = pending.baseFingerprint
+            ? (materialized.operationsByObjective.get(pending.operation.objectiveId) ?? [])
+                .filter(
+                  (candidate) =>
+                    candidate.kind === 'upsert' &&
+                    candidate.resultingRevision === pending.operation.expectedRevision &&
+                    objectivePayloadFingerprint(candidate.objective!) === pending.baseFingerprint,
+                )
+                .sort((left, right) => left.operationId.localeCompare(right.operationId))
+                .slice(0, 1)
+                .map((candidate) => candidate.operationId)
+            : [];
+          if (
+            !this.appendLearningObjectiveOperation(operationMap, {
+              ...pending.operation,
+              parentOperationIds,
+            })
+          ) {
+            throw new Error('learning-objective-oplog-limit');
+          }
+          this.yLearningObjectivesRoot!.set(
+            pending.operation.quizId,
+            QUIZ_LEARNING_OBJECTIVES_OPLOG_MARKER,
+          );
+        }
+      }, this);
+      return true;
+    } catch {
+      this.learningObjectiveSyncError.set(
+        $localize`:@@learningObjectives.syncLimit:Der synchronisierte Lernzielverlauf ist zu groß. Änderungen bleiben lokal, bis der Konflikt bereinigt wurde.`,
+      );
+      return false;
+    } finally {
+      this.isWritingYjsSnapshot = false;
+    }
+  }
+
+  private finishLearningObjectiveYjsRestore(): void {
+    this.learningObjectiveYjsRestorePending = false;
+    this.learningObjectiveYjsRestoreRoomId = null;
+    this.pendingInitialLearningObjectiveMirror = null;
+    this.pendingInitialLearningObjectiveOperations = [];
+  }
+
+  private persistLearningObjectiveMirror(serialized?: string): void {
+    if (!isPlatformBrowser(this.platformId)) return;
+    const roomId = this.syncRoomId();
+    if (!roomId) return;
+    const payload = serialized ?? this.serializeLearningObjectiveBundles();
+    try {
+      localStorage.setItem(this.learningObjectiveStorageKey(roomId), payload);
+      this.updateSerializedLearningObjectiveCache(roomId, payload);
+    } catch {
+      // Ignore quota/unavailable storage and keep in-memory state.
+    }
+  }
+
   private async initYjsPersistence(roomId: string): Promise<void> {
     if (!isPlatformBrowser(this.platformId)) return;
+
+    this.beginLearningObjectiveYjsRestore(roomId);
 
     const generation = ++this.yjsInitGeneration;
 
@@ -2586,23 +3345,22 @@ export class QuizStoreService implements OnDestroy {
 
       const yDoc = new Y.Doc();
       const yRoot = yDoc.getMap<string>('quiz-library');
+      const yLearningObjectivesRoot = yDoc.getMap<string>(QUIZ_LEARNING_OBJECTIVES_ROOT_KEY);
       yRoot.observe(this.onYjsRootChanged);
+      yLearningObjectivesRoot.observe(this.onYjsLearningObjectivesChanged);
+      yDoc.on('update', this.onYjsDocumentUpdated);
       this.yDoc = yDoc;
       this.yRoot = yRoot;
+      this.yLearningObjectivesRoot = yLearningObjectivesRoot;
 
-      if (hasIndexedDbSupport()) {
-        const IndexeddbPersistence = await this.loadIndexedDbPersistenceCtor();
-        if (!this.canUseYjsSetupResult(generation, roomId)) {
-          yRoot.unobserve(this.onYjsRootChanged);
-          yDoc.destroy();
-          return;
-        }
-        this.yPersistence = new IndexeddbPersistence(`${QUIZ_YDOC_NAME}:${roomId}`, yDoc);
-        this.yPersistence.once('synced', () => {
-          if (this.yDoc === yDoc && this.syncRoomId() === roomId) {
-            this.syncFromYjsOrSeed();
-          }
-        });
+      const deferPersistenceUntilProvider =
+        hasIndexedDbSupport() &&
+        this.pendingImportedShareToken?.roomId === roomId &&
+        this.pendingImportedQuizRestore?.roomId === roomId;
+      if (!hasIndexedDbSupport()) {
+        this.handleInitialYjsSourceSynced(roomId, 'persistence');
+      } else if (!deferPersistenceUntilProvider) {
+        await this.attachYjsIndexedDbPersistence(roomId, yDoc, generation);
       }
 
       await this.ensureShareRegisteredAndConnect(generation, roomId);
@@ -2612,6 +3370,142 @@ export class QuizStoreService implements OnDestroy {
         this.syncConnectionState.set('disconnected');
       }
     }
+  }
+
+  private async attachYjsIndexedDbPersistence(
+    roomId: string,
+    yDoc: YDoc,
+    generation: number,
+  ): Promise<void> {
+    if (this.yPersistence || !hasIndexedDbSupport()) return;
+    const IndexeddbPersistence = await this.loadIndexedDbPersistenceCtor();
+    if (!this.canUseYjsSetupResult(generation, roomId) || this.yDoc !== yDoc) return;
+    const persistence = new IndexeddbPersistence(`${QUIZ_YDOC_NAME}:${roomId}`, yDoc);
+    this.yPersistence = persistence;
+    persistence.once('synced', () => {
+      if (this.yPersistence === persistence && this.yDoc === yDoc && this.syncRoomId() === roomId) {
+        this.clearPendingImportedPersistenceSyncTimeout();
+        this.handleInitialYjsSourceSynced(roomId, 'persistence');
+      }
+    });
+    this.schedulePendingImportedPersistenceSyncTimeout(roomId, yDoc, generation, persistence);
+  }
+
+  private schedulePendingImportedPersistenceSyncTimeout(
+    roomId: string,
+    yDoc: YDoc,
+    generation: number,
+    persistence: IndexedDbPersistenceInstance,
+  ): void {
+    const pendingShare = this.pendingImportedShareToken;
+    const pendingRestore = this.pendingImportedQuizRestore;
+    if (
+      pendingShare?.roomId !== roomId ||
+      pendingRestore?.roomId !== roomId ||
+      !pendingRestore.providerSynced
+    ) {
+      return;
+    }
+
+    this.clearPendingImportedPersistenceSyncTimeout();
+    this.pendingImportedPersistenceSyncTimeoutId = setTimeout(() => {
+      this.pendingImportedPersistenceSyncTimeoutId = null;
+      void this.recoverPendingImportedPersistenceFailure(roomId, yDoc, generation, persistence);
+    }, QUIZ_IMPORTED_PERSISTENCE_SYNC_TIMEOUT_MS);
+  }
+
+  private clearPendingImportedPersistenceSyncTimeout(): void {
+    if (this.pendingImportedPersistenceSyncTimeoutId === null) return;
+    clearTimeout(this.pendingImportedPersistenceSyncTimeoutId);
+    this.pendingImportedPersistenceSyncTimeoutId = null;
+  }
+
+  private async recoverPendingImportedPersistenceFailure(
+    roomId: string,
+    yDoc: YDoc,
+    generation: number,
+    persistence: IndexedDbPersistenceInstance | null = null,
+  ): Promise<void> {
+    if (!this.canUseYjsSetupResult(generation, roomId) || this.yDoc !== yDoc) return;
+    if (
+      this.pendingImportedShareToken?.roomId !== roomId ||
+      this.pendingImportedQuizRestore?.roomId !== roomId ||
+      !this.pendingImportedQuizRestore.providerSynced
+    ) {
+      return;
+    }
+    if (persistence !== null && this.yPersistence !== persistence) return;
+    if (persistence === null && this.yPersistence !== null) return;
+
+    this.clearPendingImportedPersistenceSyncTimeout();
+    if (persistence !== null) {
+      this.yPersistence = null;
+      const cacheCleared = await this.clearFailedImportedPersistence(roomId, persistence);
+      if (
+        !this.canUseYjsSetupResult(generation, roomId) ||
+        this.yDoc !== yDoc ||
+        this.yPersistence !== null ||
+        this.pendingImportedShareToken?.roomId !== roomId ||
+        this.pendingImportedQuizRestore?.roomId !== roomId
+      ) {
+        return;
+      }
+      if (!cacheCleared) {
+        // Never confirm an import while a known stale cache could be attached
+        // normally on the next reload and forwarded to the live relay.
+        this.teardownYjs();
+        this.syncConnectionState.set('disconnected');
+        return;
+      }
+    }
+    this.handleInitialYjsSourceSynced(roomId, 'persistence');
+  }
+
+  private async clearFailedImportedPersistence(
+    roomId: string,
+    persistence: IndexedDbPersistenceInstance,
+  ): Promise<boolean> {
+    let clearTimeoutId: ReturnType<typeof setTimeout> | null = null;
+    const clearResult = await Promise.race([
+      Promise.resolve()
+        .then(() => persistence.clearData())
+        .then(
+          () => true,
+          () => false,
+        ),
+      new Promise<boolean>((resolve) => {
+        clearTimeoutId = setTimeout(
+          () => resolve(false),
+          QUIZ_IMPORTED_PERSISTENCE_CLEAR_TIMEOUT_MS,
+        );
+      }),
+    ]);
+    if (clearTimeoutId !== null) clearTimeout(clearTimeoutId);
+    if (clearResult) return true;
+
+    return this.deleteIndexedDbDatabase(`${QUIZ_YDOC_NAME}:${roomId}`);
+  }
+
+  private deleteIndexedDbDatabase(name: string): Promise<boolean> {
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = (deleted: boolean): void => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeoutId);
+        resolve(deleted);
+      };
+      const timeoutId = setTimeout(() => finish(false), QUIZ_IMPORTED_PERSISTENCE_CLEAR_TIMEOUT_MS);
+      try {
+        const request = globalThis.indexedDB.deleteDatabase(name);
+        request.onsuccess = () => finish(true);
+        request.onerror = () => finish(false);
+        // A blocked deletion stays pending until the old connection closes;
+        // only onsuccess proves that a later reload cannot restore stale data.
+      } catch {
+        finish(false);
+      }
+    });
   }
 
   /** Yjs-WebSocket nur bei geteilter Bibliothek – lokal reicht IndexedDB (keine WS-Konsolenfehler ohne Server). */
@@ -2704,8 +3598,7 @@ export class QuizStoreService implements OnDestroy {
     provider.awareness.on('change', this.onAwarenessChanged);
     provider.on('sync', (isSynced: boolean) => {
       if (isSynced && this.yDoc === yDoc && this.syncRoomId() === expectedRoomId) {
-        this.confirmPendingImportedShareToken(expectedRoomId, shareToken);
-        this.syncFromYjsOrSeed();
+        this.handleInitialYjsSourceSynced(expectedRoomId, 'provider', shareToken);
       }
     });
     let rejectionCheckInFlight = false;
@@ -2764,8 +3657,11 @@ export class QuizStoreService implements OnDestroy {
 
   private teardownYjs(): void {
     this.yjsInitGeneration++;
+    this.clearPendingImportedPersistenceSyncTimeout();
     try {
       this.yRoot?.unobserve(this.onYjsRootChanged);
+      this.yLearningObjectivesRoot?.unobserve(this.onYjsLearningObjectivesChanged);
+      this.yDoc?.off('update', this.onYjsDocumentUpdated);
     } catch {
       // Best effort cleanup.
     }
@@ -2774,7 +3670,13 @@ export class QuizStoreService implements OnDestroy {
     this.yDoc?.destroy();
     this.yPersistence = null;
     this.yRoot = null;
+    this.yLearningObjectivesRoot = null;
     this.yDoc = null;
+    this.finishLearningObjectiveYjsRestore();
+    for (const timeoutId of this.pendingLearningObjectiveDeleteSettlements.values()) {
+      clearTimeout(timeoutId);
+    }
+    this.pendingLearningObjectiveDeleteSettlements.clear();
     this.syncPeerInfos.set([]);
   }
 
@@ -2835,11 +3737,37 @@ export class QuizStoreService implements OnDestroy {
   }
 
   private syncFromYjsOrSeed(): void {
+    // A newly imported share has no authoritative local IndexedDB state yet.
+    // Wait for the provider's first successful sync before seeding anything;
+    // otherwise an empty local snapshot can win Y.Map's last-writer merge and
+    // erase the already shared library. The provider confirms the pending token
+    // only after both the provider and IndexedDB restore have completed.
+    if (this.pendingImportedShareToken?.roomId === this.syncRoomId()) return;
+
+    const hasLearningObjectiveMarker =
+      this.yRoot?.get(QUIZ_LEARNING_OBJECTIVES_INITIALIZED_KEY) === '1';
+    const hasLearningObjectiveSnapshot =
+      hasLearningObjectiveMarker || (this.yLearningObjectivesRoot?.size ?? 0) > 0;
+    if (hasLearningObjectiveSnapshot) {
+      this.migrateLegacyLearningObjectiveEntries();
+      if (this.flushPendingInitialLearningObjectiveOperations()) {
+        this.finishLearningObjectiveYjsRestore();
+        this.applyYjsLearningObjectivesSnapshot();
+      }
+    } else {
+      this.finishLearningObjectiveYjsRestore();
+    }
+
     const hasQuizSnapshot = typeof this.yRoot?.get(QUIZ_YDOC_ROOT_KEY) === 'string';
     if (hasQuizSnapshot) {
-      this.applyYjsSnapshot();
+      if (this.applyYjsSnapshot()) {
+        this.reapplyPendingImportedQuizChanges();
+      }
     } else if (this.quizDocuments().length > 0) {
+      this.pendingImportedQuizRestore = null;
       this.writeYjsSnapshot();
+    } else {
+      this.pendingImportedQuizRestore = null;
     }
 
     const hasPresetSnapshot = typeof this.yRoot?.get(QUIZ_YDOC_PRESET_KEY) === 'string';
@@ -2848,30 +3776,420 @@ export class QuizStoreService implements OnDestroy {
     } else {
       this.writePresetSnapshotToYjs();
     }
+
+    if (!hasLearningObjectiveMarker) {
+      this.writeYjsSnapshot();
+    }
   }
 
-  private readonly onYjsRootChanged = (): void => {
+  private handleInitialYjsSourceSynced(
+    roomId: string,
+    source: 'persistence' | 'provider',
+    shareToken: string | null = null,
+  ): void {
+    const pendingShare = this.pendingImportedShareToken;
+    const pendingRestore = this.pendingImportedQuizRestore;
+    if (pendingShare?.roomId === roomId) {
+      if (pendingRestore?.roomId !== roomId) return;
+      if (source === 'provider') {
+        if (!shareToken || pendingShare.token !== shareToken) return;
+        if (!this.capturePendingImportedProviderSnapshot()) return;
+        pendingRestore.providerSynced = true;
+        if (!pendingRestore.persistenceSynced && !pendingRestore.persistenceStarted) {
+          const yDoc = this.yDoc;
+          if (!yDoc) return;
+          pendingRestore.persistenceStarted = true;
+          // Keep a stale IndexedDB update away from the live relay. y-indexeddb
+          // applies cached updates with its own origin, which y-websocket would
+          // otherwise forward before the authoritative provider snapshot is
+          // restored below.
+          this.teardownYjsProvider();
+          const generation = this.yjsInitGeneration;
+          void this.attachYjsIndexedDbPersistence(roomId, yDoc, generation).catch(() => {
+            if (this.canUseYjsSetupResult(generation, roomId) && this.yDoc === yDoc) {
+              void this.recoverPendingImportedPersistenceFailure(roomId, yDoc, generation);
+            }
+          });
+        }
+      } else {
+        // Imported rooms attach IndexedDB only after capturing an isolated
+        // provider snapshot. Ignore callbacks from a superseded persistence.
+        if (!pendingRestore.providerSynced) return;
+        pendingRestore.persistenceSynced = true;
+      }
+      if (!pendingRestore.providerSynced || !pendingRestore.persistenceSynced) return;
+
+      let providerQuizzes: QuizDocument[];
+      try {
+        providerQuizzes = normalizeStoredQuizzes(
+          JSON.parse(pendingRestore.providerSerialized ?? '[]') as unknown,
+        );
+      } catch {
+        return;
+      }
+      const merged = this.rebasePendingImportedQuizChanges(providerQuizzes);
+      const serialized = JSON.stringify(merged);
+      this.quizDocuments.set(merged);
+      this.restorePendingImportedProviderPreset();
+      this.confirmPendingImportedShareToken(roomId, pendingShare.token);
+      this.pendingImportedQuizRestore = null;
+      this.persistLocalMirror(serialized);
+      this.writeYjsSnapshot(serialized, undefined, pendingRestore.providerPresetSerialized);
+      this.syncFromYjsOrSeed();
+      void this.attachYjsWebSocketProviderIfNeeded(this.yjsInitGeneration, roomId);
+      return;
+    }
+
+    if (source === 'provider') {
+      this.confirmPendingImportedShareToken(roomId, shareToken);
+    }
+    this.syncFromYjsOrSeed();
+  }
+
+  private capturePendingImportedProviderSnapshot(): boolean {
+    const pendingRestore = this.pendingImportedQuizRestore;
+    if (!pendingRestore || pendingRestore.roomId !== this.syncRoomId()) return false;
+    const raw = this.yRoot?.get(QUIZ_YDOC_ROOT_KEY);
+    try {
+      pendingRestore.providerSerialized =
+        typeof raw === 'string'
+          ? JSON.stringify(normalizeStoredQuizzes(JSON.parse(raw) as unknown))
+          : '[]';
+      const rawPreset = this.yRoot?.get(QUIZ_YDOC_PRESET_KEY);
+      try {
+        const providerPreset =
+          typeof rawPreset === 'string'
+            ? normalizeHomePresetSnapshot(JSON.parse(rawPreset) as unknown)
+            : null;
+        pendingRestore.providerPresetSerialized = providerPreset
+          ? JSON.stringify(providerPreset)
+          : null;
+      } catch {
+        pendingRestore.providerPresetSerialized = null;
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private restorePendingImportedProviderPreset(): void {
+    const pendingRestore = this.pendingImportedQuizRestore;
+    if (!pendingRestore || !this.yDoc || !this.yRoot || !isPlatformBrowser(this.platformId)) return;
+
+    let providerPreset: HomePresetSnapshot | null;
+    try {
+      providerPreset = pendingRestore.providerPresetSerialized
+        ? normalizeHomePresetSnapshot(
+            JSON.parse(pendingRestore.providerPresetSerialized) as unknown,
+          )
+        : null;
+    } catch {
+      return;
+    }
+
+    this.isWritingYjsSnapshot = true;
+    try {
+      this.yDoc.transact(() => {
+        if (pendingRestore.providerPresetSerialized === null) {
+          this.yRoot!.delete(QUIZ_YDOC_PRESET_KEY);
+        } else {
+          this.yRoot!.set(QUIZ_YDOC_PRESET_KEY, pendingRestore.providerPresetSerialized);
+        }
+      }, this);
+      try {
+        applyHomePresetSnapshot(
+          providerPreset ?? {
+            theme: null,
+            preset: null,
+            seriousOptions: null,
+            playfulOptions: null,
+          },
+        );
+      } catch {
+        // localStorage may be disabled or full. The authoritative Yjs value is
+        // already restored; do not strand the imported share in pending state.
+      }
+    } finally {
+      this.isWritingYjsSnapshot = false;
+    }
+  }
+
+  private readonly onYjsRootChanged = (
+    _event: import('yjs').YMapEvent<string>,
+    transaction: import('yjs').Transaction,
+  ): void => {
+    if (this.isWritingYjsSnapshot) return;
+    if (
+      this.yProvider !== null &&
+      transaction.origin === this.yProvider &&
+      this.pendingImportedQuizRestore?.providerSynced
+    ) {
+      this.capturePendingImportedProviderSnapshot();
+    }
+    if (!this.learningObjectiveYjsRestorePending) {
+      this.migrateLegacyLearningObjectiveEntries();
+      this.applyYjsLearningObjectivesSnapshot();
+    }
     this.applyYjsSnapshot();
     this.applyYjsPresetSnapshot();
   };
 
-  private applyYjsSnapshot(): void {
-    if (!this.yRoot) return;
+  private readonly onYjsLearningObjectivesChanged = (): void => {
+    if (this.isWritingYjsSnapshot || this.learningObjectiveYjsRestorePending) return;
+    this.migrateLegacyLearningObjectiveEntries();
+    this.applyYjsLearningObjectivesSnapshot();
+    this.applyYjsSnapshot();
+  };
+
+  private readonly onYjsDocumentUpdated = (_update: Uint8Array, origin: unknown): void => {
+    if (origin === this || this.isWritingYjsSnapshot || this.learningObjectiveYjsRestorePending) {
+      return;
+    }
+    this.migrateLegacyLearningObjectiveEntries();
+    this.applyYjsLearningObjectivesSnapshot();
+  };
+
+  private learningObjectiveOperationMap(quizId: string): YMapDoc<string> | null {
+    if (!this.yDoc || !UUID_PATTERN.test(quizId)) return null;
+    return this.yDoc.getMap<string>(`${QUIZ_LEARNING_OBJECTIVES_OPLOG_PREFIX}:${quizId}`);
+  }
+
+  /**
+   * Converts the former whole-bundle value to append-only per-objective operations.
+   * The operation map and format marker are committed in one Yjs transaction so a
+   * concurrent offline writer cannot observe a marker without its migration seed.
+   */
+  private migrateLegacyLearningObjectiveEntries(): void {
+    if (
+      !this.yDoc ||
+      !this.yLearningObjectivesRoot ||
+      this.isWritingYjsSnapshot ||
+      this.isApplyingYjsSnapshot
+    ) {
+      return;
+    }
+    const legacy: Array<{ quizId: string; bundle: QuizLearningObjectiveBundleV1 }> = [];
+    for (const [quizId, raw] of this.yLearningObjectivesRoot.entries()) {
+      if (raw === QUIZ_LEARNING_OBJECTIVES_OPLOG_MARKER || !UUID_PATTERN.test(quizId)) continue;
+      try {
+        const parsed = QuizLearningObjectiveBundleV1Schema.safeParse(JSON.parse(raw) as unknown);
+        if (parsed.success && parsed.data.quizId === quizId) {
+          legacy.push({ quizId, bundle: parsed.data });
+        }
+      } catch {
+        // Malformed legacy values intentionally remain untouched.
+      }
+    }
+    if (legacy.length === 0) return;
+
+    this.isWritingYjsSnapshot = true;
+    try {
+      this.yDoc.transact(() => {
+        for (const { quizId, bundle } of legacy) {
+          const operationMap = this.learningObjectiveOperationMap(quizId);
+          if (!operationMap) continue;
+          if (!this.appendLegacyLearningObjectiveBundleOperations(quizId, operationMap, bundle)) {
+            continue;
+          }
+          this.yLearningObjectivesRoot!.set(quizId, QUIZ_LEARNING_OBJECTIVES_OPLOG_MARKER);
+        }
+      }, this);
+    } finally {
+      this.isWritingYjsSnapshot = false;
+    }
+  }
+
+  /**
+   * A mixed-version peer can write a legacy whole-bundle value after this
+   * client has already migrated the quiz. Translate that value into causal
+   * operations as well: equal-revision edits become visible conflicts instead
+   * of being discarded, while a stale bundle cannot infer deletion of a goal
+   * that was created concurrently in the oplog.
+   */
+  private appendLegacyLearningObjectiveBundleOperations(
+    quizId: string,
+    operationMap: YMapDoc<string>,
+    bundle: QuizLearningObjectiveBundleV1,
+  ): boolean {
+    const materialized = materializeLearningObjectiveOperations(quizId, operationMap);
+    if (operationMap.size > 0 && materialized.malformed) {
+      this.malformedLearningObjectiveKeys.add(quizId);
+      return false;
+    }
+
+    const currentById = new Map(
+      materialized.bundle.objectives.map((objective) => [objective.id, objective]),
+    );
+    const desiredById = new Map(bundle.objectives.map((objective) => [objective.id, objective]));
+    const pending: LearningObjectiveYjsOperation[] = [];
+
+    for (const objective of bundle.objectives) {
+      const current = currentById.get(objective.id);
+      if (
+        current &&
+        objectivePayloadFingerprint(current) === objectivePayloadFingerprint(objective)
+      ) {
+        continue;
+      }
+      const objectiveOperations = materialized.operationsByObjective.get(objective.id) ?? [];
+      const expectedRevision = objective.revision === 0 ? null : objective.revision - 1;
+      const parentCandidates =
+        expectedRevision === null
+          ? []
+          : objectiveOperations.filter(
+              (operation) => operation.resultingRevision === expectedRevision,
+            );
+      // A legacy bundle has no operation identity. Claim one causal parent only
+      // when it is unambiguous; otherwise the rootless branch remains a head and
+      // requires deliberate conflict resolution.
+      const parentOperationIds =
+        parentCandidates.length === 1 ? [parentCandidates[0]!.operationId] : [];
+      const operationId = generateUuid();
+      pending.push({
+        schemaVersion: 1,
+        operationId,
+        quizId,
+        objectiveId: objective.id,
+        kind: 'upsert',
+        expectedRevision,
+        resultingRevision: objective.revision,
+        bundleResultRevision: bundle.revision,
+        parentOperationIds,
+        writtenAt: objective.updatedAt,
+        objective,
+      });
+    }
+
+    for (const [objectiveId, current] of currentById.entries()) {
+      if (desiredById.has(objectiveId)) continue;
+      const objectiveOperations = materialized.operationsByObjective.get(objectiveId) ?? [];
+      const latestKnownBundleRevision = Math.max(
+        0,
+        ...objectiveOperations.map((operation) => operation.bundleResultRevision),
+      );
+      // Missing entries in an equally old whole-bundle snapshot can be caused
+      // by a concurrent create on another client. Only a strictly newer bundle
+      // is allowed to express deletion of an already materialized objective.
+      if (bundle.revision <= latestKnownBundleRevision) continue;
+      if (current.revision >= LEARNING_OBJECTIVE_REVISION_MAX) return false;
+      const heads = materialized.highestOperationsByObjective.get(objectiveId) ?? [];
+      const operationId = generateUuid();
+      pending.push({
+        schemaVersion: 1,
+        operationId,
+        quizId,
+        objectiveId,
+        kind: 'delete',
+        expectedRevision: current.revision,
+        resultingRevision: current.revision + 1,
+        bundleResultRevision: bundle.revision,
+        parentOperationIds: heads.map((operation) => operation.operationId).sort(),
+        writtenAt: monotoneLearningObjectiveTimestamp(current),
+      });
+    }
+
+    if (operationMap.size + pending.length > QUIZ_LEARNING_OBJECTIVES_OPLOG_HARD_LIMIT) {
+      this.learningObjectiveSyncError.set(
+        $localize`:@@learningObjectives.syncLimit:Der synchronisierte Lernzielverlauf ist zu groß. Änderungen bleiben lokal, bis der Konflikt bereinigt wurde.`,
+      );
+      return false;
+    }
+    for (const operation of pending) {
+      operationMap.set(operation.operationId, JSON.stringify(operation));
+    }
+    return true;
+  }
+
+  private applyYjsLearningObjectivesSnapshot(): void {
+    if (!this.yLearningObjectivesRoot) return;
+    const bundles: Record<string, QuizLearningObjectiveBundleV1> = {};
+    const malformedKeys = new Set<string>();
+    const conflicts: QuizLearningObjectiveSyncConflict[] = [];
+    const current = this.learningObjectiveBundles();
+    for (const [key, raw] of this.yLearningObjectivesRoot.entries()) {
+      if (typeof raw !== 'string') {
+        malformedKeys.add(key);
+        if (current[key]) bundles[key] = current[key];
+        continue;
+      }
+      if (raw === QUIZ_LEARNING_OBJECTIVES_OPLOG_MARKER) {
+        const operationMap = this.learningObjectiveOperationMap(key);
+        const materialized = operationMap
+          ? materializeLearningObjectiveOperations(key, operationMap)
+          : null;
+        if (!materialized || materialized.malformed) {
+          malformedKeys.add(key);
+          if (current[key]) bundles[key] = current[key];
+          continue;
+        }
+        bundles[key] = materialized.bundle;
+        conflicts.push(...materialized.conflicts);
+        continue;
+      }
+      try {
+        const parsed = QuizLearningObjectiveBundleV1Schema.safeParse(JSON.parse(raw) as unknown);
+        if (parsed.success && parsed.data.quizId === key) {
+          bundles[key] = parsed.data;
+        } else {
+          malformedKeys.add(key);
+          if (current[key]) bundles[key] = current[key];
+        }
+      } catch {
+        malformedKeys.add(key);
+        if (current[key]) bundles[key] = current[key];
+      }
+    }
+    this.malformedLearningObjectiveKeys = malformedKeys;
+    this.learningObjectiveSyncConflicts.set(conflicts);
+    this.learningObjectiveSyncError.set(
+      malformedKeys.size > 0
+        ? $localize`:@@learningObjectives.syncInvalid:Mindestens ein synchronisierter Lernzielstand ist beschädigt oder zu groß. Der letzte gültige Stand bleibt erhalten.`
+        : null,
+    );
+    const serialized = JSON.stringify(
+      Object.values(bundles).sort((a, b) => a.quizId.localeCompare(b.quizId)),
+    );
+    if (
+      serialized === this.lastSerializedLearningObjectives &&
+      this.lastSerializedLearningObjectivesRoomId === this.syncRoomId()
+    ) {
+      return;
+    }
+    this.learningObjectiveBundles.set(bundles);
+    this.persistLearningObjectiveMirror(serialized);
+  }
+
+  private applyYjsSnapshot(): boolean {
+    if (!this.yRoot) return false;
 
     const raw = this.yRoot.get(QUIZ_YDOC_ROOT_KEY);
-    if (typeof raw !== 'string') return;
-    if (raw === this.lastSerializedQuizDocuments && this.lastSerializedRoomId === this.syncRoomId())
-      return;
+    if (typeof raw !== 'string') return false;
+    if (
+      this.pendingImportedQuizRestore?.roomId !== this.syncRoomId() &&
+      raw === this.lastSerializedQuizDocuments &&
+      this.lastSerializedRoomId === this.syncRoomId()
+    ) {
+      return true;
+    }
 
     let demoReseeded = false;
+    let learningObjectivesChanged = false;
+    let applied = false;
     try {
       const parsed = JSON.parse(raw) as unknown;
-      const validQuizzes = normalizeStoredQuizzes(parsed);
-      const lastRemoteChangedQuiz = determineLastChangedQuiz(this.quizDocuments(), validQuizzes);
+      const remoteQuizzes = normalizeStoredQuizzes(parsed);
+      const validQuizzes = this.rebasePendingImportedQuizChanges(remoteQuizzes);
+      const previousQuizzes = this.quizDocuments();
+      const objectivesBefore = this.serializeLearningObjectiveBundles();
+      const lastRemoteChangedQuiz = determineLastChangedQuiz(previousQuizzes, validQuizzes);
       const hadDemoQuiz = validQuizzes.some((q) => q.id === DEMO_QUIZ_ID);
 
       this.isApplyingYjsSnapshot = true;
+      this.reconcileRemoteQuestionChanges(previousQuizzes, validQuizzes);
+      learningObjectivesChanged = objectivesBefore !== this.serializeLearningObjectiveBundles();
       this.quizDocuments.set(validQuizzes);
+      this.scheduleLearningObjectiveCleanupForMissingQuizzes(previousQuizzes, validQuizzes, raw);
       if (lastRemoteChangedQuiz) {
         this.recordRemoteSync(lastRemoteChangedQuiz);
       }
@@ -2882,6 +4200,7 @@ export class QuizStoreService implements OnDestroy {
       } else {
         this.persistToStorage();
       }
+      applied = true;
     } catch {
       // Ignore malformed CRDT payload and keep current in-memory state.
     } finally {
@@ -2891,7 +4210,168 @@ export class QuizStoreService implements OnDestroy {
         const serialized = this.serializeQuizDocuments();
         this.updateSerializedQuizCache(this.syncRoomId(), serialized);
         this.writeYjsSnapshot(serialized);
+      } else if (learningObjectivesChanged) {
+        const serializedLearningObjectives = this.serializeLearningObjectiveBundles();
+        this.persistLearningObjectiveMirror(serializedLearningObjectives);
+        this.writeYjsSnapshot(undefined, serializedLearningObjectives);
       }
+    }
+    return applied;
+  }
+
+  private reapplyPendingImportedQuizChanges(): void {
+    const pending = this.pendingImportedQuizRestore;
+    if (!pending || pending.roomId !== this.syncRoomId()) return;
+
+    let baseline: QuizDocument[];
+    let latest: QuizDocument[];
+    try {
+      baseline = normalizeStoredQuizzes(JSON.parse(pending.baselineSerialized) as unknown);
+      latest = normalizeStoredQuizzes(JSON.parse(pending.latestSerialized) as unknown);
+    } catch {
+      this.pendingImportedQuizRestore = null;
+      return;
+    }
+    this.pendingImportedQuizRestore = null;
+
+    const { quizzes: merged, hasDelta } = this.mergeQuizDocumentDelta(
+      baseline,
+      latest,
+      this.quizDocuments(),
+    );
+    if (!hasDelta) return;
+    this.quizDocuments.set(merged);
+    const serialized = JSON.stringify(merged);
+    this.persistLocalMirror(serialized);
+    this.writeYjsSnapshot(serialized);
+  }
+
+  private rebasePendingImportedQuizChanges(remoteQuizzes: QuizDocument[]): QuizDocument[] {
+    const pending = this.pendingImportedQuizRestore;
+    if (!pending || pending.roomId !== this.syncRoomId()) return remoteQuizzes;
+
+    try {
+      const baseline = normalizeStoredQuizzes(JSON.parse(pending.baselineSerialized) as unknown);
+      const latest = normalizeStoredQuizzes(JSON.parse(pending.latestSerialized) as unknown);
+      const { quizzes: merged } = this.mergeQuizDocumentDelta(baseline, latest, remoteQuizzes);
+      pending.baselineSerialized = JSON.stringify(remoteQuizzes);
+      pending.latestSerialized = JSON.stringify(merged);
+      return merged;
+    } catch {
+      this.pendingImportedQuizRestore = null;
+      return remoteQuizzes;
+    }
+  }
+
+  private mergeQuizDocumentDelta(
+    baseline: readonly QuizDocument[],
+    latest: readonly QuizDocument[],
+    target: readonly QuizDocument[],
+  ): { quizzes: QuizDocument[]; hasDelta: boolean } {
+    const baselineById = new Map(baseline.map((quiz) => [quiz.id, quiz]));
+    const latestById = new Map(latest.map((quiz) => [quiz.id, quiz]));
+    const mergedById = new Map(target.map((quiz) => [quiz.id, quiz]));
+    let hasDelta = false;
+
+    for (const quiz of latest) {
+      const before = baselineById.get(quiz.id);
+      if (before && JSON.stringify(before) === JSON.stringify(quiz)) continue;
+      mergedById.set(quiz.id, quiz);
+      hasDelta = true;
+    }
+    for (const quiz of baseline) {
+      if (latestById.has(quiz.id)) continue;
+      mergedById.delete(quiz.id);
+      hasDelta = true;
+    }
+
+    return {
+      quizzes: [...mergedById.values()].sort(
+        (left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt),
+      ),
+      hasDelta,
+    };
+  }
+
+  private reconcileRemoteQuestionChanges(
+    previousQuizzes: readonly QuizDocument[],
+    nextQuizzes: readonly QuizDocument[],
+  ): void {
+    const nextByQuizId = new Map(nextQuizzes.map((quiz) => [quiz.id, quiz]));
+    for (const previousQuiz of previousQuizzes) {
+      const nextQuiz = nextByQuizId.get(previousQuiz.id);
+      // A whole quiz may disappear temporarily during IndexedDB/provider reconciliation.
+      if (!nextQuiz) continue;
+      const nextQuestions = new Map(nextQuiz.questions.map((question) => [question.id, question]));
+      for (const previousQuestion of previousQuiz.questions) {
+        const nextQuestion = nextQuestions.get(previousQuestion.id);
+        if (!nextQuestion) {
+          this.markLearningObjectivesForQuestion(
+            previousQuiz.id,
+            previousQuestion.id,
+            'source-reference-removed',
+          );
+        } else if (
+          questionSemanticFingerprint(previousQuestion) !==
+          questionSemanticFingerprint(nextQuestion)
+        ) {
+          this.markLearningObjectivesForQuestion(
+            previousQuiz.id,
+            previousQuestion.id,
+            'source-content-changed',
+          );
+        }
+      }
+    }
+  }
+
+  private scheduleLearningObjectiveCleanupForMissingQuizzes(
+    previousQuizzes: readonly QuizDocument[],
+    nextQuizzes: readonly QuizDocument[],
+    observedQuizPayload: string,
+  ): void {
+    const nextIds = new Set(nextQuizzes.map((quiz) => quiz.id));
+    for (const quiz of nextQuizzes) {
+      const pending = this.pendingLearningObjectiveDeleteSettlements.get(quiz.id);
+      if (pending) clearTimeout(pending);
+      this.pendingLearningObjectiveDeleteSettlements.delete(quiz.id);
+    }
+    const candidateIds = new Set([
+      ...previousQuizzes.map((quiz) => quiz.id),
+      ...Object.keys(this.learningObjectiveBundles()),
+      ...Array.from(this.yLearningObjectivesRoot?.keys() ?? []).filter((key) =>
+        UUID_PATTERN.test(key),
+      ),
+    ]);
+    for (const quizId of candidateIds) {
+      if (
+        nextIds.has(quizId) ||
+        quizId === DEMO_QUIZ_ID ||
+        !this.learningObjectiveBundles()[quizId] ||
+        this.pendingLearningObjectiveDeleteSettlements.has(quizId)
+      ) {
+        continue;
+      }
+      const timeoutId = setTimeout(() => {
+        this.pendingLearningObjectiveDeleteSettlements.delete(quizId);
+        if (
+          this.yRoot?.get(QUIZ_YDOC_ROOT_KEY) !== observedQuizPayload ||
+          this.quizDocuments().some((quiz) => quiz.id === quizId)
+        ) {
+          return;
+        }
+        this.learningObjectiveBundles.update((current) => {
+          if (!current[quizId]) return current;
+          const next = { ...current };
+          delete next[quizId];
+          return next;
+        });
+        // writeYjsSnapshot first appends objective tombstones, then removes the
+        // legacy root entry in the same transaction. Returning offline edits at
+        // lower revisions can therefore never resurrect a deleted quiz sidecar.
+        this.persistToStorage();
+      }, QUIZ_LEARNING_OBJECTIVES_DELETE_SETTLEMENT_MS);
+      this.pendingLearningObjectiveDeleteSettlements.set(quizId, timeoutId);
     }
   }
 
@@ -3016,9 +4496,22 @@ export class QuizStoreService implements OnDestroy {
     return JSON.stringify(this.quizDocuments());
   }
 
+  private serializeLearningObjectiveBundles(): string {
+    return JSON.stringify(
+      Object.values(this.learningObjectiveBundles()).sort((a, b) =>
+        a.quizId.localeCompare(b.quizId),
+      ),
+    );
+  }
+
   private updateSerializedQuizCache(roomId: string, serialized: string): void {
     this.lastSerializedRoomId = roomId;
     this.lastSerializedQuizDocuments = serialized;
+  }
+
+  private updateSerializedLearningObjectiveCache(roomId: string, serialized: string): void {
+    this.lastSerializedLearningObjectivesRoomId = roomId;
+    this.lastSerializedLearningObjectives = serialized;
   }
 
   private readonly onAwarenessChanged = (): void => {
@@ -3044,14 +4537,170 @@ export class QuizStoreService implements OnDestroy {
     this.syncPeerInfos.set(Array.from(peersByDeviceId.values()));
   };
 
-  private writeYjsSnapshot(serialized?: string): void {
-    if (!this.yRoot || this.isApplyingYjsSnapshot) return;
+  private appendLearningObjectiveOperation(
+    operationMap: YMapDoc<string>,
+    operation: LearningObjectiveYjsOperation,
+  ): boolean {
+    if (operationMap.size >= QUIZ_LEARNING_OBJECTIVES_OPLOG_HARD_LIMIT) {
+      this.learningObjectiveSyncError.set(
+        $localize`:@@learningObjectives.syncLimit:Der synchronisierte Lernzielverlauf ist zu groß. Änderungen bleiben lokal, bis der Konflikt bereinigt wurde.`,
+      );
+      return false;
+    }
+    operationMap.set(operation.operationId, JSON.stringify(operation));
+    return true;
+  }
+
+  private synchronizeLearningObjectiveBundleOperations(
+    quizId: string,
+    desired: QuizLearningObjectiveBundleV1 | undefined,
+  ): void {
+    const operationMap = this.learningObjectiveOperationMap(quizId);
+    if (!operationMap) return;
+    const materialized = materializeLearningObjectiveOperations(quizId, operationMap);
+    if (materialized.malformed) {
+      this.malformedLearningObjectiveKeys.add(quizId);
+      return;
+    }
+
+    const remoteById = new Map(
+      materialized.bundle.objectives.map((objective) => [objective.id, objective]),
+    );
+    const desiredById = new Map(
+      (desired?.objectives ?? []).map((objective) => [objective.id, objective]),
+    );
+    const objectiveIds = new Set([...remoteById.keys(), ...desiredById.keys()]);
+    const bundleResultRevision = desired?.revision ?? Math.max(materialized.bundle.revision + 1, 1);
+
+    for (const objectiveId of [...objectiveIds].sort()) {
+      const remote = remoteById.get(objectiveId);
+      const next = desiredById.get(objectiveId);
+      if (
+        remote &&
+        next &&
+        objectivePayloadFingerprint(remote) === objectivePayloadFingerprint(next)
+      ) {
+        continue;
+      }
+      if (remote && next && next.revision <= remote.revision) {
+        // A stale local mirror never gets promoted over a newer CRDT revision.
+        continue;
+      }
+
+      const parents = (materialized.highestOperationsByObjective.get(objectiveId) ?? [])
+        .map((operation) => operation.operationId)
+        .sort();
+      const operationId = generateUuid();
+      const resultingRevision = next?.revision ?? (remote?.revision ?? 0) + 1;
+      const operation: LearningObjectiveYjsOperation = {
+        schemaVersion: 1,
+        operationId,
+        quizId,
+        objectiveId,
+        kind: next ? 'upsert' : 'delete',
+        expectedRevision:
+          parents.length === 0 && !remote
+            ? next && next.revision === 1
+              ? 0
+              : null
+            : (remote?.revision ?? Math.max(0, resultingRevision - 1)),
+        resultingRevision,
+        bundleResultRevision,
+        parentOperationIds: parents,
+        // Diagnostic only. Authority and pruning never consult wall-clock time.
+        writtenAt: next?.updatedAt ?? new Date().toISOString(),
+        ...(next ? { objective: next } : {}),
+      };
+      if (!this.appendLearningObjectiveOperation(operationMap, operation)) return;
+    }
+
+    this.pruneSettledLearningObjectiveOperations(quizId, operationMap);
+  }
+
+  private pruneSettledLearningObjectiveOperations(
+    quizId: string,
+    operationMap: YMapDoc<string>,
+  ): void {
+    if (
+      operationMap.size <=
+      QUIZ_LEARNING_OBJECTIVES_OPLOG_RECENT_PER_OBJECTIVE * Math.max(1, 16)
+    ) {
+      return;
+    }
+    const materialized = materializeLearningObjectiveOperations(quizId, operationMap);
+    if (materialized.malformed) return;
+    const keep = new Set<string>();
+    for (const [objectiveId, operations] of materialized.operationsByObjective.entries()) {
+      const heads = materialized.highestOperationsByObjective.get(objectiveId) ?? [];
+      const headIds = new Set(heads.map((operation) => operation.operationId));
+      for (const operation of heads) keep.add(operation.operationId);
+      const settledTail = operations
+        .filter((operation) => !headIds.has(operation.operationId))
+        .sort(
+          (left, right) =>
+            right.resultingRevision - left.resultingRevision ||
+            left.operationId.localeCompare(right.operationId),
+        )
+        .slice(0, QUIZ_LEARNING_OBJECTIVES_OPLOG_RECENT_PER_OBJECTIVE);
+      for (const operation of settledTail) keep.add(operation.operationId);
+    }
+    for (const operationId of operationMap.keys()) {
+      if (!keep.has(operationId)) operationMap.delete(operationId);
+    }
+  }
+
+  private writeYjsSnapshot(
+    serialized?: string,
+    serializedLearningObjectives?: string,
+    serializedHomePreset?: string | null,
+  ): void {
+    if (!this.yRoot || !this.yLearningObjectivesRoot || !this.yDoc || this.isApplyingYjsSnapshot) {
+      return;
+    }
+    if (this.pendingImportedShareToken?.roomId === this.syncRoomId()) return;
     const payload = serialized ?? this.serializeQuizDocuments();
+    const deferLearningObjectives = this.learningObjectiveYjsRestorePending;
     try {
-      this.yRoot.set(QUIZ_YDOC_ROOT_KEY, payload);
-      this.writePresetSnapshotToYjs();
+      if (!deferLearningObjectives) this.migrateLegacyLearningObjectiveEntries();
+      const bundles = this.learningObjectiveBundles();
+      const quizIds = new Set([
+        ...Object.keys(bundles),
+        ...Array.from(this.yLearningObjectivesRoot.keys()).filter((key) => UUID_PATTERN.test(key)),
+      ]);
+      this.isWritingYjsSnapshot = true;
+      this.yDoc.transact(() => {
+        this.yRoot!.set(QUIZ_YDOC_ROOT_KEY, payload);
+        if (!deferLearningObjectives) {
+          this.yRoot!.set(QUIZ_LEARNING_OBJECTIVES_INITIALIZED_KEY, '1');
+          for (const quizId of [...quizIds].sort()) {
+            if (this.malformedLearningObjectiveKeys.has(quizId)) continue;
+            const bundle = bundles[quizId];
+            this.synchronizeLearningObjectiveBundleOperations(quizId, bundle);
+            if (bundle) {
+              this.yLearningObjectivesRoot!.set(quizId, QUIZ_LEARNING_OBJECTIVES_OPLOG_MARKER);
+            } else {
+              this.yLearningObjectivesRoot!.delete(quizId);
+            }
+          }
+        }
+      }, this);
+      if (!deferLearningObjectives) {
+        this.updateSerializedLearningObjectiveCache(
+          this.syncRoomId(),
+          serializedLearningObjectives ?? this.serializeLearningObjectiveBundles(),
+        );
+      }
+      if (serializedHomePreset === undefined) {
+        this.writePresetSnapshotToYjs();
+      } else if (serializedHomePreset === null) {
+        this.yRoot.delete(QUIZ_YDOC_PRESET_KEY);
+      } else {
+        this.yRoot.set(QUIZ_YDOC_PRESET_KEY, serializedHomePreset);
+      }
     } catch {
       // Keep local state even if Yjs write fails.
+    } finally {
+      this.isWritingYjsSnapshot = false;
     }
   }
 
@@ -3141,6 +4790,10 @@ export class QuizStoreService implements OnDestroy {
     return `${QUIZ_STORAGE_KEY}:${roomId}`;
   }
 
+  private learningObjectiveStorageKey(roomId: string): string {
+    return `${QUIZ_LEARNING_OBJECTIVES_STORAGE_PREFIX}:${roomId}`;
+  }
+
   private syncMetadataStorageKey(roomId: string): string {
     return `${QUIZ_SYNC_METADATA_PREFIX}:${roomId}`;
   }
@@ -3156,6 +4809,7 @@ export class QuizStoreService implements OnDestroy {
   private loadShareSecrets(roomId: string): void {
     if (this.pendingImportedShareToken?.roomId !== roomId) {
       this.pendingImportedShareToken = null;
+      this.pendingImportedQuizRestore = null;
     }
     if (!isPlatformBrowser(this.platformId)) {
       this.syncShareToken.set(null);
@@ -3196,11 +4850,27 @@ export class QuizStoreService implements OnDestroy {
   private rejectPendingImportedShareToken(roomId: string, token: string | null): void {
     const pending = this.pendingImportedShareToken;
     if (!token || pending?.roomId !== roomId || pending.token !== token) return;
+    this.clearPendingImportedPersistenceSyncTimeout();
     this.pendingImportedShareToken = null;
+    this.pendingImportedQuizRestore = null;
     this.syncShareToken.set(pending.previousToken);
     this.syncShareStatus.set(pending.previousToken ? 'ready' : 'error');
     this.syncShareError.set($localize`Ungültiger Sync-Share-Token wurde ignoriert.`);
     this.teardownYjsProvider();
+    const yDoc = this.yDoc;
+    const generation = this.yjsInitGeneration;
+    if (yDoc && !this.yPersistence) {
+      if (hasIndexedDbSupport()) {
+        void this.attachYjsIndexedDbPersistence(roomId, yDoc, generation).catch(() => {
+          if (this.canUseYjsSetupResult(generation, roomId) && this.yDoc === yDoc) {
+            this.teardownYjs();
+            this.syncConnectionState.set('disconnected');
+          }
+        });
+      } else {
+        this.handleInitialYjsSourceSynced(roomId, 'persistence');
+      }
+    }
     if (pending.previousToken) {
       queueMicrotask(() => {
         void this.attachYjsWebSocketProviderIfNeeded(this.yjsInitGeneration, roomId);
@@ -3218,9 +4888,14 @@ export class QuizStoreService implements OnDestroy {
     candidate: string,
     source: 'import' | 'storage',
   ): boolean {
+    const hasPendingImport =
+      this.pendingImportedShareToken?.roomId === roomId &&
+      this.pendingImportedQuizRestore?.roomId === roomId;
     const incoming = parseSyncShareToken(candidate);
     if (!incoming || incoming.roomId !== roomId.toLowerCase()) {
-      this.syncShareStatus.set(this.syncShareToken() ? 'ready' : 'error');
+      this.syncShareStatus.set(
+        hasPendingImport ? 'pending' : this.syncShareToken() ? 'ready' : 'error',
+      );
       this.syncShareError.set($localize`Ungültiger Sync-Share-Token wurde ignoriert.`);
       return false;
     }
@@ -3232,13 +4907,18 @@ export class QuizStoreService implements OnDestroy {
       (current.generation > incoming.generation ||
         (current.generation === incoming.generation && currentToken !== candidate.trim()))
     ) {
-      this.syncShareStatus.set('ready');
+      this.syncShareStatus.set(hasPendingImport ? 'pending' : 'ready');
       this.syncShareError.set($localize`Ein älterer Sync-Link wurde ignoriert.`);
       return false;
     }
 
     const normalized = candidate.trim();
     const changed = currentToken !== normalized;
+    const repeatedPendingToken =
+      !changed &&
+      this.pendingImportedShareToken?.roomId === roomId &&
+      this.pendingImportedShareToken.token === normalized &&
+      this.pendingImportedQuizRestore?.roomId === roomId;
     this.syncShareToken.set(normalized);
     if (source === 'import' && changed) {
       this.pendingImportedShareToken = {
@@ -3246,9 +4926,26 @@ export class QuizStoreService implements OnDestroy {
         token: normalized,
         previousToken: currentToken,
       };
+      const serialized = this.serializeQuizDocuments();
+      this.pendingImportedQuizRestore = {
+        roomId,
+        baselineSerialized: serialized,
+        latestSerialized: serialized,
+        persistenceStarted: false,
+        persistenceSynced: !hasIndexedDbSupport(),
+        providerSynced: false,
+        providerPresetSerialized: null,
+        providerSerialized: null,
+      };
+      this.syncShareStatus.set('pending');
+    } else if (repeatedPendingToken) {
+      // Reopening the same share URL or observing the same token from another
+      // tab must not turn an unfinished import into a confirmed one. Retain
+      // the failed-cache state until this tab completes its own restore gates.
       this.syncShareStatus.set('pending');
     } else {
       this.pendingImportedShareToken = null;
+      this.pendingImportedQuizRestore = null;
       this.syncShareStatus.set('ready');
     }
     this.syncShareError.set(null);
@@ -3303,6 +5000,7 @@ export class QuizStoreService implements OnDestroy {
   /** Neuer Raum bei behaltenem shared-Mode (Legacy-Migration / Claim-Schutz). */
   private rekeySharedLibraryRoomKeepingShared(newRoomId: string): void {
     const serialized = this.serializeQuizDocuments();
+    const serializedLearningObjectives = this.serializeLearningObjectiveBundles();
     this.teardownYjs();
     this.setLibrarySharingMode('shared');
     this.syncRoomId.set(newRoomId);
@@ -3311,7 +5009,9 @@ export class QuizStoreService implements OnDestroy {
     this.syncShareToken.set(null);
     this.canInvalidateSyncLink.set(false);
     this.persistLocalMirror(serialized);
+    this.persistLearningObjectiveMirror(serializedLearningObjectives);
     this.updateSerializedQuizCache(newRoomId, serialized);
+    this.updateSerializedLearningObjectiveCache(newRoomId, serializedLearningObjectives);
   }
 }
 
@@ -4206,6 +5906,348 @@ function normalizeSyncRoomId(value: unknown): string | null {
   const trimmed = value.trim();
   if (!/^[a-zA-Z0-9_-]{8,128}$/.test(trimmed)) return null;
   return trimmed;
+}
+
+function questionSemanticFingerprint(question: QuizQuestion): string {
+  return JSON.stringify({
+    text: question.text,
+    type: question.type,
+    answers: question.answers.map(({ text, isCorrect }) => ({ text, isCorrect })),
+    ratingMin: question.ratingMin,
+    ratingMax: question.ratingMax,
+    ratingLabelMin: question.ratingLabelMin,
+    ratingLabelMax: question.ratingLabelMax,
+    shortTextEvaluationKind: question.shortTextEvaluationKind,
+    shortTextMaxLength: question.shortTextMaxLength,
+    shortTextCaseSensitive: question.shortTextCaseSensitive,
+    shortTextEvaluationMode: question.shortTextEvaluationMode,
+    shortTextToleranceLevel: question.shortTextToleranceLevel,
+    shortTextAllowPartialCredit: question.shortTextAllowPartialCredit,
+    shortTextTrimWhitespace: question.shortTextTrimWhitespace,
+    shortTextNormalizeWhitespace: question.shortTextNormalizeWhitespace,
+    numericInputKind: question.numericInputKind,
+    numericToleranceMode: question.numericToleranceMode,
+    numericAbsoluteTolerance: question.numericAbsoluteTolerance,
+    numericRelativeTolerancePercent: question.numericRelativeTolerancePercent,
+    numericUnitFamily: question.numericUnitFamily,
+    numericRequireUnit: question.numericRequireUnit,
+    numericAcceptEquivalentUnits: question.numericAcceptEquivalentUnits,
+    numericReferenceValue: question.numericReferenceValue,
+    numericTolerancePercent: question.numericTolerancePercent,
+    numericIntervalLeft: question.numericIntervalLeft,
+    numericIntervalRight: question.numericIntervalRight,
+    numericInputType: question.numericInputType,
+    numericDecimalPlaces: question.numericDecimalPlaces,
+    numericMin: question.numericMin,
+    numericMax: question.numericMax,
+    numericTwoRounds: question.numericTwoRounds,
+    matchingPairs: question.matchingPairs,
+    matchingShuffleRight: question.matchingShuffleRight,
+    orderingItems: question.orderingItems,
+    categories: question.categories,
+    categorizationItems: question.categorizationItems,
+    categorizationShuffleItems: question.categorizationShuffleItems,
+  });
+}
+
+function objectivePayloadFingerprint(objective: QuizLearningObjectiveV1): string {
+  return JSON.stringify(objective);
+}
+
+function monotoneLearningObjectiveTimestamp(objective?: QuizLearningObjectiveV1): string {
+  const timestamps = [Date.now()];
+  if (objective) {
+    timestamps.push(Date.parse(objective.createdAt), Date.parse(objective.updatedAt));
+    if (objective.confirmation.state === 'confirmed') {
+      timestamps.push(Date.parse(objective.confirmation.confirmedAt));
+    } else if (
+      objective.confirmation.state === 'needs-review' &&
+      objective.confirmation.previousConfirmation.state === 'confirmed'
+    ) {
+      timestamps.push(Date.parse(objective.confirmation.previousConfirmation.confirmedAt));
+    }
+  }
+  return new Date(Math.max(...timestamps.filter(Number.isFinite))).toISOString();
+}
+
+function materializeLearningObjectiveOperations(
+  quizId: string,
+  operationMap: YMapDoc<string>,
+): MaterializedLearningObjectiveOperations {
+  const empty = (): MaterializedLearningObjectiveOperations => ({
+    bundle: { schemaVersion: 1, quizId, revision: 0, objectives: [] },
+    conflicts: [],
+    operationsByObjective: new Map(),
+    highestOperationsByObjective: new Map(),
+    malformed: true,
+  });
+  if (operationMap.size > QUIZ_LEARNING_OBJECTIVES_OPLOG_HARD_LIMIT) return empty();
+
+  const operationsByObjective = new Map<string, LearningObjectiveYjsOperation[]>();
+  const operationById = new Map<string, LearningObjectiveYjsOperation>();
+  let bundleRevision = 0;
+  for (const [operationId, raw] of operationMap.entries()) {
+    const operation = parseLearningObjectiveYjsOperation(raw, operationId, quizId);
+    if (!operation) return empty();
+    const current = operationsByObjective.get(operation.objectiveId) ?? [];
+    current.push(operation);
+    operationsByObjective.set(operation.objectiveId, current);
+    operationById.set(operation.operationId, operation);
+    bundleRevision = Math.max(bundleRevision, operation.bundleResultRevision);
+  }
+
+  for (const operation of operationById.values()) {
+    if (operation.expectedRevision === null && operation.parentOperationIds.length > 0) {
+      return empty();
+    }
+    for (const parentId of operation.parentOperationIds) {
+      const parent = operationById.get(parentId);
+      if (!parent) continue;
+      if (
+        parent.objectiveId !== operation.objectiveId ||
+        parent.resultingRevision >= operation.resultingRevision ||
+        (operation.expectedRevision !== null &&
+          parent.resultingRevision > operation.expectedRevision)
+      ) {
+        return empty();
+      }
+    }
+  }
+
+  const objectives: QuizLearningObjectiveV1[] = [];
+  const conflicts: QuizLearningObjectiveSyncConflict[] = [];
+  const highestOperationsByObjective = new Map<string, LearningObjectiveYjsOperation[]>();
+  for (const [objectiveId, operations] of operationsByObjective.entries()) {
+    const referencedOperationIds = new Set(
+      operations.flatMap((operation) => operation.parentOperationIds),
+    );
+    const heads = operations
+      .filter((operation) => !referencedOperationIds.has(operation.operationId))
+      .sort(
+        (left, right) =>
+          right.resultingRevision - left.resultingRevision ||
+          left.operationId.localeCompare(right.operationId),
+      );
+    if (heads.length === 0) return empty();
+    highestOperationsByObjective.set(objectiveId, heads);
+
+    const alternatives = new Map<string, LearningObjectiveYjsOperation>();
+    for (const operation of heads) {
+      const fingerprint =
+        operation.kind === 'delete'
+          ? 'delete'
+          : `upsert:${objectivePayloadFingerprint(operation.objective!)}`;
+      if (!alternatives.has(fingerprint)) alternatives.set(fingerprint, operation);
+    }
+    const distinct = [...alternatives.values()].sort(
+      (left, right) =>
+        right.resultingRevision - left.resultingRevision ||
+        left.operationId.localeCompare(right.operationId),
+    );
+    const canonical = distinct[0]!;
+    if (canonical.kind === 'upsert') objectives.push(canonical.objective!);
+    if (distinct.length > 1) {
+      conflicts.push({
+        quizId,
+        objectiveId,
+        revision: Math.max(...heads.map((operation) => operation.resultingRevision)),
+        headOperationIds: heads.map((operation) => operation.operationId).sort(),
+        alternatives: distinct.map((operation) => ({
+          operationId: operation.operationId,
+          kind: operation.kind,
+          objective: operation.objective ?? null,
+        })),
+      });
+    }
+  }
+
+  objectives.sort((left, right) => left.id.localeCompare(right.id));
+  const parsedBundle = QuizLearningObjectiveBundleV1Schema.safeParse({
+    schemaVersion: 1,
+    quizId,
+    revision: bundleRevision,
+    objectives,
+  });
+  if (!parsedBundle.success) return empty();
+  return {
+    bundle: parsedBundle.data,
+    conflicts,
+    operationsByObjective,
+    highestOperationsByObjective,
+    malformed: false,
+  };
+}
+
+function parseLearningObjectiveYjsOperation(
+  raw: unknown,
+  mapOperationId: string,
+  quizId: string,
+): LearningObjectiveYjsOperation | null {
+  if (typeof raw !== 'string' || raw.length > 32_000) return null;
+  let value: unknown;
+  try {
+    value = JSON.parse(raw) as unknown;
+  } catch {
+    return null;
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const candidate = value as Record<string, unknown>;
+  const kind = candidate['kind'];
+  const expectedKeys = new Set([
+    'schemaVersion',
+    'operationId',
+    'quizId',
+    'objectiveId',
+    'kind',
+    'expectedRevision',
+    'resultingRevision',
+    'bundleResultRevision',
+    'parentOperationIds',
+    'writtenAt',
+    ...(kind === 'upsert' ? ['objective'] : []),
+  ]);
+  if (Object.keys(candidate).some((key) => !expectedKeys.has(key))) return null;
+  if (
+    candidate['schemaVersion'] !== 1 ||
+    candidate['operationId'] !== mapOperationId ||
+    !UUID_PATTERN.test(mapOperationId) ||
+    candidate['quizId'] !== quizId ||
+    !UUID_PATTERN.test(quizId) ||
+    typeof candidate['objectiveId'] !== 'string' ||
+    !UUID_PATTERN.test(candidate['objectiveId']) ||
+    (kind !== 'upsert' && kind !== 'delete') ||
+    (candidate['expectedRevision'] !== null &&
+      (typeof candidate['expectedRevision'] !== 'number' ||
+        !Number.isInteger(candidate['expectedRevision']) ||
+        candidate['expectedRevision'] < 0 ||
+        candidate['expectedRevision'] > LEARNING_OBJECTIVE_REVISION_MAX)) ||
+    !Number.isInteger(candidate['resultingRevision']) ||
+    (candidate['resultingRevision'] as number) < 0 ||
+    (candidate['resultingRevision'] as number) > LEARNING_OBJECTIVE_REVISION_MAX ||
+    !Number.isInteger(candidate['bundleResultRevision']) ||
+    (candidate['bundleResultRevision'] as number) < 0 ||
+    (candidate['bundleResultRevision'] as number) > LEARNING_OBJECTIVE_REVISION_MAX ||
+    !Array.isArray(candidate['parentOperationIds']) ||
+    candidate['parentOperationIds'].length > 128 ||
+    candidate['parentOperationIds'].some(
+      (parentId) => typeof parentId !== 'string' || !UUID_PATTERN.test(parentId),
+    ) ||
+    new Set(candidate['parentOperationIds']).size !== candidate['parentOperationIds'].length ||
+    typeof candidate['writtenAt'] !== 'string' ||
+    !isValidDateString(candidate['writtenAt'])
+  ) {
+    return null;
+  }
+  const expectedRevision = candidate['expectedRevision'] as number | null;
+  const resultingRevision = candidate['resultingRevision'] as number;
+  if (expectedRevision !== null && resultingRevision !== expectedRevision + 1) return null;
+  if (kind === 'delete') {
+    if (expectedRevision === null || 'objective' in candidate) return null;
+  } else {
+    const objectiveBundle = QuizLearningObjectiveBundleV1Schema.safeParse({
+      schemaVersion: 1,
+      quizId,
+      revision: candidate['bundleResultRevision'],
+      objectives: [candidate['objective']],
+    });
+    if (
+      !objectiveBundle.success ||
+      objectiveBundle.data.objectives[0]?.id !== candidate['objectiveId'] ||
+      objectiveBundle.data.objectives[0]?.revision !== resultingRevision
+    ) {
+      return null;
+    }
+  }
+  return candidate as unknown as LearningObjectiveYjsOperation;
+}
+
+function remapLearningObjectiveBundle(
+  source: QuizLearningObjectiveBundleV1,
+  quizId: string,
+  questionIdMap: ReadonlyMap<string, string>,
+  now: string,
+): QuizLearningObjectiveBundleV1 | null {
+  const orphanIdMap = new Map<string, string>();
+  const remapIds = (ids: readonly string[], allowOrphans: boolean): string[] | null => {
+    const mapped = ids.map((id) => {
+      const questionId = questionIdMap.get(id);
+      if (questionId) return questionId;
+      if (!allowOrphans) return undefined;
+      const existingOrphanId = orphanIdMap.get(id);
+      if (existingOrphanId) return existingOrphanId;
+      const orphanId = generateUuid();
+      orphanIdMap.set(id, orphanId);
+      return orphanId;
+    });
+    return mapped.every((id): id is string => typeof id === 'string') ? mapped : null;
+  };
+
+  const objectives: QuizLearningObjectiveV1[] = [];
+  for (const objective of source.objectives) {
+    const allowOrphans =
+      objective.confirmation.state === 'needs-review' &&
+      objective.confirmation.reason === 'source-reference-removed';
+    const scopedIds =
+      objective.scope.kind === 'question-set'
+        ? remapIds(objective.scope.sourceQuestionIds, allowOrphans)
+        : undefined;
+    const derivedIds =
+      objective.origin.kind === 'model-derived'
+        ? remapIds(objective.origin.derivedFromSourceQuestionIds, allowOrphans)
+        : undefined;
+    if (scopedIds === null || derivedIds === null) return null;
+
+    const revision = 1;
+    const confirmation =
+      objective.confirmation.state === 'confirmed'
+        ? {
+            state: 'confirmed' as const,
+            confirmedAt: now,
+            confirmedRevision: revision,
+          }
+        : objective.confirmation.state === 'needs-review'
+          ? {
+              state: 'needs-review' as const,
+              previousConfirmation:
+                objective.confirmation.previousConfirmation.state === 'confirmed'
+                  ? {
+                      state: 'confirmed' as const,
+                      revision: 0,
+                      confirmedAt: now,
+                    }
+                  : { state: 'draft' as const, revision: 0 },
+              currentRevision: revision,
+              reason: objective.confirmation.reason,
+            }
+          : { state: 'draft' as const };
+    objectives.push({
+      ...objective,
+      id: generateUuid(),
+      revision,
+      scope:
+        objective.scope.kind === 'question-set'
+          ? { kind: 'question-set', sourceQuestionIds: scopedIds! }
+          : { kind: 'quiz-wide' },
+      origin:
+        objective.origin.kind === 'model-derived'
+          ? {
+              ...objective.origin,
+              derivedFromSourceQuestionIds: derivedIds!,
+            }
+          : { kind: 'manual' },
+      confirmation,
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+
+  const parsed = QuizLearningObjectiveBundleV1Schema.safeParse({
+    schemaVersion: 1,
+    quizId,
+    revision: source.objectives.length > 0 ? 1 : 0,
+    objectives,
+  });
+  return parsed.success ? parsed.data : null;
 }
 
 function generateUuid(): string {

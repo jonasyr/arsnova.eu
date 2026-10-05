@@ -11,6 +11,7 @@ import {
   MODERATION_PROMPT_DEFINITION_SET_VERSION,
   MODERATION_PROMPT_HASH_MATERIAL_VERSION,
 } from './moderation-prompt-context';
+import { MODERATION_COMPASS_RULES_VERSION } from './moderation-compass-rules';
 
 type ReferenceQuestionKey = 'A' | 'B' | 'C' | 'D' | 'E' | 'F';
 
@@ -163,6 +164,7 @@ function toPromptQuestion(
           confidence: { value: 0.54, meaning: 'uncalibrated-model-score' },
           modelId: 'fixture-qa-classifier',
           modelVersion: '1',
+          analyzedAt: '2026-01-15T10:00:00.000Z',
           reason: 'Fixture für einen ausdrücklich unsicheren Klassifikationsstand.',
         }
       : classifiedNlp(item.key === 'A' || item.key === 'B' ? 'content' : 'organization');
@@ -211,6 +213,7 @@ export const MODERATION_PROMPT_CONTEXT_REFERENCE_FIXTURE_V1 = {
         questionVotes: { state: 'available', value: 'question-votes-r1' },
         questionStatus: { state: 'available', value: 'question-status-r1' },
         questionAnswerState: { state: 'available', value: 'question-answer-state-r1' },
+        questionNlp: { state: 'available', value: 'question-nlp-r1' },
         topics: { state: 'available', value: 'questions-r1' },
         learningObjectives: { state: 'available', value: 'objectives-r1' },
         releasedResults: { state: 'available', value: 'quiz-results-r1' },
@@ -360,12 +363,13 @@ export const MODERATION_PROMPT_CONTEXT_REFERENCE_FIXTURE_V1 = {
     },
     compass: {
       state: 'available',
-      rulesVersion: 'fixture-compass-rules-v1',
+      rulesVersion: MODERATION_COMPASS_RULES_VERSION,
       signals: [
         {
           sourceId: 'compass-signal:highest-best-score',
           signal: 'high-best-score',
           basis: 'best-score',
+          cardKind: 'topics',
           questionSourceIds: [REFERENCE_QUESTION_SOURCE_IDS[2]],
           value: MODERATION_PROMPT_REFERENCE_RANKING_FIXTURE_V1[2].bestScore,
           reason: 'Frage C hat im Auswahlkorpus den höchsten Best-Score.',
@@ -384,6 +388,7 @@ export const MODERATION_PROMPT_CONTEXT_REFERENCE_FIXTURE_V1 = {
           sourceId: 'compass-signal:highest-controversy',
           signal: 'high-controversy',
           basis: 'controversy-score',
+          cardKind: 'friction',
           questionSourceIds: [REFERENCE_QUESTION_SOURCE_IDS[4]],
           value: MODERATION_PROMPT_REFERENCE_RANKING_FIXTURE_V1[4].controversyScore,
           reason: 'Frage E hat im Auswahlkorpus die höchste Kontroversität.',
@@ -399,6 +404,7 @@ export const MODERATION_PROMPT_CONTEXT_REFERENCE_FIXTURE_V1 = {
           },
         },
       ],
+      primarySignalSourceId: 'compass-signal:highest-controversy',
     },
     learningContext: {
       state: 'available',
@@ -514,6 +520,7 @@ export const MODERATION_PROMPT_CONTEXT_MINIMAL_FIXTURE_V1 = {
         questionVotes: { state: 'available', value: 'question-votes-r1' },
         questionStatus: { state: 'available', value: 'question-status-r1' },
         questionAnswerState: { state: 'available', value: 'question-answer-state-r1' },
+        questionNlp: { state: 'available', value: 'question-nlp-r1' },
         topics: { state: 'not-applicable', reason: 'Themenmodul ist deaktiviert.' },
         learningObjectives: { state: 'unavailable', reason: 'not-collected' },
         releasedResults: { state: 'available', value: 'quiz-results-r1' },
