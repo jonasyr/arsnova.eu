@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { trpcDodIt } from './test-utils/trpc-dod-evidence';
 
 const { rateLimitMocks, capabilityMocks, deriveLearningObjectiveDraftsMock } = vi.hoisted(() => ({
   rateLimitMocks: {
@@ -88,57 +89,91 @@ describe('quiz learning-objective derivation capability boundary', () => {
     });
   });
 
-  it('prepare only issues a bound bearer after the shared-NAT/global rate check', async () => {
-    const result = await createCaller().prepareLearningObjectiveDerivation(correlation);
+  trpcDodIt(
+    {
+      procedure: 'quiz.prepareLearningObjectiveDerivation',
+      case: 'happy',
+      mode: 'direct',
+      title: 'issues a bound derivation bearer after the shared-NAT rate check',
+    },
+    async () => {
+      const result = await createCaller().prepareLearningObjectiveDerivation(correlation);
 
-    expect(rateLimitMocks.prepare).toHaveBeenCalledWith('203.0.113.7');
-    expect(capabilityMocks.issue).toHaveBeenCalledWith(correlation);
-    expect(deriveLearningObjectiveDraftsMock).not.toHaveBeenCalled();
-    expect(result.capability).toBe(CAPABILITY);
-  });
+      expect(rateLimitMocks.prepare).toHaveBeenCalledWith('203.0.113.7');
+      expect(capabilityMocks.issue).toHaveBeenCalledWith(correlation);
+      expect(deriveLearningObjectiveDraftsMock).not.toHaveBeenCalled();
+      expect(result.capability).toBe(CAPABILITY);
+    },
+  );
 
-  it('rejects preparation before issuance when its budget is exhausted', async () => {
-    rateLimitMocks.prepare.mockResolvedValue({
-      allowed: false,
-      remaining: 0,
-      retryAfterSeconds: 41,
-    });
+  trpcDodIt(
+    {
+      procedure: 'quiz.prepareLearningObjectiveDerivation',
+      case: 'error',
+      mode: 'direct',
+      contract: 'TOO_MANY_REQUESTS',
+      title: 'rejects derivation preparation when its global budget is exhausted',
+    },
+    async () => {
+      rateLimitMocks.prepare.mockResolvedValue({
+        allowed: false,
+        remaining: 0,
+        retryAfterSeconds: 41,
+      });
 
-    await expect(
-      createCaller().prepareLearningObjectiveDerivation(correlation),
-    ).rejects.toMatchObject({ code: 'TOO_MANY_REQUESTS' });
-    expect(capabilityMocks.issue).not.toHaveBeenCalled();
-    expect(deriveLearningObjectiveDraftsMock).not.toHaveBeenCalled();
-  });
+      await expect(
+        createCaller().prepareLearningObjectiveDerivation(correlation),
+      ).rejects.toMatchObject({ code: 'TOO_MANY_REQUESTS' });
+      expect(capabilityMocks.issue).not.toHaveBeenCalled();
+      expect(deriveLearningObjectiveDraftsMock).not.toHaveBeenCalled();
+    },
+  );
 
-  it('rejects missing/replayed authorization before any model-backed work', async () => {
-    capabilityMocks.reserve.mockResolvedValue(false);
+  trpcDodIt(
+    {
+      procedure: 'quiz.deriveLearningObjectives',
+      case: 'error',
+      mode: 'direct',
+      contract: 'UNAUTHORIZED',
+      title: 'rejects missing or replayed derivation authorization before model work',
+    },
+    async () => {
+      capabilityMocks.reserve.mockResolvedValue(false);
 
-    await expect(createCaller().deriveLearningObjectives(runInput)).rejects.toMatchObject({
-      code: 'UNAUTHORIZED',
-    });
-    expect(deriveLearningObjectiveDraftsMock).not.toHaveBeenCalled();
-    expect(capabilityMocks.finalize).not.toHaveBeenCalled();
-  });
+      await expect(createCaller().deriveLearningObjectives(runInput)).rejects.toMatchObject({
+        code: 'UNAUTHORIZED',
+      });
+      expect(deriveLearningObjectiveDraftsMock).not.toHaveBeenCalled();
+      expect(capabilityMocks.finalize).not.toHaveBeenCalled();
+    },
+  );
 
-  it('propagates request cancellation, returns busy as data, and finalizes one-shot state', async () => {
-    const controller = new AbortController();
-    const result = await createCaller(controller.signal).deriveLearningObjectives(runInput);
+  trpcDodIt(
+    {
+      procedure: 'quiz.deriveLearningObjectives',
+      case: 'happy',
+      mode: 'direct',
+      title: 'returns an authorized busy result and finalizes the one-shot capability',
+    },
+    async () => {
+      const controller = new AbortController();
+      const result = await createCaller(controller.signal).deriveLearningObjectives(runInput);
 
-    expect(capabilityMocks.reserve).toHaveBeenCalledWith(runInput);
-    expect(deriveLearningObjectiveDraftsMock).toHaveBeenCalledWith(
-      {
-        ...correlation,
-        locale: runInput.locale,
-        maximumDrafts: runInput.maximumDrafts,
-        questions: runInput.questions,
-      },
-      { signal: controller.signal },
-    );
-    expect(deriveLearningObjectiveDraftsMock.mock.calls[0]?.[0]).not.toHaveProperty('capability');
-    expect(result).toEqual({ ...correlation, status: 'busy', retry: 'manual' });
-    expect(capabilityMocks.finalize).toHaveBeenCalledWith(CAPABILITY);
-  });
+      expect(capabilityMocks.reserve).toHaveBeenCalledWith(runInput);
+      expect(deriveLearningObjectiveDraftsMock).toHaveBeenCalledWith(
+        {
+          ...correlation,
+          locale: runInput.locale,
+          maximumDrafts: runInput.maximumDrafts,
+          questions: runInput.questions,
+        },
+        { signal: controller.signal },
+      );
+      expect(deriveLearningObjectiveDraftsMock.mock.calls[0]?.[0]).not.toHaveProperty('capability');
+      expect(result).toEqual({ ...correlation, status: 'busy', retry: 'manual' });
+      expect(capabilityMocks.finalize).toHaveBeenCalledWith(CAPABILITY);
+    },
+  );
 
   it('finalizes the reserved bearer even when derivation fails', async () => {
     deriveLearningObjectiveDraftsMock.mockRejectedValue(new Error('runtime failed'));

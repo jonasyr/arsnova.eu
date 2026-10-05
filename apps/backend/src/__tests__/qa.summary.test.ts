@@ -199,16 +199,38 @@ describe('qa summary V2 (issue #456 slice 7)', () => {
     },
   );
 
-  it('lehnt Vorschau und Auftrag ohne Host-Token ab', async () => {
-    vi.stubEnv('QA_SUMMARY_ENABLED', 'true');
-    prismaMock.session.findUnique.mockResolvedValue(activeSession());
-    await expect(
-      caller.summaryContextPreview({ sessionId: SESSION_ID, locale: 'de' }),
-    ).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
-    await expect(
-      caller.requestSummary({ sessionId: SESSION_ID, locale: 'de' }),
-    ).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
-  });
+  trpcDodIt(
+    {
+      procedure: 'qa.summaryContextPreview',
+      case: 'error',
+      mode: 'direct',
+      contract: 'UNAUTHORIZED',
+      title: 'lehnt qa.summaryContextPreview ohne Host-Token ab',
+    },
+    async () => {
+      prismaMock.session.findUnique.mockResolvedValue(activeSession());
+      await expect(
+        caller.summaryContextPreview({ sessionId: SESSION_ID, locale: 'de' }),
+      ).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
+    },
+  );
+
+  trpcDodIt(
+    {
+      procedure: 'qa.requestSummary',
+      case: 'error',
+      mode: 'direct',
+      contract: 'UNAUTHORIZED',
+      title: 'lehnt qa.requestSummary ohne Host-Token ab',
+    },
+    async () => {
+      vi.stubEnv('QA_SUMMARY_ENABLED', 'true');
+      prismaMock.session.findUnique.mockResolvedValue(activeSession());
+      await expect(
+        caller.requestSummary({ sessionId: SESSION_ID, locale: 'de' }),
+      ).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
+    },
+  );
 
   it('lehnt den bewussten Auftrag ab wenn der Produkt-Kill-Switch aus ist', async () => {
     prismaMock.session.findUnique.mockResolvedValue(activeSession());
