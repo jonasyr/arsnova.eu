@@ -2,8 +2,10 @@ import {
   afterNextRender,
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
   ElementRef,
   Injector,
+  LOCALE_ID,
   computed,
   inject,
   input,
@@ -22,10 +24,101 @@ import {
   LEARNING_OBJECTIVE_MAX_OBJECTIVES,
   LEARNING_OBJECTIVE_MAX_REFERENCES,
   LEARNING_OBJECTIVE_TEXT_MAX_LENGTH,
+  LearningObjectiveDerivationQuestionSchema,
+  RunLearningObjectiveDerivationInputSchema,
+  isNumericToleranceMode,
+  questionSupportsConfidence,
+  resolveNumericEstimateToleranceMode,
+  type LearningObjectiveDerivationQuestion,
+  type LearningObjectiveDerivationResult,
   type QuizLearningObjectiveV1,
 } from '@arsnova/shared-types';
+import { getEffectiveLocale, localeIdToSupported } from '../../../core/locale-from-path';
 import { renderMarkdownWithKatex } from '../../../shared/markdown-katex.util';
 import { QuizStoreService, type QuizQuestion } from '../data/quiz-store.service';
+import { LearningObjectiveDerivationClient } from './learning-objective-derivation.client';
+
+type DerivationUiStatus = 'idle' | 'pending' | LearningObjectiveDerivationResult['status'];
+
+export function mapQuestionForLearningObjectiveDerivation(
+  question: QuizQuestion,
+): LearningObjectiveDerivationQuestion {
+  return LearningObjectiveDerivationQuestionSchema.parse({
+    sourceQuestionId: question.id,
+    enabled: question.enabled,
+    text: question.text,
+    type: question.type,
+    difficulty: question.difficulty,
+    order: question.order,
+    timer: question.timer ?? null,
+    answers: question.answers.map(({ text, isCorrect }) => ({ text, isCorrect })),
+    skipReadingPhase: question.skipReadingPhase ?? false,
+    ...(question.type === 'RATING'
+      ? {
+          ratingMin: question.ratingMin ?? undefined,
+          ratingMax: question.ratingMax ?? undefined,
+          ratingLabelMin: question.ratingLabelMin ?? undefined,
+          ratingLabelMax: question.ratingLabelMax ?? undefined,
+        }
+      : {}),
+    ...(question.type === 'SHORT_TEXT'
+      ? {
+          shortTextEvaluationKind: question.shortTextEvaluationKind ?? undefined,
+          shortTextMaxLength: question.shortTextMaxLength ?? undefined,
+          shortTextCaseSensitive: question.shortTextCaseSensitive ?? undefined,
+          shortTextEvaluationMode: question.shortTextEvaluationMode ?? undefined,
+          shortTextToleranceLevel: question.shortTextToleranceLevel ?? undefined,
+          shortTextAllowPartialCredit: question.shortTextAllowPartialCredit ?? undefined,
+          shortTextTrimWhitespace: question.shortTextTrimWhitespace ?? undefined,
+          shortTextNormalizeWhitespace: question.shortTextNormalizeWhitespace ?? undefined,
+          numericInputKind: question.numericInputKind ?? undefined,
+          numericToleranceMode: isNumericToleranceMode(question.numericToleranceMode)
+            ? question.numericToleranceMode
+            : undefined,
+          numericAbsoluteTolerance: question.numericAbsoluteTolerance ?? undefined,
+          numericRelativeTolerancePercent: question.numericRelativeTolerancePercent ?? undefined,
+          numericUnitFamily: question.numericUnitFamily ?? undefined,
+          numericRequireUnit: question.numericRequireUnit ?? undefined,
+          numericAcceptEquivalentUnits: question.numericAcceptEquivalentUnits ?? undefined,
+        }
+      : {}),
+    ...(question.type === 'NUMERIC_ESTIMATE'
+      ? {
+          numericToleranceMode: resolveNumericEstimateToleranceMode(question.numericToleranceMode),
+          numericReferenceValue: question.numericReferenceValue ?? undefined,
+          numericTolerancePercent: question.numericTolerancePercent ?? undefined,
+          numericIntervalLeft: question.numericIntervalLeft ?? undefined,
+          numericIntervalRight: question.numericIntervalRight ?? undefined,
+          numericInputType: question.numericInputType ?? undefined,
+          numericDecimalPlaces: question.numericDecimalPlaces ?? undefined,
+          numericMin: question.numericMin ?? undefined,
+          numericMax: question.numericMax ?? undefined,
+          numericTwoRounds: question.numericTwoRounds ?? undefined,
+        }
+      : {}),
+    ...(question.type === 'MATCHING'
+      ? {
+          matchingPairs: question.matchingPairs ?? undefined,
+          matchingShuffleRight: question.matchingShuffleRight ?? true,
+        }
+      : {}),
+    ...(question.type === 'ORDERING' ? { orderingItems: question.orderingItems ?? undefined } : {}),
+    ...(question.type === 'CATEGORIZATION'
+      ? {
+          categories: question.categories ?? undefined,
+          categorizationItems: question.categorizationItems ?? undefined,
+          categorizationShuffleItems: question.categorizationShuffleItems ?? true,
+        }
+      : {}),
+    ...(questionSupportsConfidence(question.type)
+      ? {
+          confidenceEnabled: question.confidenceEnabled ?? false,
+          confidenceLabelLow: question.confidenceLabelLow ?? undefined,
+          confidenceLabelHigh: question.confidenceLabelHigh ?? undefined,
+        }
+      : {}),
+  });
+}
 
 @Component({
   selector: 'app-quiz-learning-objectives',
@@ -45,9 +138,15 @@ import { QuizStoreService, type QuizQuestion } from '../data/quiz-store.service'
 })
 export class QuizLearningObjectivesComponent {
   private readonly quizStore = inject(QuizStoreService);
+  private readonly derivationClient = inject(LearningObjectiveDerivationClient);
   private readonly injector = inject(Injector);
   private readonly sanitizer = inject(DomSanitizer);
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly locale = getEffectiveLocale(localeIdToSupported(inject(LOCALE_ID)));
   private readonly questionMarkdownCache = new Map<string, SafeHtml>();
+  private readonly objectiveMarkdownCache = new Map<string, SafeHtml>();
+  private derivationAbortController: AbortController | null = null;
+  private derivationSequence = 0;
 
   readonly quizId = input.required<string>();
   readonly questions = input.required<readonly QuizQuestion[]>();
@@ -75,8 +174,201 @@ export class QuizLearningObjectivesComponent {
   readonly pendingDeleteId = signal<string | null>(null);
   readonly errorMessage = signal<string | null>(null);
   readonly statusMessage = signal<string | null>(null);
+  readonly derivationStatus = signal<DerivationUiStatus>('idle');
+  readonly derivationMessage = signal<string | null>(null);
+  readonly derivationLimitations = signal<readonly string[]>([]);
+  readonly derivationIsPending = computed(() => this.derivationStatus() === 'pending');
+  readonly derivationCanRetry = computed(() =>
+    [
+      'busy',
+      'aborted',
+      'timeout',
+      'unavailable',
+      'invalid_response',
+      'circuit_open',
+      'input_too_large',
+    ].includes(this.derivationStatus()),
+  );
 
   private readonly textArea = viewChild<ElementRef<HTMLTextAreaElement>>('objectiveText');
+
+  constructor() {
+    this.destroyRef.onDestroy(() => {
+      this.derivationSequence += 1;
+      this.derivationAbortController?.abort();
+      this.derivationAbortController = null;
+    });
+  }
+
+  async deriveLearningObjectives(): Promise<void> {
+    if (this.derivationIsPending()) return;
+
+    const operationId = globalThis.crypto.randomUUID();
+    const expectedBundleRevision = this.bundle().revision;
+    const maximumDrafts = this.maxObjectives - this.objectives().length;
+    if (maximumDrafts <= 0) {
+      this.finishDerivation(
+        'unavailable',
+        $localize`:@@learningObjectives.derivationCapacity:Für weitere Vorschläge ist kein Platz. Lösche zuerst nicht mehr benötigte Lernziele.`,
+      );
+      return;
+    }
+    let questions: LearningObjectiveDerivationQuestion[];
+    try {
+      questions = [...this.questions()]
+        .sort((left, right) => left.order - right.order || left.id.localeCompare(right.id))
+        .map(mapQuestionForLearningObjectiveDerivation);
+    } catch {
+      this.finishDerivation(
+        'invalid_response',
+        $localize`:@@learningObjectives.derivationInvalidQuiz:Mindestens eine Aufgabe kann nicht sicher für die automatische Herleitung verwendet werden. Prüfe das Quiz und versuche es erneut.`,
+      );
+      return;
+    }
+    if (questions.length === 0) {
+      this.finishDerivation(
+        'no_eligible_questions',
+        $localize`:@@learningObjectives.derivationNoEligible:Es gibt noch keine geeignete aktive Aufgabe mit Lösung.`,
+      );
+      return;
+    }
+
+    const sourceSnapshots = new Map(
+      questions.map((question) => [question.sourceQuestionId, JSON.stringify(question)]),
+    );
+    const sequence = ++this.derivationSequence;
+    const controller = new AbortController();
+    this.derivationAbortController = controller;
+    this.derivationStatus.set('pending');
+    this.derivationMessage.set(
+      $localize`:@@learningObjectives.derivationPending:Vorschläge werden ausschließlich aus den Quizaufgaben formuliert.`,
+    );
+    this.derivationLimitations.set([]);
+    this.focusElement('learning-objective-derive-cancel');
+
+    try {
+      const prepared = await this.derivationClient.prepare({
+        schemaVersion: 1,
+        operationId,
+        quizId: this.quizId(),
+        expectedBundleRevision,
+      });
+      if (!this.isCurrentDerivation(sequence, controller)) return;
+
+      const result = await this.derivationClient.derive(
+        RunLearningObjectiveDerivationInputSchema.parse({
+          schemaVersion: 1,
+          operationId,
+          quizId: this.quizId(),
+          expectedBundleRevision,
+          maximumDrafts,
+          locale: this.locale,
+          capability: prepared.capability,
+          questions,
+        }),
+        controller.signal,
+      );
+      if (!this.isCurrentDerivation(sequence, controller)) return;
+      if (
+        result.operationId !== operationId ||
+        result.quizId !== this.quizId() ||
+        result.expectedBundleRevision !== expectedBundleRevision
+      ) {
+        this.finishDerivation(
+          'invalid_response',
+          $localize`:@@learningObjectives.derivationInvalidResponse:Die Antwort konnte nicht sicher zugeordnet werden. Deine Lernziele bleiben unverändert.`,
+        );
+        return;
+      }
+      if (result.status !== 'completed') {
+        this.finishDerivation(result.status, this.derivationStatusMessage(result));
+        return;
+      }
+      if (this.bundle().revision !== expectedBundleRevision) {
+        this.finishDerivation(
+          'unavailable',
+          $localize`:@@learningObjectives.derivationBundleConflict:Die Lernziele wurden während der automatischen Herleitung geändert. Deine Änderungen bleiben erhalten. Starte die Herleitung erneut.`,
+        );
+        return;
+      }
+
+      const remainingCapacity = Math.max(0, this.maxObjectives - this.objectives().length);
+      const draftsToApply = result.drafts.slice(0, remainingCapacity);
+      const omittedForCapacity = result.drafts.length - draftsToApply.length;
+
+      let currentSourceSnapshots: Map<string, string>;
+      try {
+        currentSourceSnapshots = new Map(
+          [...this.questions()]
+            .sort((left, right) => left.order - right.order || left.id.localeCompare(right.id))
+            .map(mapQuestionForLearningObjectiveDerivation)
+            .map((question) => [question.sourceQuestionId, JSON.stringify(question)]),
+        );
+      } catch {
+        currentSourceSnapshots = new Map();
+      }
+      const referencedQuestionIds = new Set(
+        draftsToApply.flatMap((draft) => draft.origin.derivedFromSourceQuestionIds),
+      );
+      const sourceChanged = [...referencedQuestionIds].some(
+        (questionId) => sourceSnapshots.get(questionId) !== currentSourceSnapshots.get(questionId),
+      );
+      if (sourceChanged) {
+        this.finishDerivation(
+          'unavailable',
+          $localize`:@@learningObjectives.derivationSourceChanged:Mindestens eine verwendete Aufgabe wurde während der automatischen Herleitung geändert oder deaktiviert. Deine Lernziele bleiben unverändert. Starte die Herleitung erneut.`,
+        );
+        return;
+      }
+
+      try {
+        const applied = this.quizStore.applyDerivedLearningObjectiveDrafts(
+          this.quizId(),
+          expectedBundleRevision,
+          operationId,
+          draftsToApply,
+        );
+        this.derivationLimitations.set([
+          ...result.limitations,
+          ...(omittedForCapacity > 0
+            ? [
+                $localize`:@@learningObjectives.derivationCapacityLimitation:Nicht übernommene Vorschläge: ${omittedForCapacity}:count:. Der Platz für bestehende Lernziele blieb reserviert.`,
+              ]
+            : []),
+        ]);
+        this.finishDerivation(
+          'completed',
+          applied.length === 0
+            ? $localize`:@@learningObjectives.derivationCompletedEmpty:Die Herleitung ist abgeschlossen. Es wurden keine neuen Vorschläge hinzugefügt.`
+            : $localize`:@@learningObjectives.derivationCompleted:Neue Vorschläge als Entwurf hinzugefügt: ${applied.length}:count:. Prüfe und bestätige sie fachlich.`,
+          applied[0] ? `learning-objective-edit-${applied[0].id}` : undefined,
+        );
+      } catch (error) {
+        this.finishDerivation(
+          'unavailable',
+          error instanceof Error
+            ? error.message
+            : $localize`:@@learningObjectives.derivationApplyFailed:Die Vorschläge konnten nicht gespeichert werden. Deine bisherigen Lernziele bleiben erhalten.`,
+        );
+      }
+    } catch {
+      if (sequence !== this.derivationSequence || controller.signal.aborted) return;
+      this.finishDerivation(
+        'unavailable',
+        $localize`:@@learningObjectives.derivationUnavailable:Die automatische Herleitung ist gerade nicht verfügbar. Versuche es später erneut.`,
+      );
+    }
+  }
+
+  cancelLearningObjectiveDerivation(): void {
+    if (!this.derivationIsPending()) return;
+    this.derivationSequence += 1;
+    this.derivationAbortController?.abort();
+    this.finishDerivation(
+      'aborted',
+      $localize`:@@learningObjectives.derivationAborted:Die automatische Herleitung wurde abgebrochen. Deine Lernziele bleiben unverändert.`,
+    );
+  }
 
   beginAdd(): void {
     this.editingId.set(null);
@@ -180,6 +472,21 @@ export class QuizLearningObjectivesComponent {
       }).html,
     );
     this.questionMarkdownCache.set(value, rendered);
+    return rendered;
+  }
+
+  renderObjectiveMarkdown(value: string): SafeHtml {
+    const cached = this.objectiveMarkdownCache.get(value);
+    if (cached) return cached;
+    const rendered = this.sanitizer.bypassSecurityTrustHtml(
+      renderMarkdownWithKatex(value, {
+        escapeListMarkers: true,
+        headingStartLevel: 4,
+        imagePolicy: 'allow-relative-and-https',
+        interactive: false,
+      }).html,
+    );
+    this.objectiveMarkdownCache.set(value, rendered);
     return rendered;
   }
 
@@ -365,6 +672,59 @@ export class QuizLearningObjectivesComponent {
     return objective.confirmation.reason === 'source-reference-removed'
       ? $localize`:@@learningObjectives.reviewReferenceRemoved:Eine referenzierte Aufgabe wurde gelöscht. Prüfe den Bereich.`
       : $localize`:@@learningObjectives.reviewSourceChanged:Der Aufgabeninhalt hat sich seit der Herleitung geändert.`;
+  }
+
+  private isCurrentDerivation(sequence: number, controller: AbortController): boolean {
+    return (
+      sequence === this.derivationSequence &&
+      !controller.signal.aborted &&
+      this.derivationAbortController === controller
+    );
+  }
+
+  private finishDerivation(
+    status: Exclude<DerivationUiStatus, 'idle' | 'pending'>,
+    message: string,
+    preferredFocusId?: string,
+  ): void {
+    this.derivationAbortController = null;
+    this.derivationStatus.set(status);
+    this.derivationMessage.set(message);
+    if (status !== 'completed') this.derivationLimitations.set([]);
+    const startRemainsEnabled = this.objectives().length < this.maxObjectives;
+    this.focusElement(
+      preferredFocusId ??
+        (status !== 'completed' && startRemainsEnabled
+          ? 'learning-objective-derive'
+          : 'learning-objective-derivation-status'),
+    );
+  }
+
+  private derivationStatusMessage(result: LearningObjectiveDerivationResult): string {
+    switch (result.status) {
+      case 'busy':
+        return $localize`:@@learningObjectives.derivationBusy:Das lokale Modell ist gerade ausgelastet. Deine Lernziele bleiben unverändert. Versuche es bewusst noch einmal.`;
+      case 'disabled':
+        return $localize`:@@learningObjectives.derivationDisabled:Automatische Vorschläge sind auf diesem System nicht aktiviert. Du kannst Lernziele weiterhin manuell formulieren.`;
+      case 'aborted':
+        return $localize`:@@learningObjectives.derivationAborted:Die automatische Herleitung wurde abgebrochen. Deine Lernziele bleiben unverändert.`;
+      case 'timeout':
+        return $localize`:@@learningObjectives.derivationTimeout:Die automatische Herleitung hat zu lange gedauert. Deine Lernziele bleiben unverändert.`;
+      case 'unavailable':
+        return $localize`:@@learningObjectives.derivationUnavailable:Die automatische Herleitung ist gerade nicht verfügbar. Versuche es später erneut.`;
+      case 'invalid_response':
+        return $localize`:@@learningObjectives.derivationInvalidResponse:Die Antwort konnte nicht sicher zugeordnet werden. Deine Lernziele bleiben unverändert.`;
+      case 'misconfigured':
+        return $localize`:@@learningObjectives.derivationMisconfigured:Automatische Vorschläge sind auf diesem System noch nicht vollständig eingerichtet. Du kannst Lernziele weiterhin manuell formulieren.`;
+      case 'circuit_open':
+        return $localize`:@@learningObjectives.derivationCircuitOpen:Das lokale Modell erholt sich gerade von Fehlern. Versuche es später bewusst noch einmal.`;
+      case 'no_eligible_questions':
+        return $localize`:@@learningObjectives.derivationNoEligible:Es gibt noch keine geeignete aktive Aufgabe mit Lösung.`;
+      case 'input_too_large':
+        return $localize`:@@learningObjectives.derivationInputTooLarge:Mindestens eine Aufgabe enthält zu viel Inhalt für die automatische Herleitung. Kürze sie und versuche es erneut.`;
+      case 'completed':
+        return $localize`:@@learningObjectives.derivationCompletedEmpty:Die Herleitung ist abgeschlossen. Es wurden keine neuen Vorschläge hinzugefügt.`;
+    }
   }
 
   private focusTextArea(): void {

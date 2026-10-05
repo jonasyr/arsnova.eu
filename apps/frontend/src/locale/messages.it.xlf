@@ -35325,6 +35325,122 @@
           <context context-type="linenumber">521</context>
         </context-group>
       </trans-unit>
+      <trans-unit id="learningObjectives.derivationInvalidOperation" datatype="html">
+        <source>Die automatische Herleitung ist nicht mehr gültig. Starte sie erneut.</source>
+        <target>La generazione automatica non è più valida. Avviala di nuovo.</target>
+      </trans-unit>
+      <trans-unit id="learningObjectives.derivationAgain" datatype="html">
+        <source>Erneut automatisch formulieren</source>
+        <target>Formula di nuovo automaticamente</target>
+      </trans-unit>
+      <trans-unit id="learningObjectives.derivationApplyFailed" datatype="html">
+        <source>Die Vorschläge konnten nicht gespeichert werden. Deine bisherigen Lernziele bleiben erhalten.</source>
+        <target>Non è stato possibile salvare i suggerimenti. Gli obiettivi di apprendimento esistenti restano invariati.</target>
+      </trans-unit>
+      <trans-unit id="learningObjectives.derivationBundleConflict" datatype="html">
+        <source>Die Lernziele wurden während der automatischen Herleitung geändert. Deine Änderungen bleiben erhalten. Starte die Herleitung erneut.</source>
+        <target>Gli obiettivi di apprendimento sono cambiati durante la generazione automatica. Le tue modifiche sono state mantenute. Avvia di nuovo la generazione.</target>
+      </trans-unit>
+      <trans-unit id="learningObjectives.derivationBusy" datatype="html">
+        <source>Das lokale Modell ist gerade ausgelastet. Deine Lernziele bleiben unverändert. Versuche es bewusst noch einmal.</source>
+        <target>Il modello locale è occupato. Gli obiettivi di apprendimento restano invariati. Riprova quando vuoi.</target>
+      </trans-unit>
+      <trans-unit id="learningObjectives.derivationCancel" datatype="html">
+        <source>Herleitung abbrechen</source>
+        <target>Annulla la generazione</target>
+      </trans-unit>
+      <trans-unit id="learningObjectives.derivationCapacity" datatype="html">
+        <source>Für weitere Vorschläge ist kein Platz. Lösche zuerst nicht mehr benötigte Lernziele.</source>
+        <target>Non c’è spazio per altri suggerimenti. Elimina prima gli obiettivi di apprendimento che non servono più.</target>
+      </trans-unit>
+      <trans-unit id="learningObjectives.derivationCapacityLimitation" datatype="html">
+        <source>Nicht übernommene Vorschläge: <x id="count" equiv-text="omittedForCapacity"/>. Der Platz für bestehende Lernziele blieb reserviert.</source>
+        <target>Suggerimenti non aggiunti: <x id="count" equiv-text="omittedForCapacity"/>. Lo spazio è rimasto riservato agli obiettivi di apprendimento esistenti.</target>
+      </trans-unit>
+      <trans-unit id="learningObjectives.derivationCircuitOpen" datatype="html">
+        <source>Das lokale Modell erholt sich gerade von Fehlern. Versuche es später bewusst noch einmal.</source>
+        <target>Il modello locale si sta riprendendo da alcuni errori. Riprova più tardi quando vuoi.</target>
+      </trans-unit>
+      <trans-unit id="learningObjectives.derivationCompleted" datatype="html">
+        <source>Neue Vorschläge als Entwurf hinzugefügt: <x id="count" equiv-text="applied.length"/>. Prüfe und bestätige sie fachlich.</source>
+        <target>Nuovi suggerimenti aggiunti come bozze: <x id="count" equiv-text="applied.length"/>. Verificane il contenuto e confermali.</target>
+      </trans-unit>
+      <trans-unit id="learningObjectives.derivationCompletedEmpty" datatype="html">
+        <source>Die Herleitung ist abgeschlossen. Es wurden keine neuen Vorschläge hinzugefügt.</source>
+        <target>La generazione è terminata. Non sono stati aggiunti nuovi suggerimenti.</target>
+      </trans-unit>
+      <trans-unit id="learningObjectives.derivationDisabled" datatype="html">
+        <source>Automatische Vorschläge sind auf diesem System nicht aktiviert. Du kannst Lernziele weiterhin manuell formulieren.</source>
+        <target>I suggerimenti automatici non sono attivi su questo sistema. Puoi continuare a formulare manualmente gli obiettivi di apprendimento.</target>
+      </trans-unit>
+      <trans-unit id="learningObjectives.derivationDuplicate" datatype="html">
+        <source>Die automatische Herleitung enthielt doppelte Vorschläge. Starte sie erneut.</source>
+        <target>La generazione automatica conteneva suggerimenti duplicati. Avviala di nuovo.</target>
+      </trans-unit>
+      <trans-unit id="learningObjectives.derivationHelp" datatype="html">
+        <source>Erst nach deiner ausdrücklichen Aktion werden geeignete aktive Aufgaben mit ihren Lösungen an das lokale Modell übergeben. Vorschläge werden als Entwurf ergänzt; manuelle, bearbeitete oder bestätigte Lernziele bleiben unverändert.</source>
+        <target>Le attività attive idonee e le relative soluzioni vengono inviate al modello locale solo dopo una tua azione esplicita. I suggerimenti vengono aggiunti come bozze; gli obiettivi di apprendimento manuali, modificati o confermati restano invariati.</target>
+      </trans-unit>
+      <trans-unit id="learningObjectives.derivationIdCollision" datatype="html">
+        <source>Die Vorschläge können nicht sicher zugeordnet werden. Deine bestehenden Lernziele bleiben unverändert. Starte die Herleitung erneut.</source>
+        <target>I suggerimenti non possono essere associati in modo sicuro. Gli obiettivi di apprendimento esistenti restano invariati. Avvia di nuovo la generazione.</target>
+      </trans-unit>
+      <trans-unit id="learningObjectives.derivationInputTooLarge" datatype="html">
+        <source>Mindestens eine Aufgabe enthält zu viel Inhalt für die automatische Herleitung. Kürze sie und versuche es erneut.</source>
+        <target>Almeno un’attività contiene troppo contenuto per la generazione automatica. Riducila e riprova.</target>
+      </trans-unit>
+      <trans-unit id="learningObjectives.derivationInvalidQuiz" datatype="html">
+        <source>Mindestens eine Aufgabe kann nicht sicher für die automatische Herleitung verwendet werden. Prüfe das Quiz und versuche es erneut.</source>
+        <target>Almeno un’attività non può essere usata in modo sicuro per la generazione automatica. Controlla il quiz e riprova.</target>
+      </trans-unit>
+      <trans-unit id="learningObjectives.derivationInvalidResponse" datatype="html">
+        <source>Die Antwort konnte nicht sicher zugeordnet werden. Deine Lernziele bleiben unverändert.</source>
+        <target>La risposta non ha potuto essere associata in modo sicuro. Gli obiettivi di apprendimento restano invariati.</target>
+      </trans-unit>
+      <trans-unit id="learningObjectives.derivationLimitations" datatype="html">
+        <source>Hinweise zur Herleitung:</source>
+        <target>Note sulla generazione:</target>
+      </trans-unit>
+      <trans-unit id="learningObjectives.derivationMisconfigured" datatype="html">
+        <source>Automatische Vorschläge sind auf diesem System noch nicht vollständig eingerichtet. Du kannst Lernziele weiterhin manuell formulieren.</source>
+        <target>I suggerimenti automatici non sono ancora configurati completamente su questo sistema. Puoi continuare a formulare manualmente gli obiettivi di apprendimento.</target>
+      </trans-unit>
+      <trans-unit id="learningObjectives.derivationNoEligible" datatype="html">
+        <source>Es gibt noch keine geeignete aktive Aufgabe mit Lösung.</source>
+        <target>Non è ancora presente un’attività attiva idonea con una soluzione.</target>
+      </trans-unit>
+      <trans-unit id="learningObjectives.derivationPending" datatype="html">
+        <source>Vorschläge werden ausschließlich aus den Quizaufgaben formuliert.</source>
+        <target>I suggerimenti vengono generati esclusivamente dalle attività del quiz.</target>
+      </trans-unit>
+      <trans-unit id="learningObjectives.derivationRetry" datatype="html">
+        <source>Nochmal versuchen</source>
+        <target>Riprova</target>
+      </trans-unit>
+      <trans-unit id="learningObjectives.derivationSourceChanged" datatype="html">
+        <source>Mindestens eine verwendete Aufgabe wurde während der automatischen Herleitung geändert oder deaktiviert. Deine Lernziele bleiben unverändert. Starte die Herleitung erneut.</source>
+        <target>Almeno un’attività usata è stata modificata o disattivata durante la generazione automatica. Gli obiettivi di apprendimento restano invariati. Avvia di nuovo la generazione.</target>
+      </trans-unit>
+      <trans-unit id="learningObjectives.derivationStart" datatype="html">
+        <source>Automatisch aus Aufgaben formulieren</source>
+        <target>Formula automaticamente dalle attività</target>
+      </trans-unit>
+      <trans-unit id="learningObjectives.derivationTimeout" datatype="html">
+        <source>Die automatische Herleitung hat zu lange gedauert. Deine Lernziele bleiben unverändert.</source>
+        <target>La generazione automatica ha richiesto troppo tempo. Gli obiettivi di apprendimento restano invariati.</target>
+      </trans-unit>
+      <trans-unit id="learningObjectives.derivationTitle" datatype="html">
+        <source>Automatische Vorschläge</source>
+        <target>Suggerimenti automatici</target>
+      </trans-unit>
+      <trans-unit id="learningObjectives.derivationUnavailable" datatype="html">
+        <source>Die automatische Herleitung ist gerade nicht verfügbar. Versuche es später erneut.</source>
+        <target>La generazione automatica non è al momento disponibile. Riprova più tardi.</target>
+      </trans-unit>
+      <trans-unit id="learningObjectives.derivationAborted" datatype="html">
+        <source>Die automatische Herleitung wurde abgebrochen. Deine Lernziele bleiben unverändert.</source>
+        <target>La generazione automatica è stata annullata. Gli obiettivi di apprendimento restano invariati.</target>
+      </trans-unit>
     </body>
   </file>
 </xliff>

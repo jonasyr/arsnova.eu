@@ -4,17 +4,14 @@ import {
   QaSummaryInferenceRequestSchema,
   QaSummaryLocaleEnum,
   QaSummaryModelOutputSchema,
-} from './schemas.js';
+} from './schemas';
 import {
   LEARNING_OBJECTIVE_MAX_OBJECTIVES,
   LEARNING_OBJECTIVE_MAX_REFERENCES,
   LEARNING_OBJECTIVE_TEXT_MAX_LENGTH,
   QuizSourceQuestionIdSchema,
-} from './learning-objectives.js';
-import {
-  QUIZ_QUESTION_TEXT_MAX_LENGTH,
-  QUIZ_UPLOAD_MAX_QUESTIONS,
-} from './quiz-contract-limits.js';
+} from './learning-objectives';
+import { QUIZ_QUESTION_TEXT_MAX_LENGTH, QUIZ_UPLOAD_MAX_QUESTIONS } from './quiz-contract-limits';
 
 /**
  * Versioned application boundary for the private llama.cpp runtime (Story 8.9d).

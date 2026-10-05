@@ -5,7 +5,7 @@
 **Status:** Accepted
 **Datum:** 2026-08-22
 **Entscheider:** Projektteam (Architekturentscheid auf Basis der 1.14c-Voranalyse, PO-Auftrag 2026-08-22)
-**Letzter Repo-Abgleich:** 2026-10-05 (Runtime R implementiert; Produktivaktivierung und fachliche Consumer offen)
+**Letzter Repo-Abgleich:** 2026-10-05 (Runtime R und Lernziel-Consumer implementiert; Produktivaktivierung sowie Label-/Summary-Consumer offen)
 **Kontext-Tags:** Machine Learning, Inferenz-Runtime, Selbst-Hosting, Backend-Architektur, Betrieb, Open-Weight-LLM
 
 **Ersetzt keine Produktentscheidung, nur die Runtime:** [WORD-CLOUD-3.0-1.14c-VORANALYSE-2026-08-20.md](../../implementation/WORD-CLOUD-3.0-1.14c-VORANALYSE-2026-08-20.md), [ADR-0032](0032-optional-nlp-cascade-for-qa-moderation-signals.md), Backlog Story 1.14c, Story 8.9c, Story 8.9d.
@@ -238,8 +238,10 @@ Diese Entscheidung betrifft ausschließlich die **Betreiber-seitige** Serving-Ru
 
 Implementierungsfolge: **Runtime-Baustein zuerst** (Image, Profil,
 Flags, gemeinsames Inflight, Health, Tests ohne Modell-Download) → 1.14c Stufe 2 (kurze Labels)
-→ 8.9c Slice 4 nach Prefill-Messung. Runtime R ist umgesetzt; diese ADR autorisiert weiterhin
-keine Produktivaktivierung oder fachliche Freigabe der drei Consumer von selbst.
+→ 8.9c Slice 4 nach Prefill-Messung. Runtime R und der ausdrücklich gestartete Lernziel-Consumer
+sind umgesetzt; diese ADR autorisiert weiterhin keine Produktivaktivierung. Label und Summary
+benötigen ihre eigenen Ausbaustufen, der Lernzielpfad noch die reale Abschlussabnahme aus #456
+Slice 8.
 
 ## Performance-Steckbrief
 
@@ -346,7 +348,8 @@ keine Produktivaktivierung oder fachliche Freigabe der drei Consumer von selbst.
   produktionsnahe Last-/Fehler-/Security-/Privacy-/Kostenprüfung, erst danach bewusste
   Produktivaktivierung.
 - Runtime R setzt diese Leitplanken technisch um. Die ADR autorisiert weder die Aktivierung
-  noch die fachlichen Consumer aus 1.14c Stufe 2, 8.9c Slice 4 oder #456 Slice 5.
+  noch die weiterhin offenen Consumer aus 1.14c Stufe 2 und 8.9c Slice 4. Der Lernziel-Consumer
+  aus #456 Slice 5 ist implementiert, bleibt aber bis zur realen Slice-8-Abnahme produktiv aus.
 
 ---
 
@@ -364,7 +367,7 @@ keine Produktivaktivierung oder fachliche Freigabe der drei Consumer von selbst.
 
 ## Ergänzung 2026-09-22: Runtime-Voraussetzung für Issue #456
 
-**Status:** Runtime R am 2026-10-05 technisch implementiert und lokal mit echtem Modell geprüft; keine Produktivaktivierung oder Consumer-Freigabe.
+**Status:** Runtime R am 2026-10-05 technisch implementiert und lokal mit echtem Modell geprüft; Lernziel-Consumer implementiert, aber noch keine Produktivaktivierung oder reale Slice-8-Freigabe.
 [Issue #456](https://github.com/kqc-real/arsnova.eu/issues/456) erweitert den bisherigen
 Geltungsbereich (Labels und Summary) um einen dritten Auftrag: **Lernzielableitung**.
 Frühere Aussagen über zwei Aufträge beschreiben den bisherigen Scope; die übrigen
@@ -386,8 +389,9 @@ sind nachzuweisen. Produktivaktivierung bleibt eine separate Betreiberentscheidu
 R enthält bereits versionierte Shared-Ein-/Ausgabeschemas, Auftragserkennung und
 Adapterübersetzung für **Label, Summary und Lernzielableitung**. Dies umfasst technische
 Vertragstests für gültige und schemainkompatible Antworten sowie unzulässige Referenzen.
-Lernziel-Fixtures reichen für diese technische Prüfung; fachlicher Ableitungsprompt,
-Ableitungsqualität und Host-UI bleiben #456 Slice 5.
+Lernziel-Fixtures reichen für diese technische Prüfung. Fachlicher Ableitungsprompt,
+Lebenszyklus und Host-UI sind in #456 Slice 5 umgesetzt; reale Ableitungsqualität und
+Zielhostmessung bleiben Teil der kombinierten Slice-8-Abnahme.
 
 Die Slot-Abnahme prüft alle drei Auftragspaarungen in beiden Belegungsreihenfolgen,
 drei gleichzeitige Anfragen und die Freigabe nach Abbruch/Timeout jedes Auftragstyps.
