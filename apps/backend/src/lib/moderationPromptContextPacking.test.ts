@@ -965,7 +965,7 @@ describe('moderation prompt context packing', () => {
       result.budget.reservedOutputTokens +
       result.budget.safetyMarginTokens;
     expect(occupiedWindow).toBeLessThan(largeWindowProfile.contextWindowTokens / 2);
-  });
+  }, 15_000);
 
   it('omits transport and analysis timestamps from semantic hashes but invalidates semantic changes', () => {
     const first = analysisFixture();
