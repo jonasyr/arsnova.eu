@@ -118,6 +118,8 @@ model AnswerOption {
   questionId  String
   question    Question     @relation(fields: [questionId], references: [id], onDelete: Cascade)
   voteAnswers VoteAnswer[] // MC: mehrere Votes pro Option möglich
+
+  @@index([questionId])
 }
 
 // ─── Live-Session (Story 2.1–2.3) ───────────────────────────────────────────
@@ -233,6 +235,7 @@ model Participant {
   @@unique([sessionId, nickname]) // Kein doppelter Nickname pro Session
   @@unique([sessionId, participantNumber])
   @@unique([sessionId, anonymousClientIdHash]) // Ein Browser-Client = eine Teilnahme
+  @@index([teamId]) // SET NULL beim Session-/Team-Purge ohne Participant-Vollscan
   @@index([sessionId, timerAccommodation]) // Host-Fortschritt für persönliche Zeitfenster
   @@index([sessionId, joinedAt, id]) // Revisionsgebundene Host-Pagination ohne Vollbestand
 }
@@ -273,6 +276,7 @@ model HostCredentialExchange {
   expiresAt          DateTime
 
   @@unique([sessionId, sourceSecretHash, exchangeIdHash])
+  @@index([sourceCredentialId])
   @@index([expiresAt])
 }
 
@@ -304,6 +308,7 @@ model ParticipantJoinReplay {
   expiresAt          DateTime
 
   @@unique([sessionId, idempotencyKeyHash])
+  @@index([participantId]) // SET NULL beim Participant-Cascade ohne Replay-Vollscan
   @@index([expiresAt])
 }
 
@@ -440,6 +445,7 @@ model Vote {
   votedAt                  DateTime     @default(now())
 
   @@unique([sessionId, participantId, questionId, round]) // Nur eine Stimme pro Frage pro Runde
+  @@index([questionId]) // Cascade eines verwaisten Parent-Quiz ohne Vote-Vollscan
   @@index([sessionId, questionId, round])
   @@index([participantId, votedAt])
 }
@@ -453,6 +459,7 @@ model VoteAnswer {
   answerOption   AnswerOption @relation(fields: [answerOptionId], references: [id], onDelete: Cascade)
 
   @@unique([voteId, answerOptionId]) // Jede Option maximal einmal pro Vote
+  @@index([answerOptionId])
 }
 
 // ─── Enums ──────────────────────────────────────────────────────────────────
@@ -533,6 +540,8 @@ model BonusToken {
   generatedAt   DateTime     @default(now())
 
   @@index([generatedAt])
+  @@index([participantId])
+  @@index([sessionId])
 }
 
 // Story 4.8: Session-Bewertung durch Teilnehmende
@@ -548,6 +557,7 @@ model SessionFeedback {
   createdAt             DateTime     @default(now())
 
   @@unique([sessionId, participantId]) // Nur eine Bewertung pro Person pro Session
+  @@index([participantId])
 }
 
 // ─── Produktfeedback (Epic 12) — getrennt von SessionFeedback / Blitzlicht ───
@@ -750,6 +760,7 @@ model QaQuestion {
   @@index([sessionId, status, upvoteCount, createdAt, id])
   @@index([sessionId, updatedAt])
   @@index([sessionId, participantId])
+  @@index([participantId]) // Participant-Cascade darf nicht jede Q&A-Zeile scannen
   @@index([sessionId, nlpStatus])
 }
 
@@ -766,6 +777,7 @@ model QaUpvote {
 
   @@unique([qaQuestionId, participantId])
   @@index([qaQuestionId, direction])
+  @@index([participantId]) // Gemessener Hauptpfad des Session-Purge-Cascades
 }
 
 enum QaVoteDirection {
@@ -975,6 +987,7 @@ model AdminAuditLog {
   createdAt            DateTime         @default(now())
 
   @@index([createdAt])
+  @@index([sessionId]) // Set-basierte Pseudonymisierung beim Session-Purge
   @@index([sessionCode, createdAt])
   @@index([sessionReferenceHash, createdAt])
 }

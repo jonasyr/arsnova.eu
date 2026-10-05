@@ -312,7 +312,20 @@ Rolling Deployments noch ein altes Image den Sessionkern löscht. Der weiterhin
 minütliche alte Feedback-Cleanup dient als TTL-Bridge für entkoppelte
 Bewertungen und Admin-Audits.
 
-Alle drei Migrationen bleiben bei einem App-Rollback vorwärts angewandt. Ein
+`20261005033000_session_purge_fk_indexes` ergänzt die leitenden Indizes für
+alle Referenzaktionen im Session-/Parent-Quiz-Purge sowie den Audit-Lookup.
+Die Indizes werden `CONCURRENTLY` aufgebaut, weil die Migrationsphase vor dem
+Writer-Drain des Produktions-Deployments liegt. Vor jedem Aufbau entfernt die
+Migration einen eventuell gleichnamig verbliebenen Index: Ein abgebrochener
+PostgreSQL-Aufbau kann sonst einen ungültigen Index hinterlassen, den
+`IF NOT EXISTS` bei einem Migrations-Retry übergehen würde. Beim ersten Deploy
+ist dieser Drop ein No-op; nur beim Retry eines fehlgeschlagenen Aufbaus kann
+der kurze reguläre Drop auf eine Tabellensperre warten. Ein lokaler 10er-Batch
+mit 2.300 Teilnehmenden und 2.900 Votes sank dadurch im PostgreSQL-Plan von
+10,45 Sekunden auf 193 Millisekunden; der Purge bleibt damit deutlich unter
+Prismas 5-Sekunden-Limit für interaktive Transaktionen.
+
+Alle vier Migrationen bleiben bei einem App-Rollback vorwärts angewandt. Ein
 Schema-Downgrade ist nicht vorgesehen; das Rückrollen erfolgt ausschließlich
 über das App-Image.
 
@@ -325,7 +338,8 @@ Sie decken Defaults,
 Unveränderlichkeit, die `startedAt`-Rollback-Brücke, Child-Write-Sperren,
 automatische Endmaterialisierung sowie Verlängerung-/Ende-Races über mehrere
 DB-Verbindungen, Q&A-Titel-/Moderationsrevisionen sowie Cascade/SetNull,
-Legal-Hold-Bridge, Audit-Minimierung und die getrennten TTLs ab.
+Legal-Hold-Bridge, Audit-Minimierung, gültige Purge-Leitindizes und die getrennten
+TTLs ab.
 
 Lokal:
 
