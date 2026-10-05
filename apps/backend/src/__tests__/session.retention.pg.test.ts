@@ -6,8 +6,73 @@
  * den 24h-Cleanup eines vorherigen App-Images.
  */
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+
+const PURGE_INDEXES = [
+  {
+    indexName: 'AdminAuditLog_sessionId_idx',
+    tableName: 'AdminAuditLog',
+    leadingColumn: 'sessionId',
+  },
+  {
+    indexName: 'AnswerOption_questionId_idx',
+    tableName: 'AnswerOption',
+    leadingColumn: 'questionId',
+  },
+  {
+    indexName: 'BonusToken_participantId_idx',
+    tableName: 'BonusToken',
+    leadingColumn: 'participantId',
+  },
+  {
+    indexName: 'BonusToken_sessionId_idx',
+    tableName: 'BonusToken',
+    leadingColumn: 'sessionId',
+  },
+  {
+    indexName: 'HostCredentialExchange_sourceCredentialId_idx',
+    tableName: 'HostCredentialExchange',
+    leadingColumn: 'sourceCredentialId',
+  },
+  {
+    indexName: 'Participant_teamId_idx',
+    tableName: 'Participant',
+    leadingColumn: 'teamId',
+  },
+  {
+    indexName: 'ParticipantJoinReplay_participantId_idx',
+    tableName: 'ParticipantJoinReplay',
+    leadingColumn: 'participantId',
+  },
+  {
+    indexName: 'QaQuestion_participantId_idx',
+    tableName: 'QaQuestion',
+    leadingColumn: 'participantId',
+  },
+  {
+    indexName: 'QaUpvote_participantId_idx',
+    tableName: 'QaUpvote',
+    leadingColumn: 'participantId',
+  },
+  {
+    indexName: 'SessionFeedback_participantId_idx',
+    tableName: 'SessionFeedback',
+    leadingColumn: 'participantId',
+  },
+  {
+    indexName: 'Vote_questionId_idx',
+    tableName: 'Vote',
+    leadingColumn: 'questionId',
+  },
+  {
+    indexName: 'VoteAnswer_answerOptionId_idx',
+    tableName: 'VoteAnswer',
+    leadingColumn: 'answerOptionId',
+  },
+] as const;
 
 const RUN_PG = process.env['RUN_PG_SESSION_LIFECYCLE_TESTS'] === '1';
 const DATABASE_URL =
@@ -17,6 +82,32 @@ const DATABASE_URL =
 function uniqueSessionCode(): string {
   return `R${randomUUID().replaceAll('-', '').slice(0, 5).toUpperCase()}`;
 }
+
+describe('session purge index migration', () => {
+  const migration = readFileSync(
+    resolve(
+      process.cwd(),
+      '../../prisma/migrations/20261005033000_session_purge_fk_indexes/migration.sql',
+    ),
+    'utf8',
+  );
+
+  it('entfernt mögliche ungültige Reste vor jedem concurrent Retry', () => {
+    expect(migration).not.toContain('CREATE INDEX CONCURRENTLY IF NOT EXISTS');
+
+    for (const { indexName } of PURGE_INDEXES) {
+      const dropStatement = `DROP INDEX IF EXISTS "${indexName}";`;
+      const createStatement = `CREATE INDEX CONCURRENTLY "${indexName}"`;
+      const dropPosition = migration.indexOf(dropStatement);
+      const createPosition = migration.indexOf(createStatement);
+
+      expect(dropPosition, `fehlender Retry-Drop für ${indexName}`).toBeGreaterThanOrEqual(0);
+      expect(createPosition, `fehlender Aufbau für ${indexName}`).toBeGreaterThan(dropPosition);
+      expect(migration.indexOf(dropStatement, dropPosition + 1)).toBe(-1);
+      expect(migration.indexOf(createStatement, createPosition + 1)).toBe(-1);
+    }
+  });
+});
 
 describe.skipIf(!RUN_PG)('session retention (PostgreSQL)', () => {
   const client = new Client({ connectionString: DATABASE_URL });
@@ -44,68 +135,7 @@ describe.skipIf(!RUN_PG)('session retention (PostgreSQL)', () => {
   });
 
   it('hält alle Referenzaktionen des Session-Purges über Leitindizes bounded', async () => {
-    const expected = [
-      {
-        indexName: 'AdminAuditLog_sessionId_idx',
-        tableName: 'AdminAuditLog',
-        leadingColumn: 'sessionId',
-      },
-      {
-        indexName: 'AnswerOption_questionId_idx',
-        tableName: 'AnswerOption',
-        leadingColumn: 'questionId',
-      },
-      {
-        indexName: 'BonusToken_participantId_idx',
-        tableName: 'BonusToken',
-        leadingColumn: 'participantId',
-      },
-      {
-        indexName: 'BonusToken_sessionId_idx',
-        tableName: 'BonusToken',
-        leadingColumn: 'sessionId',
-      },
-      {
-        indexName: 'HostCredentialExchange_sourceCredentialId_idx',
-        tableName: 'HostCredentialExchange',
-        leadingColumn: 'sourceCredentialId',
-      },
-      {
-        indexName: 'Participant_teamId_idx',
-        tableName: 'Participant',
-        leadingColumn: 'teamId',
-      },
-      {
-        indexName: 'ParticipantJoinReplay_participantId_idx',
-        tableName: 'ParticipantJoinReplay',
-        leadingColumn: 'participantId',
-      },
-      {
-        indexName: 'QaQuestion_participantId_idx',
-        tableName: 'QaQuestion',
-        leadingColumn: 'participantId',
-      },
-      {
-        indexName: 'QaUpvote_participantId_idx',
-        tableName: 'QaUpvote',
-        leadingColumn: 'participantId',
-      },
-      {
-        indexName: 'SessionFeedback_participantId_idx',
-        tableName: 'SessionFeedback',
-        leadingColumn: 'participantId',
-      },
-      {
-        indexName: 'Vote_questionId_idx',
-        tableName: 'Vote',
-        leadingColumn: 'questionId',
-      },
-      {
-        indexName: 'VoteAnswer_answerOptionId_idx',
-        tableName: 'VoteAnswer',
-        leadingColumn: 'answerOptionId',
-      },
-    ];
+    const expected = PURGE_INDEXES;
     const indexes = await client.query<{
       indexName: string;
       tableName: string;

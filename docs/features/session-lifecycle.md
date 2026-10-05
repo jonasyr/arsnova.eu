@@ -309,8 +309,13 @@ Bewertungen und Admin-Audits.
 `20261005033000_session_purge_fk_indexes` ergänzt die leitenden Indizes für
 alle Referenzaktionen im Session-/Parent-Quiz-Purge sowie den Audit-Lookup.
 Die Indizes werden `CONCURRENTLY` aufgebaut, weil die Migrationsphase vor dem
-Writer-Drain des Produktions-Deployments liegt. Ein lokaler 10er-Batch mit
-2.300 Teilnehmenden und 2.900 Votes sank dadurch im PostgreSQL-Plan von
+Writer-Drain des Produktions-Deployments liegt. Vor jedem Aufbau entfernt die
+Migration einen eventuell gleichnamig verbliebenen Index: Ein abgebrochener
+PostgreSQL-Aufbau kann sonst einen ungültigen Index hinterlassen, den
+`IF NOT EXISTS` bei einem Migrations-Retry übergehen würde. Beim ersten Deploy
+ist dieser Drop ein No-op; nur beim Retry eines fehlgeschlagenen Aufbaus kann
+der kurze reguläre Drop auf eine Tabellensperre warten. Ein lokaler 10er-Batch
+mit 2.300 Teilnehmenden und 2.900 Votes sank dadurch im PostgreSQL-Plan von
 10,45 Sekunden auf 193 Millisekunden; der Purge bleibt damit deutlich unter
 Prismas 5-Sekunden-Limit für interaktive Transaktionen.
 
