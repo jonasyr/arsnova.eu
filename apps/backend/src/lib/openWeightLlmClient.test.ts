@@ -512,4 +512,31 @@ describe('openWeightLlmClient', () => {
     });
     expect(request).toHaveBeenCalledTimes(3);
   });
+
+  it('schließt den Circuit Breaker nach seinem Ablauf und erlaubt einen neuen Auftrag', async () => {
+    let now = 0;
+    let unavailable = true;
+    const request = vi.fn(async (input: { path: string }) => {
+      if (unavailable) return { status: 500, body: '' };
+      return input.path.startsWith('/slots')
+        ? { status: 200, body: '[]' }
+        : completionResponse(outputs.topic_label);
+    });
+    resetOpenWeightLlmClientForTests({ config: () => defaultConfig, now: () => now, request });
+    for (let index = 0; index < 3; index += 1) {
+      await expect(runOpenWeightLlm(requests.topic_label)).resolves.toEqual({
+        status: 'unavailable',
+      });
+    }
+    await expect(runOpenWeightLlm(requests.topic_label)).resolves.toEqual({
+      status: 'circuit_open',
+    });
+
+    now = 30_000;
+    unavailable = false;
+    await expect(runOpenWeightLlm(requests.topic_label)).resolves.toMatchObject({
+      status: 'completed',
+    });
+    expect(request).toHaveBeenCalledTimes(5);
+  });
 });
