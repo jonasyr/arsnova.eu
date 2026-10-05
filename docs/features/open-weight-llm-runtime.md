@@ -4,7 +4,7 @@
 
 **Stand:** 2026-10-05
 
-**Status:** Runtime, App-Verträge und Betriebswrapper implementiert; Lernzielableitung aus #456 Slice 5 als erster expliziter Vorbereitungs-Consumer verdrahtet; produktiv standardmäßig aus
+**Status:** Runtime, App-Verträge und Betriebswrapper implementiert; Lernzielableitung und Summary V2 als getrennte Consumer verdrahtet; produktiv standardmäßig aus; reale Consumer-/Hardwareabnahme offen
 
 **ADR:** [ADR-0035](../architecture/decisions/0035-self-hosted-llm-runtime-llama-cpp-over-ollama.md)
 
@@ -16,9 +16,11 @@ Runtime R stellt eine gemeinsame, private CPU-Runtime für drei getrennte techni
 - `qa_summary` für 8.9c Slice 4,
 - `learning_objectives` für Issue #456 Slice 5.
 
-Die versionierten Zod-Verträge liegen in `libs/shared-types/src/open-weight-llm.ts`. Der Backend-Client übersetzt ausschließlich diese Verträge nach llama.cpp Chat Completions, prüft die strukturierte Antwort erneut und verwirft unbekannte Quellen- oder Aufgabenreferenzen. Runtime R allein erzeugte noch keine sichtbare Funktion; #456 Slice 5 verdrahtet nun ausschließlich den bewusst ausgelösten Vorbereitungsauftrag aus [Modellgestützte Lernzielableitung](learning-objective-derivation.md). Label- und Summary-Pfade behalten ihre eigenen Aktivierungs- und Fallbackgrenzen.
+Die versionierten Zod-Verträge liegen in `libs/shared-types/src/open-weight-llm.ts`. Der Backend-Client übersetzt ausschließlich diese Verträge nach llama.cpp Chat Completions, prüft die strukturierte Antwort erneut und verwirft unbekannte Quellen- oder Aufgabenreferenzen. #456 Slice 5 verdrahtet den bewusst ausgelösten Vorbereitungsauftrag aus [Modellgestützte Lernzielableitung](learning-objective-derivation.md); Slice 7 verdrahtet `qa_summary` V2 mit dem versionierten [Moderations-Prompt-Kontext](moderation-prompt-context.md), einem hostgeschützten Vorschaupfad und dem extraktiven Backend-Fallback. Der Labelpfad bleibt fachlich offen. Alle drei Aufträge behalten eigene Aktivierungs-, Schema-, Timeout- und Fallbackgrenzen.
 
-Jeder Auftrag ist zusätzlich auf 2.500 UTF-8-Bytes für die vollständig serialisierte User-Nachricht begrenzt. Zusammen mit der festen System-/Chat-Schablone und dem größten Ausgabebudget von 768 Tokens bleibt damit selbst der Byte-Fallback konservativ unter dem festen Kontextfenster von 4.096 Tokens. Künftige Consumer müssen größere Quellen- oder Quizmengen deterministisch in mehrere Aufträge teilen; die Runtime nimmt keinen scheinbar gültigen, aber unausführbaren Großauftrag an.
+`topic_label`, `learning_objectives` und der Legacy-Summaryauftrag sind zusätzlich auf 2.500 UTF-8-Bytes für die vollständig serialisierte User-Nachricht begrenzt. Größere Lernzielmengen werden deterministisch in sequenzielle Aufträge geteilt. Summary V2 besitzt bewusst nicht diese historische Gesamtgrenze, sondern den bereits gepackten `ModerationPromptContextV1` mit seinem eigenen Kontext-, Instruktions-, Definitions-, Antwort- und Sicherheitsbudget. Sein festes Profil reserviert bei 4.096 insgesamt 640 für die Antwort und 128 als Sicherheitsmarge.
+
+Der reichhaltige Summary-V2-Referenzkontext passt in diesem Profil nicht: Die App packt sichtbar eine Q&A-Textbaseline neu. Das verhindert einen unausführbaren Großauftrag, belegt aber nicht die vom Issue geforderte reichhaltige Vollkontexttauglichkeit. Es gibt keinen stillen Ausbau des Kontextfensters, keine GPU- und keine SaaS-Ausweicharchitektur.
 
 `OPEN_WEIGHT_LLM_ENABLED` bleibt standardmäßig `false` und ist unabhängig von `NLP_ENABLED`, `QA_NLP_ENABLED`, `WORD_CLOUD_SEMANTIC_ENABLED` und `QA_SUMMARY_ENABLED`. Es gibt keinen SaaS-Fallback.
 
@@ -227,7 +229,7 @@ docker exec -i arsnova-v3-open-weight-llm sh -c \
 
 Der finale isolierte Container war zusätzlich effektiv als UID/GID `65532:65532`, read-only, `network_mode: none`, 128 PIDs, `cap_drop: ALL`, `no-new-privileges` und `healthy` geprüft. Am geschützten Slot-Endpunkt lieferte das exakte Credential unter der abweichenden App-UID und gemeinsamen Socket-Gruppe HTTP 200, ein anderes formal gültiges Credential HTTP 401. Ein anschließendes `SIGTERM` wurde sauber an den Server weitergegeben; der Container beendete sich innerhalb der Grace Period mit Exitcode 0 und ohne OOM. Der `/health`-Endpunkt bleibt, wie oben beschrieben, nur eine Readiness-Sonde.
 
-Die drei Läufe belegen Schemaerzwingung und Ausführbarkeit des kurzen Labelauftrags. Sie belegen nicht Summary-Prefill auf der echten 8-vCPU-Inferenzbox, einen realen Lernzielauftrag, Lernzielqualität, p95 unter Last, Produktions-RSS oder fachliche Freigabe. Slice 5 ergänzt dafür modellfreie Consumer-, Prompt- und Lebenszyklustests; die echten Consumerläufe und Produktionsmessungen bleiben Bestandteil der Slice-8-Gesamtabnahme vor Aktivierung.
+Die drei Läufe belegen Schemaerzwingung und Ausführbarkeit des kurzen Labelauftrags. Sie belegen nicht Summary-Prefill auf der echten 8-vCPU-Inferenzbox, einen realen Lernzielauftrag, Lernzielqualität, p95 unter Last, Produktions-RSS oder fachliche Freigabe. Die Slices 5–7 ergänzen dafür modellfreie Consumer-, Prompt-, Adapter-, Quellen- und Lebenszyklustests. Für den integrierten Head stand keine reale Zielruntime für `qa_summary` V2 oder `learning_objectives` zur Verfügung; die fehlenden Läufe und der nicht passende reichhaltige 4.096-Kontext bleiben in der [Slice-8-Abnahme](../implementation/ISSUE-456-SLICE-8-ABNAHME.md) offen. Die Produktivflags bleiben aus.
 
 ## Verifikation
 

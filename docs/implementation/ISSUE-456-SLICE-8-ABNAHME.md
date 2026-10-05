@@ -1,0 +1,137 @@
+<!-- markdownlint-disable MD013 -->
+
+# Issue #456 – Slice-8-Abnahme und offene Betriebsgrenzen
+
+**Stand:** 2026-10-05
+
+**Scope:** finaler Integrationsstand der Slices 5–8 auf Basis der bereits gemergten Runtime R
+**Produktivstatus:** `QA_SUMMARY_ENABLED=false` und `OPEN_WEIGHT_LLM_ENABLED=false`; keine Aktivierungsfreigabe
+
+## Ergebnis
+
+Die Slices 5–7 sind im Code als zusammenhängender, weiterhin abschaltbarer Pfad vorhanden:
+
+- Die Lernzielableitung ist ein ausdrücklich gestarteter, abbrechbarer Vorbereitungsauftrag. Sie verwendet die private Runtime, nicht Join, Vote, Q&A-Submit oder WebSocket.
+- N10–N12 bauen den frisch hostautorisierten, lösungsfreien Analysekontext, packen ihn deterministisch, schließen Quellenreferenzen und bilden Hash sowie begrenzten Cache.
+- N13–N15 handeln `full-context` und `legacy-text` explizit aus, stellen einen lokalen extraktiven Fallback bereit und prüfen Hostrecht, Retention, Hash und Quellen vor sowie nach der Verarbeitung erneut.
+- `qa.summaryContextPreview` ist hostgeschützt. Die Host-UI lädt die Diagnose nur nach einer eigenen Aktion und zeigt Verträge, Modus, Cache, Bereichszustände, Mengen, Budget und Kürzungsgründe. Instruktions-/Definitionstext und vollständige Rohinhalte werden dort nicht angezeigt.
+- `QaSummaryRuntimeCompatibleDTOSchema` versucht V2 vor dem unveränderten Legacy-Vertrag. Inkompatible Adapter erhalten keinen scheinbar erfolgreichen, still gekürzten V2-Auftrag.
+
+Das ist ein technischer Übergabenachweis, keine empirische Bestätigung eines endgültigen Moderationsprompts oder einer didaktischen Wirksamkeit.
+
+## Reproduzierbares Demo-Quiz-Szenario
+
+Der verbindliche Integrationsrunner verwendet das kanonische Demo-Quiz aus `apps/frontend/src/assets/demo/quiz-demo-showcase.<locale>.json`; die Produktquelle bleibt `getDemoQuizPayload(...)` in `apps/frontend/src/app/features/quiz/data/demo-quiz-payload.ts`. Er erzeugt kein verkürztes Ersatzquiz.
+
+Netzwerkfreie Vertrags- und Korpusprüfung:
+
+```bash
+npm run load:issue-456:validate
+```
+
+`--validate` liest ausschließlich Repositorydateien. Es öffnet keine HTTP-, WebSocket-, Datenbank- oder Redis-Verbindung und prüft insbesondere:
+
+- das kanonische Demo-Quiz und seine 13 Aufgaben;
+- mindestens 250 Teilnahmen;
+- mindestens zehn fachlich sinnvolle Q&A-Fragen je Teilnahme und damit mindestens 2.500 Einreichungen;
+- den kuratierten Bezug der Fragen zum Demo-Quiz oder zu Funktionen, Nutzung, Barrierefreiheit und Datenschutz von arsnova.eu;
+- Text- und Vertragsgrenzen ohne technische Platzhalterfragen.
+
+Der netzwerkfreie Lauf vom 2026-10-05 bestand mit 14/14 Tests: 250 Teilnahmen, genau 2.500 Fragen, davon 1.250 zum Demo-Quiz und 1.250 zu arsnova.eu. Der echte lokale `--run` wurde in diesem Dokumentationslauf nicht ausgeführt.
+
+Der echte Lauf ist absichtlich nur gegen Loopbackziele zugelassen:
+
+```bash
+# separates Terminal für den lokalen Backendprozess
+QA_SUMMARY_ENABLED=true npm run dev:backend
+
+# Lastgenerator erst nach erfolgreichem Backendstart
+npm run load:issue-456:run
+```
+
+Der Runner verweigert kleinere Werte als 250 Teilnahmen beziehungsweise zehn Fragen je Teilnahme und verweigert Nicht-Loopback-Ziele. Alle Clients kommen aus demselben Lastgeneratornetz und bilden damit auch den zulässigen Shared-NAT-Fall ab. Der Ablauf erstellt eine lokale Session mit kanonischem Demo-Quiz, Q&A und Blitzlicht, speichert vor dem ersten Join ein bestätigtes manuelles quiz-weites Lernziel, lässt die Teilnehmenden beitreten, reicht die mindestens 2.500 Fragen capability-gebunden ein, übt Quiz und Feedback aus und ruft anschließend Kontextvorschau sowie versionierten Summary-Auftrag auf. Der persistierte Bericht übernimmt vom Lernziel nur Anzahl und Revision, nicht den Text. Er ist kein Produktionslasttest und darf nicht gegen `arsnova.eu` ausgeführt werden.
+
+`QA_SUMMARY_ENABLED=true` muss am **Backendprozess** gesetzt sein; eine gleichnamige Variable nur am Lastgenerator ändert den bereits laufenden Server nicht. Der Runner prüft deshalb unmittelbar nach dem Erstellen der lokalen Session und noch vor Lernziel, Joins und 2.500 Q&A-Einreichungen, dass das Backend Summary V2 aktiviert meldet. Bei einem späteren Fehler beendet er die von ihm erstellte Session idempotent über `session.end`, damit der stabile Demo-History-Scope keinen Folgelauf blockiert.
+
+Der netzwerkfreie Lauf belegt nur Testdaten und Harness-Vertrag. Ein erfolgreicher `--run` gegen eine lokale App belegt den Anwendungsfluss, ersetzt aber weder die reale Modellmessung noch eine Freigabe des Produktivflags.
+
+## Festes Summary-V2-Budgetprofil
+
+Der technische Übergabepfad verwendet derzeit dieses feste Profil:
+
+| Anteil                                      |  Wert | Bedeutung                                                             |
+| ------------------------------------------- | ----: | --------------------------------------------------------------------- |
+| Kontextfenster                              | 4.096 | konservative UTF-8-Obergrenze des Packers für das feste Runtimeprofil |
+| technische Instruktion                      |   314 | exakte UTF-8-Bytes                                                    |
+| Bedeutungsdefinition                        |   203 | exakte UTF-8-Bytes                                                    |
+| Antwortreserve                              |   640 | reservierte Ausgabetokens                                             |
+| Sicherheitsmarge                            |   128 | nicht für Eingabedaten verwendbar                                     |
+| verbleibende konservative Kontextobergrenze | 2.811 | kanonisches JSON des gepackten Fachkontexts                           |
+
+Die llama.cpp-Übergabe besteht bei V2 aus genau drei Nachrichten:
+
+1. System: die versionierte technische Instruktion;
+2. System: die versionierte Bedeutungsdefinition;
+3. User: ausschließlich das kanonische JSON von `promptContext.context`.
+
+Transportfelder wie Hash, `packedAt` und der Budgetbericht werden nicht noch einmal als Userinhalt dupliziert. Untrusted Fragen-, Quiz- und Lernzieltexte bleiben dadurch strukturell von den beiden Systemnachrichten getrennt.
+
+### Offener Blocker: reichhaltiger Vollkontext passt nicht in 4.096
+
+Der reichhaltige Referenzkontext mit allen Fachmetadaten überschreitet in diesem festen Profil bereits mit seinen Basismetadaten das verfügbare Budget. Die Implementierung verschweigt das nicht: Sie packt kontrolliert eine Q&A-Textbaseline neu und weist ausgelassene Bereiche und `token-budget`-/`budget-truncated`-Gründe im Vertrag und in der Vorschau aus.
+
+Damit sind V2-Vertrag, Quellenbindung, Vorschau und Fallback ausführbar. **Nicht belegt ist, dass der im Issue geforderte reichhaltige Vollkontext auf dem vorgesehenen CPU-Profil mit 4.096 Kontexttokens nutzbar ist.** Das darf weder als bestandene Full-context-Abnahme noch als Anlass für einen stillen Kontext-, GPU-, Modell- oder SaaS-Wechsel dargestellt werden. Vor einer Produktivfreigabe braucht es eine ausdrückliche Profilentscheidung und eine erneute Messung.
+
+## Reale Modell- und Betriebsmessung
+
+Runtime R besitzt einen vollständig dokumentierten realen Kurzlauf für `topic_label`; Systemtext, Usernachricht, JSON-Schema, vollständige Antworten, Digests, Hardware und Laufzeiten stehen in [Private Open-Weight-LLM-Runtime](../features/open-weight-llm-runtime.md#vollständig-protokollierte-lokale-modellprüfung-vom-2026-10-05).
+
+Für den neuen `qa_summary`-V2-Auftrag und für `learning_objectives` war in dieser Abschlussarbeit keine vorgesehene reale Runtime-/Hardwareumgebung verfügbar. Deshalb existiert kein ehrlicher CPU-/Prefill-/RSS-Nachweis für den reichhaltigen Kontext und kein realer Demo-Quiz-Lernzieloutput. Mocks, Vertragstests und der extraktive Fallback ersetzen diesen Nachweis nicht.
+
+Vor einem echten Lauf müssen ohne Secrets dauerhaft in der Abnahmedokumentation festgehalten werden:
+
+- Hardware, Containerlimits, Image-, llama.cpp- und Modelldigest;
+- Kontextlimit, exakte Eingabe- und Antwortreserve, Prompt-/Completiontokens;
+- vollständige Systemnachrichten, Usernachricht, angefordertes Schema und vollständiger Responsebody;
+- Prefill/TTFT, Gesamtlaufzeit, Tokens pro Sekunde und Spitzen-/stabiler RSS;
+- Kalt-/Warmlauf, Slotbelegung, Cachezustand, Timeout und Fallbackbedingung.
+
+Bis das für Summary V2 und Lernzielableitung auf der vorgesehenen CPU-Box vorliegt, bleibt der Betriebsanteil von Slice 8 ausdrücklich offen und beide Produktivflags bleiben aus.
+
+## Zuordnung der Slice-8-Abnahme
+
+| Abnahmepunkt                                                                    | Stand dieses Integrationsheads                                                                                                                                                                                                                          |
+| ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Vorbereitung → Lernziele → Q&A/Quiz/Feedback → Vorschau → versionierter Auftrag | lokaler Demo-Quiz-Runner und modellfreie Verträge vorhanden; echter Modelllauf offen                                                                                                                                                                    |
+| Vollständiger Kontext und Minimalfall nur Q&A-Texte                             | beide Vertragswege getestet; 4.096-Profil degradiert den reichhaltigen Kontext jedoch auf die ausgewiesene Q&A-Baseline                                                                                                                                 |
+| Produktionsnahe CPU-/Prefill-/Speichermessung                                   | **offen**, keine geeignete Runtime-/Zielhardware in diesem Lauf                                                                                                                                                                                         |
+| Nutzbares Budgetprofil                                                          | Q&A-Baseline technisch begrenzt; reichhaltiger Vollkontext bei 4.096 **nicht belegt**                                                                                                                                                                   |
+| Join, Vote, Q&A-Submit und WebSocket unabhängig vom Modell                      | Architektur und modellfreie Hotpath-/Slot-/Queue-Tests vorhanden; keine automatische Inferenz in diesen Pfaden                                                                                                                                          |
+| Telemetrie ohne Rohprompt, Texte oder Personenkennungen                         | Der Runnerbericht enthält nur freigegebene Mengen, Budgetzähler, Hashes, Status, Modus, Fallback und Laufzeiten; die Queue aggregiert Status, Modus, Fallbackgrund und Latenz. Prompt-/Completiontoken-Telemetrie ist für diese Consumer noch **offen** |
+| Berechtigung, Freigabe, Cache, Quellenintegrität, Fallback                      | fokussierte Shared-/Backend-/Frontendtests decken positive, negative und Änderungsfälle ab                                                                                                                                                              |
+| Fünf Locales und mobile Hostansicht                                             | XLF-Verträge und responsive UI sind implementiert; eine abschließende manuelle Fünf-Locale-/Mobile-Browserabnahme ist im finalen PR als ausgeführter Nachweis oder als offen auszuweisen                                                                |
+| Endgültiger Moderationsprompt und didaktische Wirksamkeit                       | ausdrücklich außerhalb von #456; nur technische, quellengebundene Übergabe                                                                                                                                                                              |
+
+## Verifikationspaket
+
+```bash
+npm run load:issue-456:validate
+npm test -w @arsnova/shared-types -- --run \
+  src/qa-summary-v2.test.ts \
+  src/qa-summary-visibility.test.ts
+npm test -w @arsnova/backend -- --run \
+  src/lib/moderationSummaryContext.test.ts \
+  src/lib/openWeightLlmClient.test.ts \
+  src/lib/qaSummaryQueue.test.ts \
+  src/__tests__/qa.summary.test.ts
+npm run test -w @arsnova/frontend -- \
+  src/app/features/session/session-host/moderation-compass-dialog.component.spec.ts \
+  src/app/features/session/session-host/session-host.component.spec.ts
+npm run check:i18n -w @arsnova/frontend
+npm run typecheck
+npm test
+npm run lint
+npm run build:prod
+```
+
+Ein Kommando gilt erst nach tatsächlicher Ausführung als bestanden. Der finale Pull Request muss die exakten Ergebnisse sowie nicht ausgeführte Browser-, Runtime- oder Hardwareprüfungen mit Risiko nennen. Issue #456 darf wegen der beiden offenen Betriebsnachweise nicht allein aufgrund der implementierten Verträge geschlossen werden.
