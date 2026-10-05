@@ -5,6 +5,7 @@ import { BlockList, isIP } from 'node:net';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse } from 'dotenv';
+import { shouldVerifyOpenWeightLlmModel } from './prod-compose-policy.mjs';
 
 const privateAddresses = new BlockList();
 privateAddresses.addSubnet('10.0.0.0', 8, 'ipv4');
@@ -17,12 +18,6 @@ function isPrivateAddress(address) {
   return family === 4
     ? privateAddresses.check(address, 'ipv4')
     : family === 6 && privateAddresses.check(address, 'ipv6');
-}
-
-const MODEL_REQUIRED_COMMANDS = new Set(['create', 'restart', 'run', 'start', 'up']);
-
-export function shouldVerifyOpenWeightLlmModel(argumentsToCompose) {
-  return argumentsToCompose.some((argument) => MODEL_REQUIRED_COMMANDS.has(argument));
 }
 
 function main() {

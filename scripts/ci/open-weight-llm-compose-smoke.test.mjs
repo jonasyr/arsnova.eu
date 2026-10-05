@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
-import { shouldVerifyOpenWeightLlmModel } from '../open-weight-llm/prod-compose.mjs';
+import { shouldVerifyOpenWeightLlmModel } from '../open-weight-llm/prod-compose-policy.mjs';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '../..');
 
