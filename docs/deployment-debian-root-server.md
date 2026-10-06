@@ -684,7 +684,8 @@ Starke Passwörter und `JWT_SECRET` z. B. mit `openssl rand -base64 32`,
 `ADMIN_SECRET` und `ADMIN_DIAGNOSTIC_SECRET` jeweils separat mit
 `openssl rand -base64 48` erzeugen. Die beiden Admin-Secrets dürfen nie
 identisch sein. `HOST_SESSION_TTL_SECONDS` ist optional; fehlt der Wert, nutzt
-das Backend 8 Stunden. `NLP_ENABLED` bleibt in Produktion `false`, bis der
+das Backend 15 Minuten. Der ursprüngliche Host erneuert dieses kurzlebige Token
+aus seiner persistenten Browser-Capability vor dem Ablauf. `NLP_ENABLED` bleibt in Produktion `false`, bis der
 optionale spaCy-Sidecar bewusst eingeschaltet wird (Compose-Profil `nlp` plus
 `NLP_ENABLED=true`). `deploy.sh` startet den Sidecar nicht; siehe
 [ENVIRONMENT.md](ENVIRONMENT.md) und [NOTICE](../NOTICE). Lokal: `npm run docker:up:nlp`.

@@ -154,6 +154,14 @@ export function createWsBindingFingerprint(
     : null;
 }
 
+function createWsConnectionParamsFingerprint(params: Record<string, string> | null): string | null {
+  if (!params) return null;
+  return Object.entries(params)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, value]) => `${key.length}:${key}:${value.length}:${value}`)
+    .join('|');
+}
+
 function createWsConnectionParams(): Record<string, string> | null {
   const feedbackCode = resolveRouteFeedbackCode();
   const feedbackHostToken = feedbackCode ? getFeedbackHostToken(feedbackCode) : null;
@@ -232,8 +240,8 @@ export function clearPendingHostSessionCode(): void {
   pendingHostSessionCode = null;
 }
 
-let activeWsBindingFingerprint = createWsBindingFingerprint(
-  isBrowser ? resolveWsParticipantBinding() : null,
+let activeWsBindingFingerprint = createWsConnectionParamsFingerprint(
+  isBrowser ? createWsConnectionParams() : null,
 );
 let bindingRefreshPromise: Promise<void> = Promise.resolve();
 const wsClient = isBrowser
@@ -248,12 +256,12 @@ const wsClient = isBrowser
 
 /**
  * Schließt eine wiederverwendete physische Verbindung kontrolliert, sobald
- * SPA-Route oder lokal gespeicherte Participant-ID ein anderes Binding ergeben.
+ * SPA-Route, Capability oder Zugriffstoken ein anderes Binding ergeben.
  * Der nächste Subscription-Start öffnet den lazy Client mit frischen Params.
  */
 export function refreshTrpcWsBinding(): boolean {
   if (!wsClient) return false;
-  const nextFingerprint = createWsBindingFingerprint(resolveWsParticipantBinding());
+  const nextFingerprint = createWsConnectionParamsFingerprint(createWsConnectionParams());
   if (nextFingerprint === activeWsBindingFingerprint) return false;
   activeWsBindingFingerprint = nextFingerprint;
   bindingRefreshPromise = bindingRefreshPromise

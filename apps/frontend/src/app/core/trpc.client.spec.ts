@@ -353,6 +353,34 @@ describe('trpc.client host transport', () => {
     activeSubscription.unsubscribe();
   });
 
+  it('erneuert den WebSocket nach Rotation des Host-Tokens', async () => {
+    let activeHostToken: string | null = 'host-token-old';
+    getHostTokenMock.mockImplementation(() => activeHostToken);
+    storeHostTokenMock.mockImplementation((_code: string, token: string | null) => {
+      activeHostToken = token;
+    });
+    const { refreshTrpcWsBinding, setHostToken } =
+      await loadClientModule('/de/session/abc123/host');
+    const wsOptions = createWSClientMock.mock.calls[0]?.[0] as {
+      connectionParams: () => Record<string, string> | null;
+    };
+
+    expect(wsOptions.connectionParams()).toMatchObject({
+      'x-host-token': 'host-token-old',
+    });
+
+    setHostToken('ABC123', 'host-token-new');
+
+    expect(refreshTrpcWsBinding()).toBe(true);
+    await vi.waitFor(() => expect(wsTransportCloseMock).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(mockConnectionId).toBe(2));
+    expect(wsClientCloseMock).not.toHaveBeenCalled();
+    expect(wsOptions.connectionParams()).toMatchObject({
+      'x-host-token': 'host-token-new',
+    });
+    expect(refreshTrpcWsBinding()).toBe(false);
+  });
+
   it('erzwingt einen Transport-Reconnect auch bei unverändertem Binding', async () => {
     const { forceReconnectTrpcWs } = await loadClientModule('/de/session/abc123/host');
 
