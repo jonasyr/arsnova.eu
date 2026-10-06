@@ -128,6 +128,7 @@ const {
   qaPresentProjectionQueryMock,
   qaNlpRuntimeQueryMock,
   qaSummaryRuntimeQueryMock,
+  qaSummaryContextPreviewQueryMock,
   qaRequestSummaryMutateMock,
   qaModerateMutateMock,
   qaPendingReleaseSnapshotQueryMock,
@@ -193,6 +194,7 @@ const {
   qaPresentProjectionQueryMock: vi.fn(),
   qaNlpRuntimeQueryMock: vi.fn(),
   qaSummaryRuntimeQueryMock: vi.fn(),
+  qaSummaryContextPreviewQueryMock: vi.fn(),
   qaRequestSummaryMutateMock: vi.fn(),
   qaModerateMutateMock: vi.fn(),
   qaPendingReleaseSnapshotQueryMock: vi.fn(),
@@ -302,6 +304,7 @@ vi.mock('../../../core/trpc.client', () => ({
       presentProjection: { query: qaPresentProjectionQueryMock },
       nlpRuntime: { query: qaNlpRuntimeQueryMock },
       summaryRuntime: { query: qaSummaryRuntimeQueryMock },
+      summaryContextPreview: { query: qaSummaryContextPreviewQueryMock },
       requestSummary: { mutate: qaRequestSummaryMutateMock },
       moderate: { mutate: qaModerateMutateMock },
       pendingReleaseSnapshot: { query: qaPendingReleaseSnapshotQueryMock },
@@ -622,6 +625,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
       inferenceConfigured: false,
       result: null,
     });
+    qaSummaryContextPreviewQueryMock.mockRejectedValue(new Error('preview not stubbed'));
     qaRequestSummaryMutateMock.mockResolvedValue({
       enabled: false,
       inferenceConfigured: false,
@@ -25532,9 +25536,21 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
         summaryEnabled: () => boolean;
         summaryVisibleQuestionCount: () => number;
         onRequestSummary: () => void;
+        onRequestSummaryContextPreview: () => Promise<{ contractVersion: string }>;
       };
       expect(data.summaryEnabled()).toBe(true);
       expect(data.summaryVisibleQuestionCount()).toBe(3);
+
+      qaSummaryContextPreviewQueryMock.mockResolvedValue({
+        contractVersion: 'qa-summary-context-preview-v1',
+      });
+      await expect(data.onRequestSummaryContextPreview()).resolves.toEqual({
+        contractVersion: 'qa-summary-context-preview-v1',
+      });
+      expect(qaSummaryContextPreviewQueryMock).toHaveBeenCalledWith({
+        sessionId: defaultSession.id,
+        locale: 'de',
+      });
 
       qaRequestSummaryMutateMock.mockResolvedValue({
         enabled: true,
@@ -25568,7 +25584,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
       fixture.destroy();
     });
 
-    it('startet keine Zusammenfassung ohne Inferenz-Endpunkt oder mit zu wenigen Fragen', async () => {
+    it('respektiert die Frageschwelle und erlaubt danach den lokalen V2-Fallback', async () => {
       getInfoQueryMock.mockResolvedValue({
         ...defaultSession,
         status: 'ACTIVE',
@@ -25614,6 +25630,45 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
       data.onRequestSummary();
       await fixture.whenStable();
       expect(qaRequestSummaryMutateMock).not.toHaveBeenCalled();
+
+      const firstQuestion = fixture.componentInstance.qaQuestions()[0]!;
+      expect(firstQuestion).toBeDefined();
+      fixture.componentInstance.qaQuestions.set([
+        firstQuestion,
+        {
+          ...firstQuestion,
+          id: '22222222-2222-4222-8222-222222222222',
+          text: 'Wie berechnet man den Median?',
+        },
+        {
+          ...firstQuestion,
+          id: '33333333-3333-4333-8333-333333333333',
+          text: 'Wie funktioniert der Fragenkanal in arsnova.eu?',
+        },
+      ]);
+      fixture.componentInstance.qaSummaryRuntime.set({
+        schemaVersion: 2,
+        enabled: true,
+        inferenceConfigured: false,
+        capabilities: {
+          contractVersion: 'qa-summary-adapter-capabilities-v1',
+          adapterId: 'arsnova-summary-adapter-v2',
+          modes: [
+            {
+              kind: 'full-context',
+              requestContract: 'qa-summary-context-v2',
+              outputContract: 'qa-summary-model-output-v2',
+              promptContextContract: 'moderation-prompt-context-v1',
+              definitionVersion: 'moderation-prompt-definitions-v1',
+            },
+            { kind: 'legacy-text' },
+          ],
+        },
+        result: null,
+      });
+      qaRequestSummaryMutateMock.mockResolvedValue(fixture.componentInstance.qaSummaryRuntime());
+      data.onRequestSummary();
+      await vi.waitFor(() => expect(qaRequestSummaryMutateMock).toHaveBeenCalledTimes(1));
       fixture.destroy();
     });
 

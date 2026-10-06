@@ -164,7 +164,8 @@ import {
   QaQuestionsListDTO,
   QaQuestionSortMode,
   QaQuestionSortModeEnum,
-  QaSummaryRuntimeDTO,
+  QaSummaryContextPreviewDTO,
+  QaSummaryRuntimeCompatibleDTO,
   QaSummarySource,
   QuickFeedbackResult,
   SessionChannelsDTO,
@@ -794,7 +795,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   private qaListCursorHistory: Array<string | null> = [];
   private qaListRequestGeneration = 0;
   readonly qaNlpEnabled = signal(false);
-  readonly qaSummaryRuntime = signal<QaSummaryRuntimeDTO | null>(null);
+  readonly qaSummaryRuntime = signal<QaSummaryRuntimeCompatibleDTO | null>(null);
   readonly qaSummaryEnabled = computed(() => this.qaSummaryRuntime()?.enabled === true);
   readonly qaSummaryVisibleQuestionCount = computed(() =>
     countQaSummaryVisibleQuestions(this.qaQuestions()),
@@ -1206,6 +1207,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   readonly emojiBadgePulse = signal(false);
   private emojiPulseTimer: ReturnType<typeof setTimeout> | null = null;
   private qaSummaryPollTimer: ReturnType<typeof setInterval> | null = null;
+  private qaSummaryPreviewRequestGeneration = 0;
   /** Frage + Abstimmungsrunde (Peer Instruction), damit Emoji-Badge bei Rundenwechsel zurücksetzt. */
   private lastEmojiReactionScope = '';
   /** Aktuelle Quiz-Abstimmungsrunde (1/2) für Emoji-Host-Panel. */
@@ -2771,6 +2773,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
         onSummarySourceActivate: (source: QaSummarySource) => {
           void this.followQaSummarySource(source);
         },
+        onRequestSummaryContextPreview: () => this.requestQaSummaryContextPreview(),
         qaSortMode: () => this.qaSortMode(),
         wordCloudSmoothingActive: () => this.qaWordCloudSmoothingStatus() === 'active',
         wordCloudSingleWordsOnly: () =>
@@ -2787,6 +2790,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       backdropClass: 'moderation-compass-dialog-backdrop',
     });
     dialogRef.afterClosed().subscribe(() => {
+      this.qaSummaryPreviewRequestGeneration += 1;
       this.stopQaSummaryPolling();
     });
   };
@@ -5981,6 +5985,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     }
     this.clearFoyerArrivalState();
     this.stopCountdown();
+    this.qaSummaryPreviewRequestGeneration += 1;
     this.stopQaSummaryPolling();
     this.sound.stopAll();
     if (this.isPairedHostClient() || this.hostAccessRevoked()) {
@@ -6801,6 +6806,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   }
 
   private clearSessionTokens(options?: { keepHostToken?: boolean }): void {
+    this.qaSummaryPreviewRequestGeneration += 1;
     if (!this.code) {
       return;
     }
@@ -12484,6 +12490,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     this.qaListNextCursor.set(null);
     this.qaListRankingRevision.set(null);
     this.resetQaListPageNavigation();
+    this.qaSummaryPreviewRequestGeneration += 1;
     this.qaSummaryRuntime.set(null);
     this.qaNlpEnabled.set(false);
     this.frozenQaWordCloudQuestions.set(null);
@@ -12986,6 +12993,8 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       !canRequestQaSummary({
         enabled: runtime?.enabled === true,
         inferenceConfigured: runtime?.inferenceConfigured === true,
+        fallbackAvailable:
+          runtime !== null && 'schemaVersion' in runtime && runtime.schemaVersion === 2,
         visibleQuestionCount: this.qaSummaryVisibleQuestionCount(),
       })
     ) {
@@ -13005,6 +13014,26 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     } catch {
       this.stopQaSummaryPolling();
     }
+  }
+
+  private async requestQaSummaryContextPreview(): Promise<QaSummaryContextPreviewDTO> {
+    const sessionId = this.session()?.id;
+    if (!sessionId) {
+      throw new Error('Session context is no longer available.');
+    }
+    const generation = ++this.qaSummaryPreviewRequestGeneration;
+    const preview = await trpc.qa.summaryContextPreview.query({
+      sessionId,
+      locale: getEffectiveLocale(localeIdToSupported(this.localeId)),
+    });
+    if (
+      generation !== this.qaSummaryPreviewRequestGeneration ||
+      this.session()?.id !== sessionId ||
+      this.hostAccessRevoked()
+    ) {
+      throw new Error('Session authorization changed while loading the context preview.');
+    }
+    return preview;
   }
 
   private startQaSummaryPolling(): void {

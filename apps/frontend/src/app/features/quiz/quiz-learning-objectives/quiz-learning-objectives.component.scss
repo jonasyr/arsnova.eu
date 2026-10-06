@@ -74,6 +74,57 @@
   justify-items: start;
 }
 
+.learning-objectives__derivation {
+  background: var(--mat-sys-surface-container);
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: var(--mat-sys-corner-medium);
+  display: grid;
+  gap: 0.75rem;
+  margin-block-end: 1rem;
+  padding: 1rem;
+}
+
+.learning-objectives__derivation h3,
+.learning-objectives__derivation p {
+  margin: 0;
+}
+
+.learning-objectives__derivation h3 {
+  font: var(--mat-sys-title-medium);
+}
+
+.learning-objectives__derivation > p,
+.learning-objectives__derivation-status {
+  color: var(--mat-sys-on-surface-variant);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.learning-objectives__derivation-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.learning-objectives__derivation-status {
+  background: var(--mat-sys-secondary-container);
+  border-radius: var(--mat-sys-corner-small);
+  color: var(--mat-sys-on-secondary-container);
+  padding: 0.75rem;
+}
+
+.learning-objectives__derivation-status--error {
+  background: var(--mat-sys-error-container);
+  color: var(--mat-sys-on-error-container);
+}
+
+.learning-objectives__derivation-status ul {
+  margin-block: 0.5rem 0;
+  overflow-wrap: anywhere;
+  padding-inline-start: 1.25rem;
+}
+
 .learning-objectives__conflict-text {
   font: var(--mat-sys-body-large);
   overflow-wrap: anywhere;
@@ -265,14 +316,18 @@ button[mat-stroked-button] {
   }
 
   .learning-objectives__actions,
-  .learning-objectives__form-actions {
+  .learning-objectives__form-actions,
+  .learning-objectives__derivation-actions {
     justify-content: stretch;
   }
 
   .learning-objectives__actions button,
   .learning-objectives__form-actions button,
+  .learning-objectives__derivation-actions button,
   #learning-objective-add {
     flex: 1 1 auto;
+    max-width: 100%;
+    white-space: normal;
   }
 }
 

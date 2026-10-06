@@ -83,6 +83,76 @@
       </section>
     }
 
+    <section
+      class="learning-objectives__derivation"
+      aria-labelledby="learning-objective-derivation-title"
+      [attr.aria-busy]="derivationIsPending()"
+    >
+      <h3 id="learning-objective-derivation-title" i18n="@@learningObjectives.derivationTitle">
+        Automatische Vorschläge
+      </h3>
+      <p id="learning-objective-derivation-description" i18n="@@learningObjectives.derivationHelp">
+        Erst nach deiner ausdrücklichen Aktion werden geeignete aktive Aufgaben mit ihren Lösungen
+        an das lokale Modell übergeben. Vorschläge werden als Entwurf ergänzt; manuelle, bearbeitete
+        oder bestätigte Lernziele bleiben unverändert.
+      </p>
+      <div class="learning-objectives__derivation-actions">
+        <button
+          mat-flat-button
+          type="button"
+          id="learning-objective-derive"
+          aria-describedby="learning-objective-derivation-description"
+          [disabled]="derivationIsPending() || objectives().length >= maxObjectives"
+          (click)="deriveLearningObjectives()"
+        >
+          <mat-icon aria-hidden="true">auto_awesome</mat-icon>
+          @if (derivationCanRetry()) {
+            <span i18n="@@learningObjectives.derivationRetry">Nochmal versuchen</span>
+          } @else if (derivationStatus() === 'completed') {
+            <span i18n="@@learningObjectives.derivationAgain">Erneut automatisch formulieren</span>
+          } @else {
+            <span i18n="@@learningObjectives.derivationStart"
+              >Automatisch aus Aufgaben formulieren</span
+            >
+          }
+        </button>
+        @if (derivationIsPending()) {
+          <button
+            mat-stroked-button
+            type="button"
+            id="learning-objective-derive-cancel"
+            (click)="cancelLearningObjectiveDerivation()"
+            i18n="@@learningObjectives.derivationCancel"
+          >
+            Herleitung abbrechen
+          </button>
+        }
+      </div>
+      @if (derivationMessage()) {
+        <div
+          id="learning-objective-derivation-status"
+          class="learning-objectives__derivation-status"
+          [class.learning-objectives__derivation-status--error]="
+            derivationStatus() !== 'pending' && derivationStatus() !== 'completed'
+          "
+          role="status"
+          tabindex="-1"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          <p>{{ derivationMessage() }}</p>
+          @if (derivationLimitations().length > 0) {
+            <p i18n="@@learningObjectives.derivationLimitations">Hinweise zur Herleitung:</p>
+            <ul>
+              @for (limitation of derivationLimitations(); track limitation) {
+                <li>{{ limitation }}</li>
+              }
+            </ul>
+          }
+        </div>
+      }
+    </section>
+
     @if (objectives().length === 0 && !formOpen()) {
       <p class="learning-objectives__empty" i18n="@@learningObjectives.empty">
         Noch keine Lernziele angelegt.
@@ -96,9 +166,11 @@
           [attr.aria-labelledby]="'objective-' + objective.id"
         >
           <div class="learning-objectives__item-main">
-            <p class="learning-objectives__text" [id]="'objective-' + objective.id">
-              {{ objective.text }}
-            </p>
+            <div
+              class="learning-objectives__text markdown-body"
+              [id]="'objective-' + objective.id"
+              [innerHTML]="renderObjectiveMarkdown(objective.text)"
+            ></div>
             <div class="learning-objectives__meta">
               <span
                 class="learning-objectives__status"
