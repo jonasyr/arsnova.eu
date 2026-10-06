@@ -464,16 +464,19 @@ Nicht durch wiederholtes Neustarten übergehen. Erst die konkrete Ursache nach
 ### 10.1 Bind-Adresse und Ressourcen prüfen
 
 ```bash
-cd /opt/arsnova-llm/repository
-LLM_PRIVATE_IP="$(sed -n 's/^OPEN_WEIGHT_LLM_BIND_ADDRESS=//p' .env.llm)"
-LLM_TOKEN="$(sed -n 's/^OPEN_WEIGHT_LLM_TOKEN=//p' .env.llm)"
+(
+  set -euo pipefail
+  cd /opt/arsnova-llm/repository
+  LLM_PRIVATE_IP="$(sed -n 's/^OPEN_WEIGHT_LLM_BIND_ADDRESS=//p' .env.llm)"
+  LLM_TOKEN="$(sed -n 's/^OPEN_WEIGHT_LLM_TOKEN=//p' .env.llm)"
 
-ss -ltnp | grep ':8080'
-curl --fail --silent --show-error --max-time 5 \
-  --header "Authorization: Bearer $LLM_TOKEN" \
-  "http://${LLM_PRIVATE_IP}:8080/health"
-echo
-docker stats --no-stream arsnova-open-weight-llm
+  ss -ltnp | grep -F "${LLM_PRIVATE_IP}:8080"
+  curl --fail --silent --show-error --max-time 5 \
+    --header "Authorization: Bearer $LLM_TOKEN" \
+    "http://${LLM_PRIVATE_IP}:8080/health"
+  echo
+  docker stats --no-stream arsnova-open-weight-llm
+)
 ```
 
 `ss` muss die **private Inferenz-IP**, nicht `0.0.0.0`, `::` oder eine öffentliche
@@ -484,41 +487,67 @@ IP anzeigen. Der Health-Aufruf muss HTTP 200 liefern.
 Ohne Token muss der geschützte Slot-Endpunkt HTTP 401 liefern:
 
 ```bash
-HTTP_CODE="$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 5 \
-  "http://${LLM_PRIVATE_IP}:8080/slots?fail_on_no_slot=1")"
-echo "Ohne Token: HTTP $HTTP_CODE"
-test "$HTTP_CODE" = '401'
+(
+  set -euo pipefail
+  cd /opt/arsnova-llm/repository
+  LLM_PRIVATE_IP="$(sed -n 's/^OPEN_WEIGHT_LLM_BIND_ADDRESS=//p' .env.llm)"
+
+  HTTP_CODE="$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 5 \
+    "http://${LLM_PRIVATE_IP}:8080/slots?fail_on_no_slot=1")"
+  echo "Ohne Token: HTTP $HTTP_CODE"
+  test "$HTTP_CODE" = '401'
+)
 ```
 
 Mit Token muss er antworten:
 
 ```bash
-curl --fail --silent --show-error --max-time 5 \
-  --header "Authorization: Bearer $LLM_TOKEN" \
-  "http://${LLM_PRIVATE_IP}:8080/slots?fail_on_no_slot=1" \
-  | jq 'length'
+(
+  set -euo pipefail
+  cd /opt/arsnova-llm/repository
+  LLM_PRIVATE_IP="$(sed -n 's/^OPEN_WEIGHT_LLM_BIND_ADDRESS=//p' .env.llm)"
+  LLM_TOKEN="$(sed -n 's/^OPEN_WEIGHT_LLM_TOKEN=//p' .env.llm)"
+
+  curl --fail --silent --show-error --max-time 5 \
+    --header "Authorization: Bearer $LLM_TOKEN" \
+    "http://${LLM_PRIVATE_IP}:8080/slots?fail_on_no_slot=1" \
+    | jq -e 'type == "array" and length == 1' >/dev/null
+  echo 'Mit Token: genau ein Slot erreichbar.'
+)
 ```
 
-Erwartet wird `1`, weil genau ein Inferenz-Slot konfiguriert ist.
+Erwartet wird `Mit Token: genau ein Slot erreichbar.`. Jede andere
+Antwortstruktur bricht den Block ab.
 
 ### 10.3 Künstliche Testinferenz ausführen
 
 Dieser Test enthält absichtlich keine Produktions- oder Personendaten:
 
 ```bash
-curl --fail --silent --show-error --max-time 120 \
-  --request POST \
-  --header "Authorization: Bearer $LLM_TOKEN" \
-  --header 'Content-Type: application/json' \
-  --data '{"model":"qwen3-4b-instruct-2507-q4_k_m","messages":[{"role":"system","content":"Antworte nur mit dem Wort bereit."},{"role":"user","content":"Kurzer technischer Bereitschaftstest."}],"temperature":0,"max_tokens":8,"stream":false,"reasoning_effort":"none","chat_template_kwargs":{"enable_thinking":false}}' \
-  "http://${LLM_PRIVATE_IP}:8080/v1/chat/completions" \
-  | jq -r '.choices[0].message.content'
+(
+  set -euo pipefail
+  cd /opt/arsnova-llm/repository
+  LLM_PRIVATE_IP="$(sed -n 's/^OPEN_WEIGHT_LLM_BIND_ADDRESS=//p' .env.llm)"
+  LLM_TOKEN="$(sed -n 's/^OPEN_WEIGHT_LLM_TOKEN=//p' .env.llm)"
 
-unset LLM_TOKEN
+  RESPONSE="$(curl --fail --silent --show-error --max-time 120 \
+    --request POST \
+    --header "Authorization: Bearer $LLM_TOKEN" \
+    --header 'Content-Type: application/json' \
+    --data '{"model":"qwen3-4b-instruct-2507-q4_k_m","messages":[{"role":"system","content":"Antworte nur mit dem Wort bereit."},{"role":"user","content":"Kurzer technischer Bereitschaftstest."}],"temperature":0,"max_tokens":8,"stream":false,"reasoning_effort":"none","chat_template_kwargs":{"enable_thinking":false}}' \
+    "http://${LLM_PRIVATE_IP}:8080/v1/chat/completions")"
+  ANSWER="$(jq -er \
+    '.choices[0].message.content | select(type == "string" and length > 0)' \
+    <<<"$RESPONSE")"
+  printf 'Modellantwort: %s\n' "$ANSWER"
+)
 ```
 
-Eine kurze Antwort und Exit-Code 0 bestätigen den Modellpfad. Der genaue Wortlaut
-ist für diesen Infrastrukturtest nicht die fachliche Qualitätsabnahme.
+Nur eine erfolgreiche HTTP-Antwort mit einem nicht leeren String im erwarteten
+Antwortfeld bestätigt den Modellpfad. HTTP-Fehler, Timeout, leere Ausgabe,
+ungültiges JSON oder ein fehlendes Antwortfeld brechen den Block mit Fehler ab.
+Der genaue Wortlaut ist für diesen Infrastrukturtest nicht die fachliche
+Qualitätsabnahme.
 
 ## 11. Verbindung vom App-Host prüfen
 
@@ -531,10 +560,13 @@ ssh <ADMIN-BENUTZER>@<PRIVATE-IP-DES-APP-HOSTS>
 Zuerst nur das Netz prüfen, ohne die Anwendung zu verändern:
 
 ```bash
-export LLM_PRIVATE_IP='<PRIVATE-IP-DES-INFERENZ-HOSTS>'
-curl --fail --silent --show-error --max-time 5 \
-  "http://${LLM_PRIVATE_IP}:8080/health"
-echo
+(
+  set -euo pipefail
+  LLM_PRIVATE_IP='<PRIVATE-IP-DES-INFERENZ-HOSTS>'
+  curl --fail --silent --show-error --max-time 5 \
+    "http://${LLM_PRIVATE_IP}:8080/health"
+  echo
+)
 ```
 
 Der `/health`-Endpunkt ist im gepinnten llama.cpp-Build nicht selbst die
@@ -543,18 +575,22 @@ ihn. Danach den Token verdeckt aus dem Passwortmanager eingeben und den geschüt
 Endpunkt testen:
 
 ```bash
-read -r -s -p 'OPEN_WEIGHT_LLM_TOKEN aus dem Passwortmanager: ' LLM_TOKEN
-echo
-curl --fail --silent --show-error --max-time 5 \
-  --header "Authorization: Bearer $LLM_TOKEN" \
-  "http://${LLM_PRIVATE_IP}:8080/slots?fail_on_no_slot=1" \
-  | jq 'length'
-unset LLM_TOKEN
+(
+  set -euo pipefail
+  LLM_PRIVATE_IP='<PRIVATE-IP-DES-INFERENZ-HOSTS>'
+  read -r -s -p 'OPEN_WEIGHT_LLM_TOKEN aus dem Passwortmanager: ' LLM_TOKEN
+  echo
+  curl --fail --silent --show-error --max-time 5 \
+    --header "Authorization: Bearer $LLM_TOKEN" \
+    "http://${LLM_PRIVATE_IP}:8080/slots?fail_on_no_slot=1" \
+    | jq -e 'type == "array" and length == 1' >/dev/null
+  echo 'App-Host erreicht mit Token genau einen Slot.'
+)
 ```
 
-Erwartet wird `1`. Zusätzlich muss ein Zugriff von einem beliebigen anderen Host
-auf Port 8080 scheitern. Dafür **keine** öffentliche Firewall-Freigabe zum Testen
-anlegen.
+Erwartet wird `App-Host erreicht mit Token genau einen Slot.`. Zusätzlich muss ein
+Zugriff von einem beliebigen anderen Host auf Port 8080 scheitern. Dafür **keine**
+öffentliche Firewall-Freigabe zum Testen anlegen.
 
 ## 12. App-Host konfigurieren und kurz aktivieren
 
@@ -754,7 +790,10 @@ cd /opt/arsnova-llm/repository
 npm run llm:prod -- logs --tail=200 open-weight-llm
 free -h
 df -h / /srv/arsnova/models/open-weight-llm
-docker inspect --format '{{json .State.Health}}' arsnova-open-weight-llm | jq
+(
+  set -o pipefail
+  docker inspect --format '{{json .State.Health}}' arsnova-open-weight-llm | jq
+)
 ```
 
 ### App-Host erhält Timeout oder `Connection refused`
@@ -813,22 +852,122 @@ den App-Kill-Switch ausschalten und den Runtime-Container stoppen.
 ## 14. Kontrollierte Aktualisierung
 
 Ein Update ist eine geplante Wartung. Nie unbemerkt `git pull`, einen beweglichen
-Image-Tag oder eine ungeprüfte neue Modelldatei verwenden.
+Image-Tag oder eine ungeprüfte neue Modelldatei verwenden. Der aktive Checkout
+bleibt immer unter `/opt/arsnova-llm/repository`. Dadurch bleibt auch der von
+Docker Compose aus dem Verzeichnis abgeleitete Projektname `repository` stabil.
 
-1. Auf dem App-Host `OPEN_WEIGHT_LLM_ENABLED=false` setzen und App neu erstellen.
-2. Auf dem Inferenz-Host Runtime stoppen.
-3. Neuen freigegebenen Git-Commit in ein neues Verzeichnis auschecken.
-4. Neues Runtime-Image per Digest und gegebenenfalls neues Modell verifizieren.
-5. `.env.llm` mit Modus `0600` übernehmen und `config` ausführen.
-6. Runtime starten und Abschnitte 9 bis 11 wiederholen.
-7. Erst danach einen zeitlich begrenzten App-Test aktivieren.
+### 14.1 App-Consumer vor der Wartung ausschalten
 
-Stoppbefehl:
+Auf dem App-Host:
 
 ```bash
-cd /opt/arsnova-llm/repository
-npm run llm:prod -- stop open-weight-llm
+set -e
+cd /home/deploy/arsnova.eu
+sed -i 's/^OPEN_WEIGHT_LLM_ENABLED=.*/OPEN_WEIGHT_LLM_ENABLED=false/' .env.production
+test "$(grep -c '^OPEN_WEIGHT_LLM_ENABLED=false$' .env.production)" -eq 1
+./scripts/prod-compose.sh up -d app
+./scripts/prod-compose.sh ps app
 ```
+
+### 14.2 Neuen Checkout vollständig vorbereiten
+
+Auf dem Inferenz-Host den neuen freigegebenen Commit einsetzen:
+
+```bash
+set -euo pipefail
+NEW_REF='<VOLLSTAENDIGE-40-STELLIGE-NEUE-GIT-COMMIT-ID>'
+case "$NEW_REF" in
+  *[!0-9a-f]*|'') echo 'Ungültige Commit-ID.' >&2; exit 1 ;;
+esac
+test "${#NEW_REF}" -eq 40
+
+ACTIVE_DIR='/opt/arsnova-llm/repository'
+NEW_DIR="/opt/arsnova-llm/release-${NEW_REF}"
+test -d "$ACTIVE_DIR/.git"
+test ! -e "$NEW_DIR"
+
+git clone https://github.com/kqc-real/arsnova.eu.git "$NEW_DIR"
+git -C "$NEW_DIR" checkout --detach "$NEW_REF"
+test "$(git -C "$NEW_DIR" rev-parse HEAD)" = "$NEW_REF"
+cd "$NEW_DIR"
+npm ci --omit=dev --ignore-scripts
+
+install -m 0600 "$ACTIVE_DIR/.env.llm" .env.llm
+npm run llm:prod -- config >/dev/null
+```
+
+Jetzt bei Bedarf in `"$NEW_DIR/.env.llm"` ausschließlich die freigegebene neue
+Digest-Image-Referenz eintragen und gegebenenfalls das neue, separat verifizierte
+Modell bereitstellen. Danach `npm run llm:prod -- config` erneut ausführen. Der
+Produktionswrapper prüft Image-Digest, private Bind-Adresse, Credential,
+Modellpfad sowie GGUF-Größe und -Hash vor dem Start.
+
+### 14.3 Alten Container entfernen und Checkout wechseln
+
+`stop` allein genügt hier nicht: Der feste Containername muss vor dem Wechsel aus
+dem alten Compose-Projekt entfernt werden. Der folgende Block verwendet deshalb
+`down`, behält den alten Checkout als direkten Rollback und stellt anschließend
+den neuen Checkout unter dem unveränderten kanonischen Pfad bereit:
+
+```bash
+set -euo pipefail
+ACTIVE_DIR='/opt/arsnova-llm/repository'
+NEW_REF='<VOLLSTAENDIGE-40-STELLIGE-NEUE-GIT-COMMIT-ID>'
+NEW_DIR="/opt/arsnova-llm/release-${NEW_REF}"
+OLD_REF="$(git -C "$ACTIVE_DIR" rev-parse HEAD)"
+ROLLBACK_DIR="/opt/arsnova-llm/rollback-${OLD_REF}"
+
+test -d "$NEW_DIR/.git"
+test "$(git -C "$NEW_DIR" rev-parse HEAD)" = "$NEW_REF"
+test ! -e "$ROLLBACK_DIR"
+printf 'Rollback-Commit für eine mögliche Rückkehr: %s\n' "$OLD_REF"
+
+cd "$ACTIVE_DIR"
+npm run llm:prod -- down
+cd /opt/arsnova-llm
+mv repository "rollback-${OLD_REF}"
+mv "release-${NEW_REF}" repository
+
+cd /opt/arsnova-llm/repository
+npm run llm:prod -- up -d
+npm run llm:prod -- ps
+```
+
+Danach Abschnitte 9 bis 11 vollständig wiederholen. Erst anschließend darf ein
+zeitlich begrenzter App-Test wieder aktiviert werden.
+
+### 14.4 Rückkehr zum alten Checkout
+
+Falls der neue Stand nicht abgenommen wird, auf dem App-Host den Kill-Switch auf
+`false` belassen. Auf dem Inferenz-Host die beim Wechsel ausgegebene alte
+Commit-ID einsetzen:
+
+```bash
+set -euo pipefail
+OLD_REF='<VOLLSTAENDIGE-40-STELLIGE-ALTE-GIT-COMMIT-ID>'
+ACTIVE_DIR='/opt/arsnova-llm/repository'
+ROLLBACK_DIR="/opt/arsnova-llm/rollback-${OLD_REF}"
+FAILED_REF="$(git -C "$ACTIVE_DIR" rev-parse HEAD)"
+FAILED_DIR="/opt/arsnova-llm/failed-${FAILED_REF}"
+
+test -d "$ROLLBACK_DIR/.git"
+test "$(git -C "$ROLLBACK_DIR" rev-parse HEAD)" = "$OLD_REF"
+test ! -e "$FAILED_DIR"
+
+cd "$ACTIVE_DIR"
+npm run llm:prod -- down
+cd /opt/arsnova-llm
+mv repository "failed-${FAILED_REF}"
+mv "rollback-${OLD_REF}" repository
+
+cd /opt/arsnova-llm/repository
+npm run llm:prod -- up -d
+npm run llm:prod -- ps
+```
+
+Abschnitte 9 bis 11 erneut ausführen. Erst nach bestätigtem stabilen Betrieb die
+genau benannten `failed-…`- oder alten Rollback-Verzeichnisse nach gesonderter
+Bestätigung entfernen.
 
 Der Container-Neustart nach einem geplanten Host-Reboot wird durch
 `restart: always` übernommen. Danach trotzdem prüfen:
