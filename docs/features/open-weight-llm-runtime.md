@@ -56,6 +56,11 @@ Der normale `scripts/deploy.sh`-Pfad startet die Runtime absichtlich nicht.
 
 ### Zweiten privaten Host vorbereiten
 
+Das vollständige Copy-&-Paste-Betriebshandbuch für Ubuntu Server 24.04 LTS sowie
+Debian 12/13 liegt unter
+[`operations/OPEN-WEIGHT-LLM-SECOND-HOST-RUNBOOK.md`](../operations/OPEN-WEIGHT-LLM-SECOND-HOST-RUNBOOK.md).
+Die folgende Kurzfassung bleibt der technische Vertrag:
+
 1. Eigenes Runtime-Image aus `docker/open-weight-llm/Dockerfile` bauen, in die interne Registry pushen und den Registry-Digest festhalten.
 2. Das geprüfte GGUF unter einem absoluten Hostpfad ablegen.
 3. `.env.llm.example` nach `.env.llm` kopieren. `.env.llm` ist git-ignoriert. Image nur als `...@sha256:<digest>`, private Bind-Adresse und separates Secret mit 32–512 Zeichen aus `A–Z`, `a–z`, `0–9`, `.`, `_`, `~`, `-` setzen. Kommas sind ausgeschlossen, damit llama.cpp den Wert nicht als mehrere API-Schlüssel interpretiert.
