@@ -2,6 +2,7 @@ import {
   createTRPCProxyClient,
   createWSClient,
   httpBatchLink,
+  httpLink,
   splitLink,
   type TRPCLink,
   wsLink,
@@ -124,6 +125,24 @@ function createTrpcHeaders(): Record<string, string> {
   }
 
   return headers;
+}
+
+export function shouldUseUnbatchedHttpTransport(path: string): boolean {
+  return path === 'quiz.deriveLearningObjectives';
+}
+
+function createHttpRequestLink(): TRPCLink<AppRouter> {
+  const options = {
+    url: resolveTrpcBatchLinkUrl(),
+    headers() {
+      return createTrpcHeaders();
+    },
+  };
+  return splitLink({
+    condition: (operation) => shouldUseUnbatchedHttpTransport(operation.path),
+    true: httpLink<AppRouter>(options),
+    false: httpBatchLink<AppRouter>(options),
+  });
 }
 
 function resolveWsParticipantBinding(): TrpcWebSocketParticipantBinding | null {
@@ -420,18 +439,8 @@ export const trpc = createTRPCProxyClient<AppRouter>({
             return op.type === 'subscription';
           },
           true: bindingAwareWsLink,
-          false: httpBatchLink({
-            url: resolveTrpcBatchLinkUrl(),
-            headers() {
-              return createTrpcHeaders();
-            },
-          }),
+          false: createHttpRequestLink(),
         })
-      : httpBatchLink({
-          url: resolveTrpcBatchLinkUrl(),
-          headers() {
-            return createTrpcHeaders();
-          },
-        }),
+      : createHttpRequestLink(),
   ],
 });

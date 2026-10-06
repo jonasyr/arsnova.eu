@@ -40,6 +40,7 @@ import type { HostTokenContext } from './hostAuth';
 import {
   assertModerationStateStillCurrent,
   loadAuthorizedModerationState,
+  type AuthorizedModerationQaContext,
   type AuthorizedModerationState,
 } from './moderationQaContext';
 import { isQaControversialLabel, resolveQaControversyThreshold } from './qaControversy';
@@ -1979,8 +1980,17 @@ export async function buildAuthorizedModerationTeachingSignals(input: {
   readonly sessionId: string;
   readonly access: HostTokenContext;
   readonly clock?: { readonly now: () => Date };
+  readonly qaContext?: Pick<AuthorizedModerationQaContext, 'state' | 'questions' | 'topics'>;
 }): Promise<AuthorizedModerationTeachingSignals> {
-  const initial = await loadAuthorizedModerationState(input);
+  const stateInput = {
+    sessionId: input.sessionId,
+    access: input.access,
+    clock: input.clock,
+  };
+  const initial = await loadAuthorizedModerationState(stateInput);
+  if (input.qaContext) {
+    assertModerationStateStillCurrent(input.qaContext.state, initial);
+  }
   const initialFeedback = await loadQuickFeedbackModerationSnapshot({
     sessionId: initial.id,
     sessionCode: initial.code,
@@ -1993,7 +2003,7 @@ export async function buildAuthorizedModerationTeachingSignals(input: {
     { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
   );
 
-  const current = await loadAuthorizedModerationState(input);
+  const current = await loadAuthorizedModerationState(stateInput);
   assertModerationStateStillCurrent(initial, current);
 
   const [confirmedReleased, confirmedFeedback] = await Promise.all([
@@ -2017,9 +2027,18 @@ export async function buildAuthorizedModerationTeachingSignals(input: {
       message: 'Released teaching evidence changed while the moderation context was built.',
     });
   }
-  const final = await loadAuthorizedModerationState(input);
+  const final = await loadAuthorizedModerationState(stateInput);
   assertModerationStateStillCurrent(initial, final);
-  const compass = buildCompassContext({ released, feedback: initialFeedback });
+  if (input.qaContext) {
+    assertModerationStateStillCurrent(input.qaContext.state, final);
+  }
+  const compass = buildCompassContext({
+    released,
+    feedback: initialFeedback,
+    questions: input.qaContext?.questions,
+    topics: input.qaContext?.topics,
+    activeSortMode: input.qaContext?.state.activeSortMode,
+  });
   return {
     state: final,
     releasedResults: released.releasedResults,

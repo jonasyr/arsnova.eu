@@ -427,8 +427,13 @@ Kill-Switch default aus (`QA_NLP_ENABLED=false`). Timeout, Queue-Limit, Konfiden
 ### Optionale Moderationszusammenfassung (Story 8.9c)
 
 ```bash
-npm test -w @arsnova/shared-types -- src/qa-summary.test.ts
+npm test -w @arsnova/shared-types -- --run \
+  src/qa-summary.test.ts \
+  src/qa-summary-v2.test.ts \
+  src/qa-summary-visibility.test.ts
 npm test -w @arsnova/backend -- --run \
+  src/lib/moderationSummaryContext.test.ts \
+  src/lib/openWeightLlmClient.test.ts \
   src/lib/qaSummaryConfig.test.ts \
   src/lib/qaSummarySnapshot.test.ts \
   src/lib/qaSummaryValidate.test.ts \
@@ -439,9 +444,10 @@ npm test -w @arsnova/backend -- --run \
 npm run test -w @arsnova/frontend -- \
   src/app/features/session/session-host/moderation-compass-dialog.component.spec.ts \
   src/app/features/session/session-host/session-host.component.spec.ts
+npm run load:issue-456:validate
 ```
 
-Kill-Switch default aus (`QA_SUMMARY_ENABLED=false`). On-demand, quellengebunden, ephemer; ohne private `QA_SUMMARY_INFERENCE_URL` kein Cloud-Fallback. Lokaler Helfer: `npm run qa-summary:dev` / `npm run qa-summary:dev:test`. Produktdoku: [qa-summary.md](features/qa-summary.md). Die private Runtime ist technisch vorhanden; der fachliche Summary-Consumer bleibt 8.9c Slice 4.
+Kill-Switch default aus (`QA_SUMMARY_ENABLED=false`). On-demand, quellengebunden und ephemer. V2 handelt `full-context`/`legacy-text` ausdrücklich aus und liefert ohne Modell einen lokalen extraktiven Backend-Fallback; es gibt keinen Cloud-Fallback. `qa.summaryContextPreview` ist hostgeschützt und wird in der UI erst nach ausdrücklicher Aktion geladen. Der lokale Legacy-Helfer bleibt mit `npm run qa-summary:dev` / `npm run qa-summary:dev:test` prüfbar. `npm run load:issue-456:validate` validiert netzwerkfrei das kanonische Demo-Quiz sowie mindestens 250 Teilnahmen mit je zehn sinnvollen Fragen; der echte `npm run load:issue-456:run` ist auf Loopback beschränkt und erwartet einen separat mit `QA_SUMMARY_ENABLED=true` gestarteten Backendprozess. Sein früher Preflight bricht bei deaktiviertem Summary V2 noch vor Joins und Q&A-Last ab. Produktdoku: [qa-summary.md](features/qa-summary.md), [Slice-8-Abnahme](implementation/ISSUE-456-SLICE-8-ABNAHME.md). Reale Summary-/Lernziel-Consumerläufe sowie das reichhaltige 4.096-Profil bleiben offen.
 
 ### Private Open-Weight-LLM-Runtime (Story 8.9d)
 

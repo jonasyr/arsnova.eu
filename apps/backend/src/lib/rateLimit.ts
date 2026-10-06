@@ -87,6 +87,19 @@ export const RATE_LIMIT_ENV = {
     QUIZ_UPLOAD_GLOBAL_COMPLEXITY_PER_WINDOW_DEFAULT,
     QUIZ_UPLOAD_GLOBAL_COMPLEXITY_PER_WINDOW_DEFAULT,
   ),
+  /**
+   * Explizite KI-Ableitung in der lokalen Quiz-Vorbereitung. Das IP-Budget
+   * lässt mindestens 500 legitime Clients hinter einer gemeinsamen NAT zu;
+   * das globale Budget begrenzt gleichzeitig neue CPU-Work-Capabilities.
+   */
+  learningObjectiveDerivationPreparePerIpPerHour: positiveIntegerEnv(
+    'RATE_LIMIT_OBJECTIVE_DERIVE_PER_IP_PER_HOUR',
+    600,
+  ),
+  learningObjectiveDerivationPrepareGlobalPerHour: positiveIntegerEnv(
+    'RATE_LIMIT_OBJECTIVE_DERIVE_GLOBAL_PER_HOUR',
+    3_000,
+  ),
   quickFeedbackStandalonePerIpPerHour: positiveIntegerEnv(
     'RATE_LIMIT_QUICK_FEEDBACK_STANDALONE_PER_IP_PER_HOUR',
     600,
@@ -405,6 +418,22 @@ export async function checkQuizUploadStorageRate(
       },
     ],
     PUBLIC_CREATE_WINDOW_SECONDS,
+  );
+}
+
+export async function checkLearningObjectiveDerivationPrepareRate(ip: string) {
+  return checkFixedWindowBudgets(
+    [
+      {
+        key: 'learningObjectiveDerivation:prepare:global',
+        limit: RATE_LIMIT_ENV.learningObjectiveDerivationPrepareGlobalPerHour,
+      },
+      {
+        key: `learningObjectiveDerivation:prepare:ip:${ip}`,
+        limit: RATE_LIMIT_ENV.learningObjectiveDerivationPreparePerIpPerHour,
+      },
+    ],
+    3600,
   );
 }
 

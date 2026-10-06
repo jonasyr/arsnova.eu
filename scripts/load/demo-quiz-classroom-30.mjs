@@ -723,9 +723,11 @@ export async function runDemoQuizClassroom(options = {}) {
   }
 
   const publicTrpc = createHttpClient(undefined, trpcUrl, runtimeMetrics);
+  const ownsSession = !SESSION_CODE;
   let code;
   let hostToken;
   let quizId;
+  let sessionId;
 
   if (SESSION_CODE) {
     const info = await publicTrpc.session.getInfo.query({ code: SESSION_CODE });
@@ -733,6 +735,7 @@ export async function runDemoQuizClassroom(options = {}) {
       throw new Error(`Session ${SESSION_CODE} nicht gefunden.`);
     }
     code = SESSION_CODE;
+    sessionId = info.id;
     quizId = info.id;
     hostToken = await mintHostToken(code);
     log(`Nutze bestehende Session ${code} (${info.quizName ?? 'Quiz'}).`);
@@ -742,124 +745,185 @@ export async function runDemoQuizClassroom(options = {}) {
     const created = await publicTrpc.session.create.mutate({
       quizId,
       type: 'QUIZ',
-      qaEnabled: false,
-      quickFeedbackEnabled: false,
+      qaEnabled: options.qaEnabled === true,
+      qaModerationMode: options.qaModerationMode ?? false,
+      quickFeedbackEnabled: options.quickFeedbackEnabled === true,
     });
     code = created.code;
+    sessionId = created.sessionId;
     hostToken = created.hostToken;
   }
 
   const hostTrpc = createHttpClient(hostToken, trpcUrl, runtimeMetrics);
-
-  const indexes = Array.from({ length: participantCount }, (_, index) => index);
-  const participants = await mapLimit(indexes, joinConcurrency, async (index) =>
-    publicTrpc.session.join.mutate({
+  return runWithSessionFailureCleanup(hostTrpc, code, ownsSession, async () => {
+    const scenarioContext = {
       code,
-      nickname: kindergartenNickname(index, QUIZ_CONTENT_LOCALE),
-      anonymousClientId: globalThis.crypto.randomUUID(),
-      joinIdempotencyKey: globalThis.crypto.randomUUID(),
-    }),
-  );
+      sessionId,
+      quizId,
+      hostTrpc,
+      publicTrpc,
+      trpcUrl,
+      runtimeMetrics,
+    };
+    const preparation =
+      typeof options.beforeParticipantsJoined === 'function'
+        ? await options.beforeParticipantsJoined(scenarioContext)
+        : null;
 
-  const questions = [];
-  for (const meta of questionMetas) {
-    questions.push(
-      await runQuestion({
-        questionNumber: meta.questionNumber,
-        hostTrpc,
-        publicTrpc,
-        trpcUrl,
-        runtimeMetrics,
+    const indexes = Array.from({ length: participantCount }, (_, index) => index);
+    const participants = await mapLimit(indexes, joinConcurrency, async (index) =>
+      publicTrpc.session.join.mutate({
         code,
-        participants,
-        meta,
-        voteCooldownMs,
+        nickname: kindergartenNickname(index, QUIZ_CONTENT_LOCALE),
+        anonymousClientId: globalThis.crypto.randomUUID(),
+        joinIdempotencyKey: globalThis.crypto.randomUUID(),
       }),
     );
-  }
+    const extensionState =
+      typeof options.afterParticipantsJoined === 'function'
+        ? await options.afterParticipantsJoined({
+            ...scenarioContext,
+            participants,
+            preparation,
+          })
+        : null;
 
-  const finished = await hostTrpc.session.nextQuestion.mutate({ code });
-  const feedback =
-    finished.status === 'FINISHED'
-      ? await submitSessionFeedback(participants, code, trpcUrl, runtimeMetrics)
-      : { accepted: 0, rejected: participantCount };
-  const totalVotesAccepted = questions.reduce(
-    (sum, question) =>
-      sum + question.voteRounds.reduce((roundSum, round) => roundSum + round.accepted, 0),
-    0,
-  );
-  const expectedVotes = questionMetas.reduce(
-    (sum, meta) => sum + participantCount * (meta.numericTwoRounds ? 2 : 1),
-    0,
-  );
+    const questions = [];
+    for (const meta of questionMetas) {
+      questions.push(
+        await runQuestion({
+          questionNumber: meta.questionNumber,
+          hostTrpc,
+          publicTrpc,
+          trpcUrl,
+          runtimeMetrics,
+          code,
+          participants,
+          meta,
+          voteCooldownMs,
+        }),
+      );
+    }
+    const extensionMetrics =
+      typeof options.afterQuestionsCompleted === 'function'
+        ? await options.afterQuestionsCompleted({
+            ...scenarioContext,
+            participants,
+            preparation,
+            extensionState,
+            questionResults: questions,
+          })
+        : extensionState;
 
-  const summary = {
-    scenario: 'demo-quiz-classroom',
-    code,
-    quizId,
-    participants: participantCount,
-    questions: questionMetas.length,
-    expectedVotes,
-    totalVotesAccepted,
-    feedbackAccepted: feedback.accepted,
-    finishedStatus: finished.status,
-    questionResults: questions,
-    startedAt: startedAt.toISOString(),
-    endedAt: new Date().toISOString(),
-    durationMs: Date.now() - startedAt.getTime(),
-  };
+    const finished = await hostTrpc.session.nextQuestion.mutate({ code });
+    const feedback =
+      finished.status === 'FINISHED'
+        ? await submitSessionFeedback(participants, code, trpcUrl, runtimeMetrics)
+        : { accepted: 0, rejected: participantCount };
+    const totalVotesAccepted = questions.reduce(
+      (sum, question) =>
+        sum + question.voteRounds.reduce((roundSum, round) => roundSum + round.accepted, 0),
+      0,
+    );
+    const expectedVotes = questionMetas.reduce(
+      (sum, meta) => sum + participantCount * (meta.numericTwoRounds ? 2 : 1),
+      0,
+    );
 
-  log(JSON.stringify(summary, null, 2));
+    const summary = {
+      scenario: 'demo-quiz-classroom',
+      code,
+      quizId,
+      participants: participantCount,
+      questions: questionMetas.length,
+      expectedVotes,
+      totalVotesAccepted,
+      feedbackAccepted: feedback.accepted,
+      finishedStatus: finished.status,
+      ...(extensionMetrics === null ? {} : { extensionMetrics }),
+      questionResults: questions,
+      startedAt: startedAt.toISOString(),
+      endedAt: new Date().toISOString(),
+      durationMs: Date.now() - startedAt.getTime(),
+    };
 
-  const failures = [];
-  if (participants.length !== participantCount) {
-    failures.push(`Join: ${participants.length}/${participantCount} Teilnehmende.`);
-  }
-  if (totalVotesAccepted !== expectedVotes) {
-    failures.push(`Votes: ${totalVotesAccepted}/${expectedVotes} akzeptiert.`);
-  }
-  if (finished.status !== 'FINISHED') {
-    failures.push(`Session endete mit Status ${finished.status}, erwartet FINISHED.`);
-  }
-  if (feedback.accepted !== participantCount) {
-    failures.push(`Session-Feedback: ${feedback.accepted}/${participantCount} akzeptiert.`);
-  }
-  for (const question of questions) {
-    for (const round of question.voteRounds) {
-      if (round.accepted !== participantCount) {
-        failures.push(
-          `Frage ${question.questionNumber} Runde ${round.round}: ${round.accepted}/${participantCount} Votes.`,
-        );
-      }
-      if (round.p95Ms > voteP95LimitMs) {
-        failures.push(
-          `Frage ${question.questionNumber} Runde ${round.round}: Vote-p95 ${round.p95Ms} ms > ${voteP95LimitMs} ms.`,
-        );
+    log(JSON.stringify(summary, null, 2));
+
+    const failures = [];
+    if (participants.length !== participantCount) {
+      failures.push(`Join: ${participants.length}/${participantCount} Teilnehmende.`);
+    }
+    if (totalVotesAccepted !== expectedVotes) {
+      failures.push(`Votes: ${totalVotesAccepted}/${expectedVotes} akzeptiert.`);
+    }
+    if (finished.status !== 'FINISHED') {
+      failures.push(`Session endete mit Status ${finished.status}, erwartet FINISHED.`);
+    }
+    if (feedback.accepted !== participantCount) {
+      failures.push(`Session-Feedback: ${feedback.accepted}/${participantCount} akzeptiert.`);
+    }
+    for (const question of questions) {
+      for (const round of question.voteRounds) {
+        if (round.accepted !== participantCount) {
+          failures.push(
+            `Frage ${question.questionNumber} Runde ${round.round}: ${round.accepted}/${participantCount} Votes.`,
+          );
+        }
+        if (round.p95Ms > voteP95LimitMs) {
+          failures.push(
+            `Frage ${question.questionNumber} Runde ${round.round}: Vote-p95 ${round.p95Ms} ms > ${voteP95LimitMs} ms.`,
+          );
+        }
       }
     }
-  }
 
-  if (options.writeReport !== false) {
-    await writeScenarioReport({
-      scenario: 'demo-quiz-classroom-30',
-      environment: {
-        participants: participantCount,
-        expectedQuestions,
-        voteP95LimitMs,
-      },
-      metrics: summary,
-      failures,
-    });
-  }
+    if (options.writeReport !== false) {
+      await writeScenarioReport({
+        scenario: 'demo-quiz-classroom-30',
+        environment: {
+          participants: participantCount,
+          expectedQuestions,
+          voteP95LimitMs,
+          qaEnabled: options.qaEnabled === true,
+          quickFeedbackEnabled: options.quickFeedbackEnabled === true,
+        },
+        metrics: summary,
+        failures,
+      });
+    }
 
-  if (failures.length > 0) {
+    if (failures.length > 0) {
+      return { summary, failures };
+    }
+
+    log(
+      `\nOK Demo-Quiz-Unterrichtsszenario (${participantCount} TN, ${expectedQuestions} Fragen) bestanden.`,
+    );
     return { summary, failures };
-  }
+  });
+}
 
-  log(
-    `\nOK Demo-Quiz-Unterrichtsszenario (${participantCount} TN, ${expectedQuestions} Fragen) bestanden.`,
-  );
-  return { summary, failures };
+/**
+ * A failed extension or load step must not leave the stable demo history scope
+ * attached to a live session. `session.end` is host-authorized and idempotent,
+ * and unlike `nextQuestion` it closes the session from every lifecycle state.
+ */
+export async function runWithSessionFailureCleanup(hostTrpc, code, cleanupOnFailure, operation) {
+  try {
+    return await operation();
+  } catch (error) {
+    if (!cleanupOnFailure) throw error;
+    try {
+      await hostTrpc.session.end.mutate({ code });
+    } catch (cleanupError) {
+      throw new AggregateError(
+        [error, cleanupError],
+        'Demo-Quiz-Lauf fehlgeschlagen; auch session.end zur Fehlerbereinigung schlug fehl.',
+        { cause: cleanupError },
+      );
+    }
+    throw error;
+  }
 }
 
 const isDirectRun =

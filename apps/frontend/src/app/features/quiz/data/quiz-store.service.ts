@@ -21,7 +21,9 @@ import {
   QuizImportSchema,
   QuizExportSchema,
   QuizLearningObjectiveBundleV1Schema,
+  QuizLearningObjectiveV1Schema,
   QuizUploadInputSchema,
+  LEARNING_OBJECTIVE_MAX_OBJECTIVES,
   LEARNING_OBJECTIVE_REVISION_MAX,
   QUIZ_EXPORT_VERSION,
   QUIZ_UPLOAD_MAX_QUESTIONS,
@@ -47,6 +49,7 @@ import {
   type QuizPreset,
   type QuizExport,
   type QuizLearningObjectiveBundleV1,
+  type LearningObjectiveDerivedDraft,
   type LearningObjectiveNeedsReviewReason,
   type QuizLearningObjectiveScope,
   type QuizLearningObjectiveV1,
@@ -1504,6 +1507,125 @@ export class QuizStoreService implements OnDestroy {
     this.markDemoQuizUserModified(quizId);
     this.persistToStorage();
     return objective;
+  }
+
+  /**
+   * Applies one completed model derivation as an atomic, append-only bundle update.
+   *
+   * Draft ids are derived by the backend from the operation, normalized suggestion
+   * content, source semantics, model metadata, and derivation version. A retried
+   * response is therefore a no-op only when every id still identifies the same
+   * derivation. Existing rows are never replaced here: manual objectives, confirmed
+   * model results and model drafts that the host has already edited remain authoritative.
+   */
+  applyDerivedLearningObjectiveDrafts(
+    quizId: string,
+    expectedBundleRevision: number,
+    operationId: string,
+    drafts: readonly LearningObjectiveDerivedDraft[],
+  ): readonly QuizLearningObjectiveV1[] {
+    const quiz = this.quizDocuments().find((candidate) => candidate.id === quizId);
+    if (!quiz) {
+      throw new Error($localize`:@@learningObjectives.quizMissing:Quiz nicht gefunden.`);
+    }
+    if (!UUID_PATTERN.test(operationId)) {
+      throw new Error(
+        $localize`:@@learningObjectives.derivationInvalidOperation:Die automatische Herleitung ist nicht mehr gültig. Starte sie erneut.`,
+      );
+    }
+
+    const bundle = this.getLearningObjectiveBundle(quizId);
+    const existingById = new Map(bundle.objectives.map((objective) => [objective.id, objective]));
+    const draftIds = new Set<string>();
+    for (const draft of drafts) {
+      if (draftIds.has(draft.id)) {
+        throw new Error(
+          $localize`:@@learningObjectives.derivationDuplicate:Die automatische Herleitung enthielt doppelte Vorschläge. Starte sie erneut.`,
+        );
+      }
+      draftIds.add(draft.id);
+    }
+
+    const collidingDrafts = drafts.filter((draft) => existingById.has(draft.id));
+    if (collidingDrafts.length > 0) {
+      const isExactDerivationReplay =
+        collidingDrafts.length === drafts.length &&
+        collidingDrafts.every((draft) => {
+          const existing = existingById.get(draft.id);
+          if (
+            existing?.origin.kind !== 'model-derived' ||
+            JSON.stringify(existing.origin) !== JSON.stringify(draft.origin)
+          ) {
+            return false;
+          }
+
+          // Revision 1 + draft is the untouched persisted server result. In that
+          // state an idempotent replay must still carry the exact original payload;
+          // otherwise a deterministic-id collision could be mistaken for a retry.
+          // Later revisions prove that the host edited or confirmed this same
+          // origin, whose current text/scope must remain authoritative.
+          return (
+            existing.revision > 1 ||
+            existing.confirmation.state !== 'draft' ||
+            (existing.text === draft.text &&
+              JSON.stringify(existing.scope) === JSON.stringify(draft.scope) &&
+              existing.createdAt === draft.createdAt &&
+              existing.updatedAt === draft.updatedAt)
+          );
+        });
+      if (isExactDerivationReplay) {
+        return drafts
+          .map((draft) => existingById.get(draft.id))
+          .filter((objective): objective is QuizLearningObjectiveV1 => objective !== undefined);
+      }
+      throw new Error(
+        $localize`:@@learningObjectives.derivationIdCollision:Die Vorschläge können nicht sicher zugeordnet werden. Deine bestehenden Lernziele bleiben unverändert. Starte die Herleitung erneut.`,
+      );
+    }
+    if (bundle.revision !== expectedBundleRevision) {
+      throw new Error(
+        $localize`:@@learningObjectives.derivationBundleConflict:Die Lernziele wurden während der automatischen Herleitung geändert. Deine Änderungen bleiben erhalten. Starte die Herleitung erneut.`,
+      );
+    }
+
+    const knownEnabledQuestionIds = new Set(
+      quiz.questions.filter((question) => question.enabled).map((question) => question.id),
+    );
+    const unseenDrafts = [...drafts];
+    for (const draft of unseenDrafts) {
+      const references = new Set([
+        ...(draft.scope.kind === 'question-set' ? draft.scope.sourceQuestionIds : []),
+        ...draft.origin.derivedFromSourceQuestionIds,
+      ]);
+      if ([...references].some((questionId) => !knownEnabledQuestionIds.has(questionId))) {
+        throw new Error(
+          $localize`:@@learningObjectives.derivationSourceChanged:Mindestens eine verwendete Aufgabe wurde während der automatischen Herleitung geändert oder deaktiviert. Deine Lernziele bleiben unverändert. Starte die Herleitung erneut.`,
+        );
+      }
+    }
+    if (bundle.objectives.length + unseenDrafts.length > LEARNING_OBJECTIVE_MAX_OBJECTIVES) {
+      throw new Error(
+        $localize`:@@learningObjectives.derivationCapacity:Für weitere Vorschläge ist kein Platz. Lösche zuerst nicht mehr benötigte Lernziele.`,
+      );
+    }
+    if (unseenDrafts.length === 0) return [];
+
+    const objectives = unseenDrafts.map((draft) =>
+      QuizLearningObjectiveV1Schema.parse({
+        ...draft,
+        revision: 1,
+      }),
+    );
+    const nextBundle = QuizLearningObjectiveBundleV1Schema.parse({
+      ...bundle,
+      revision: bundle.revision + 1,
+      objectives: [...bundle.objectives, ...objectives],
+    });
+    this.malformedLearningObjectiveKeys.delete(quizId);
+    this.learningObjectiveBundles.update((current) => ({ ...current, [quizId]: nextBundle }));
+    this.markDemoQuizUserModified(quizId);
+    this.persistToStorage();
+    return objectives;
   }
 
   deleteQuizLearningObjective(quizId: string, objectiveId: string, expectedRevision: number): void {

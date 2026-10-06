@@ -365,9 +365,10 @@ Der Host sieht zusätzlich:
   Analyse. Story **8.9a** ist umgesetzt. Story **8.9b** ist umgesetzt (optionaler
   asynchroner Q&A-NLP-Vertrag, Kill-Switch default aus, Queue, Host-only
   Kategorien in der Karte **Häufige Themen**, Gatekeeper, Seed-Kalibrierung,
-  k-NN-Fallback, lokaler Hörsaallast). **8.9c** hat Vertrag, Host-UI,
-  privaten Adapter, Snapshot-Ranking und lokalen Loopback-Helfer ohne LLM;
-  Kill-Switch default aus. Kanonisch: [moderation-compass.md](features/moderation-compass.md),
+  k-NN-Fallback, lokaler Hörsaallast). **8.9c** hat Summary V2,
+  hostautorisierten Kontext, Hostvorschau, private Runtimeübergabe und lokalen
+  extraktiven Backend-Fallback; Kill-Switch default aus. Reale Consumer-/CPU-Abnahme
+  und reichhaltiges 4.096-Profil bleiben offen. Kanonisch: [moderation-compass.md](features/moderation-compass.md),
   [qa-nlp-moderation.md](features/qa-nlp-moderation.md),
   [qa-summary.md](features/qa-summary.md).
 - Verteilungsmatrizen und typische Fehler für Zuordnung, Reihenfolge und Kategorisierung nach der

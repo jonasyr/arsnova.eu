@@ -36,6 +36,14 @@ export const MODERATION_PROMPT_HASH_MATERIAL_VERSION =
 export const MODERATION_PROMPT_BUDGET_VERSION = 'moderation-prompt-budget-v1' as const;
 export const MODERATION_QUIZ_EFFECTIVE_VOTE_BASIS_VERSION = 'effective-vote-v1' as const;
 export const MODERATION_QUIZ_ROUND_COMPARISON_BASIS_VERSION = 'round-comparison-v1' as const;
+/**
+ * Internal candidate graphs retain all bounded N5-N10 sections. The larger
+ * limit covers their dependency-closed maxima; N11 still caps the actual
+ * model payload independently.
+ */
+export const MODERATION_ANALYSIS_SOURCE_LIMIT = 1_500;
+/** Maximum dependency-closed source registry that may reach model input. */
+export const MODERATION_PROMPT_SOURCE_LIMIT = 500;
 
 export const MODERATION_PROMPT_SOURCE_ID_PREFIXES = {
   qaQuestion: 'qa-question:',
@@ -508,6 +516,13 @@ export const ModerationPromptQuestionSchema = z
     votes: ModerationQuestionVoteStateSchema,
     nlp: ModerationQuestionNlpStateSchema,
     topicSourceIds: z.array(z.string().trim().min(1).max(160)).max(12),
+    deduplication: z
+      .object({
+        rule: z.literal('normalized-text-and-metadata-v1'),
+        questionCount: z.number().int().min(2).max(200),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 export type ModerationPromptQuestion = z.infer<typeof ModerationPromptQuestionSchema>;
@@ -2171,7 +2186,7 @@ const ModerationDomainContextV1BaseSchema = z
     learningContext: ModerationLearningContextSectionSchema,
     releasedResults: ModerationReleasedResultsSectionSchema,
     feedback: ModerationFeedbackSectionSchema,
-    sources: z.array(ModerationPromptSourceSchema).max(500),
+    sources: z.array(ModerationPromptSourceSchema).max(MODERATION_ANALYSIS_SOURCE_LIMIT),
     limitations: z.array(ModerationPromptLimitationSchema).max(100),
   })
   .strict();
@@ -3398,6 +3413,7 @@ function validatePromptPacking(value: ModerationDomainContextV1, ctx: z.Refineme
   const sourcesById = new Map(value.sources.map((source) => [source.id, source] as const));
   const reachableSourceIds = new Set<string>();
   const allowedIncludedQuestionTextIds = new Set<string>();
+  const allowedTopicOnlyQuestionTextIds = new Set<string>();
   const reach = (sourceId: string): void => {
     reachableSourceIds.add(sourceId);
   };
@@ -3416,12 +3432,20 @@ function validatePromptPacking(value: ModerationDomainContextV1, ctx: z.Refineme
     value.topics.items.forEach((topic) => {
       reach(topic.sourceId);
       topic.memberQuestionSourceIds.forEach(reach);
-      topic.representedQuestionSourceIds.forEach(reachIncludedQuestionText);
+      topic.representedQuestionSourceIds.forEach((sourceId) => {
+        reachIncludedQuestionText(sourceId);
+        allowedTopicOnlyQuestionTextIds.add(sourceId);
+      });
       reachIncludedQuestionText(topic.representativeQuestionSourceId);
+      allowedTopicOnlyQuestionTextIds.add(topic.representativeQuestionSourceId);
       if (topic.labelOrigin.kind === 'source-extractive') {
         reachIncludedQuestionText(topic.labelOrigin.sourceQuestionId);
+        allowedTopicOnlyQuestionTextIds.add(topic.labelOrigin.sourceQuestionId);
       } else if (topic.labelOrigin.kind === 'model-generated') {
-        topic.labelOrigin.derivedFromSourceIds.forEach(reachIncludedQuestionText);
+        topic.labelOrigin.derivedFromSourceIds.forEach((sourceId) => {
+          reachIncludedQuestionText(sourceId);
+          allowedTopicOnlyQuestionTextIds.add(sourceId);
+        });
       }
     });
   }
@@ -3488,12 +3512,14 @@ function validatePromptPacking(value: ModerationDomainContextV1, ctx: z.Refineme
     if (
       source.kind === 'qa-question' &&
       source.content.state === 'included' &&
-      !packedQuestionItemIds.has(source.id)
+      !packedQuestionItemIds.has(source.id) &&
+      !allowedTopicOnlyQuestionTextIds.has(source.id)
     ) {
       ctx.addIssue({
         code: 'custom',
         path: ['sources', sourceIndex, 'content'],
-        message: 'Enthaltener Q&A-Text muss Teil des ausgewählten Fragenkorpus sein.',
+        message:
+          'Enthaltener Q&A-Text außerhalb des Fragenkorpus benötigt einen ausgewählten Themenbeleg.',
       });
     }
   });
@@ -3524,6 +3550,7 @@ export const ModerationDomainContextV1Schema = ModerationAnalysisDomainContextV1
 
 export const ModerationPromptDomainContextV1Schema = ModerationDomainContextV1BaseSchema.extend({
   representation: z.literal('prompt-selection'),
+  sources: z.array(ModerationPromptSourceSchema).max(MODERATION_PROMPT_SOURCE_LIMIT),
 }).superRefine((value, ctx) => {
   validateCommonDomainContext(value, ctx);
   validatePromptPacking(value, ctx);

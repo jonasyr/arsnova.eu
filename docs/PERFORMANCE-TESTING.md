@@ -6,6 +6,39 @@ Werkzeugwahl stehen in
 die Live-SLOs stehen in
 [ADR-0021](architecture/decisions/0021-separate-service-status-from-load-status-with-live-slo-telemetry.md).
 
+## Issue #456: lokales Demo-Quiz-Integrationsprofil
+
+Der Slice-8-Runner verwendet ausschließlich das kanonische Demo-Quiz und erzwingt mindestens
+250 Teilnahmen mit jeweils zehn sinnvollen Q&A-Fragen zum Quiz oder zu arsnova.eu, also
+mindestens 2.500 Einreichungen. Die netzwerkfreie Prüfung lautet:
+
+```bash
+npm run load:issue-456:validate
+```
+
+Der echte Lauf ist ausschließlich gegen Loopbackziele zulässig, verweigert kleinere Profile
+und bildet durch den gemeinsamen Lastgenerator auch Shared NAT ab:
+
+```bash
+# separates Terminal für den lokalen Backendprozess
+QA_SUMMARY_ENABLED=true npm run dev:backend
+
+# Lastgenerator erst nach erfolgreichem Backendstart
+npm run load:issue-456:run
+```
+
+Er prüft lokal den Ablauf Demo-Quiz, bestätigtes manuelles quiz-weites Lernziel, Join, Q&A,
+Quiz, Blitzlicht, Kontextvorschau und versionierten Summary-Auftrag. Er darf nicht gegen
+Produktion laufen und ersetzt keine
+produktive Kapazitätsmessung. Insbesondere standen für den integrierten Head keine reale
+Summary-/Lernziel-Runtime und keine vorgesehene Zielhardware zur Verfügung. Das feste
+4.096-Profil degradiert den zu großen reichhaltigen Kontext kontrolliert auf die ausgewiesene
+Q&A-Textbaseline. CPU-/Prefill-/RSS-Abnahme und reichhaltiges Vollkontextbudget bleiben offen;
+siehe [Issue #456 – Slice-8-Abnahme](implementation/ISSUE-456-SLICE-8-ABNAHME.md).
+Das Summary-Flag gehört zum separat gestarteten Backend, nicht zum Lastgenerator. Ein früher
+Preflight stoppt bei deaktiviertem Summary V2 noch vor Joins und Q&A-Last; bei späteren Fehlern
+beendet der Runner seine neu erstellte Demo-Session idempotent.
+
 ## Epic #405: gemeinsamer Release-Nachweis für #414 und #415
 
 Der Runner `scripts/load/qa-scale-epic405.mjs` bildet das verbindliche

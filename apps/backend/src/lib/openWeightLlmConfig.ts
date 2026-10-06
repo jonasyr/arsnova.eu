@@ -8,6 +8,12 @@ export const OPEN_WEIGHT_LLM_TIMEOUT_MIN_MS = 1_000;
 export const OPEN_WEIGHT_LLM_TIMEOUT_MAX_MS = 300_000;
 export const OPEN_WEIGHT_LLM_CIRCUIT_FAILURE_THRESHOLD = 3;
 export const OPEN_WEIGHT_LLM_CIRCUIT_OPEN_MS = 30_000;
+/** Persisted audit identity: canonical repository plus the verified GGUF digest. */
+export const OPEN_WEIGHT_LLM_MODEL_ID =
+  'unsloth/Qwen3-4B-Instruct-2507-GGUF@sha256:3605803b982cb64aead44f6c1b2ae36e3acdb41d8e46c8a94c6533bc4c67e597';
+/** Source revision, quantization and inference runtime used with that artifact. */
+export const OPEN_WEIGHT_LLM_MODEL_VERSION =
+  'revision:a06e946bb6b655725eafa393f4a9745d460374c9|quant:Q4_K_M|llama:server-b10524';
 export const OPEN_WEIGHT_LLM_MODEL_ALIAS = 'qwen3-4b-instruct-2507-q4_k_m';
 
 const BLOCKED_SAAS_HOSTS = new Set([

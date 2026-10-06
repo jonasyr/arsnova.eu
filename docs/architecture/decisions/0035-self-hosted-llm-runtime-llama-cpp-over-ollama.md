@@ -5,7 +5,7 @@
 **Status:** Accepted
 **Datum:** 2026-08-22
 **Entscheider:** Projektteam (Architekturentscheid auf Basis der 1.14c-Voranalyse, PO-Auftrag 2026-08-22)
-**Letzter Repo-Abgleich:** 2026-10-05 (Runtime R implementiert; Produktivaktivierung und fachliche Consumer offen)
+**Letzter Repo-Abgleich:** 2026-10-05 (Runtime R, Lernziel- und Summary-V2-Consumer implementiert; Produktivaktivierung, Label-Consumer und reale Consumerabnahme offen)
 **Kontext-Tags:** Machine Learning, Inferenz-Runtime, Selbst-Hosting, Backend-Architektur, Betrieb, Open-Weight-LLM
 
 **Ersetzt keine Produktentscheidung, nur die Runtime:** [WORD-CLOUD-3.0-1.14c-VORANALYSE-2026-08-20.md](../../implementation/WORD-CLOUD-3.0-1.14c-VORANALYSE-2026-08-20.md), [ADR-0032](0032-optional-nlp-cascade-for-qa-moderation-signals.md), Backlog Story 1.14c, Story 8.9c, Story 8.9d.
@@ -158,6 +158,14 @@ anzuwenden. Verbindlich ist daher das ebenfalls dokumentierte und real geprüfte
 `scripts/qa-summary-dev-server.mjs` bleibt Qualitätsorakel und lokaler Extraktor, kein
 Produktionspfad und keine Übersetzerschicht in Produktion.
 
+**Umsetzungsabgleich #456 Slice 7:** Summary V2 verwendet den Node-Client direkt und bindet
+`qa-summary-context-v2`, `qa-summary-model-output-v2`,
+`moderation-prompt-context-v1`, die technische Instruktionsversion und das
+Bedeutungslexikon ausdrücklich. Die Runtime erhält genau zwei Systemnachrichten
+(Instruktion und Definition) sowie als Usernachricht ausschließlich das kanonische JSON
+des gepackten Domainkontexts. Der Legacy-HTTP-Adapter bleibt als explizit ausgehandelter
+`legacy-text`-Modus erhalten; `QA_SUMMARY_INFERENCE_URL` zeigt weiterhin nicht auf llama.cpp.
+
 #### 2.4 Kontext, Timeout und Promptgröße sind nicht Gemini-förmig
 
 Qwen3-4B-Instruct-2507 hat nativ sehr großen Kontext. `--ctx-size` Default `0` lädt den
@@ -175,19 +183,27 @@ Verbindlich:
   deutlich kleineres `max_tokens`.
 - Getrennte Backend-Timeouts für Label-, Summary- und Lernziel-Job; Werte erst nach Prefill-Messung auf
   der echten 8-vCPU-Box, nicht als Kopie der Gemini-Fenster.
-- Slice 4 sendet dem LLM eine **kürzere, schon gerankte** Quellenliste (Richtung 8), nicht
-  automatisch alle 20 Snapshot-Quellen. Das Ranking aus 8.9c Slice 3 bleibt die Auswahl.
-- Slice 4 startet erst, wenn diese Messung vorliegt. 1.14c Stufe 2 (kurze Labels) ist der
-  passendere erste generative Auftrag auf CPU.
+- Der Summary-V2-Packer sendet eine **deterministisch ausgewählte, dependency-geschlossene**
+  Teilmenge, nicht automatisch alle 20 Legacy-Snapshot-Quellen.
+- Das feste Implementierungsprofil verwendet 4.096, 640 Antwortreserve und 128
+  Sicherheitsmarge. Instruktion und Definition belegen konservativ weitere 314 und 203
+  UTF-8-Einheiten; für das kanonische Kontext-JSON bleiben höchstens 2.811.
+- Der reichhaltige Referenzkontext passt in dieses Profil bereits mit seinen
+  Basismetadaten nicht. Der Packer degradiert sichtbar auf eine Q&A-Textbaseline. Das ist
+  kein Nachweis eines nutzbaren reichhaltigen Vollkontextprofils.
+- Eine Produktivaktivierung startet erst, wenn die Messung auf der vorgesehenen CPU-Box
+  und eine ausdrückliche Profilentscheidung vorliegen. 1.14c Stufe 2 (kurze Labels) bleibt
+  der passendere erste generative Auftrag auf CPU.
 
 #### 2.5 Fallback sitzt in der App, nicht nur im Dev-Helfer
 
-Die extraktive 8.9c-Kurzfassung lebt heute nur in `scripts/qa-summary-dev-server.mjs`. Backend
-bei Timeout/Fehler: `failed` / `stub:timeout`. ADR und Voranalyse versprechen extraktiven
-Fallback als Standard.
+Der extraktive Fallback ist mit #456 Slice 7 in der Backend-Queue umgesetzt. Der
+Entwicklungshilfsserver ist dafür nicht mehr erforderlich.
 
-- **Slice 4:** Extraktion in die Summary-Queue. llama-Timeout oder Backpressure → scanbare
-  Bullets, nicht leere Karte. Der Gemini-Helfer bleibt dafür nicht zuständig.
+- **Summary V2:** llama-Timeout, belegter Slot, ungültige Antwort, fehlender Adapter oder
+  Backpressure → quellengebundene extraktive Belege mit typisiertem Fallback, nicht leere
+  Karte. Quellenänderung während des Laufs verwirft die alte Modellantwort; Rechteverlust
+  liefert keine alten Quellen.
 - **Stufe 2:** Das LLM darf nur das **Label** ersetzen. Clustering und Mitgliedschaft bleiben
   Stufe 1 (`wordCloudSemanticCluster.ts`). LLM-Ausfall → extraktives Label, **nicht** lexikalisch
   2.x.
@@ -199,11 +215,12 @@ Fallback als Standard.
 Eigener Schalter `OPEN_WEIGHT_LLM_ENABLED` (nur exakt `true`), Compose-Profil `llm`, eigenes
 Image. Er wird mit keinem der vier bestehenden Schalter verwechselt oder wiederverwendet.
 
-| Schalter                         | Ohne LLM-Prozess / Schalter aus                       |
-| -------------------------------- | ----------------------------------------------------- |
-| `WORD_CLOUD_SEMANTIC_ENABLED`    | Stufe 1 bleibt (Encoder + extraktive Labels)          |
-| `QA_SUMMARY_ENABLED`             | Karte/Queue wie 8.9c Slices 1–3; ohne URL keine Karte |
-| `NLP_ENABLED` / `QA_NLP_ENABLED` | unberührt                                             |
+| Schalter                         | Ohne LLM-Prozess / Schalter aus                                                      |
+| -------------------------------- | ------------------------------------------------------------------------------------ |
+| `WORD_CLOUD_SEMANTIC_ENABLED`    | Stufe 1 bleibt (Encoder + extraktive Labels)                                         |
+| `QA_SUMMARY_ENABLED`             | Summary bleibt aus, wenn dieses Produktflag aus ist                                  |
+| `OPEN_WEIGHT_LLM_ENABLED`        | Bei aktiviertem Summary-Produktflag bleibt der lokale extraktive V2-Fallback nutzbar |
+| `NLP_ENABLED` / `QA_NLP_ENABLED` | unberührt                                                                            |
 
 LLM aus darf den Themenmodus nicht abschalten und 8.9a nicht verstecken.
 
@@ -238,8 +255,11 @@ Diese Entscheidung betrifft ausschließlich die **Betreiber-seitige** Serving-Ru
 
 Implementierungsfolge: **Runtime-Baustein zuerst** (Image, Profil,
 Flags, gemeinsames Inflight, Health, Tests ohne Modell-Download) → 1.14c Stufe 2 (kurze Labels)
-→ 8.9c Slice 4 nach Prefill-Messung. Runtime R ist umgesetzt; diese ADR autorisiert weiterhin
-keine Produktivaktivierung oder fachliche Freigabe der drei Consumer von selbst.
+→ 8.9c Slice 4 nach Prefill-Messung. Runtime R sowie der ausdrücklich gestartete
+Lernziel-Consumer und der Summary-V2-Consumer sind umgesetzt; diese ADR autorisiert weiterhin
+keine Produktivaktivierung. Label benötigt seine eigene Ausbaustufe. Summary und Lernzielpfad
+benötigen reale Consumer-/Hardwareläufe; das reichhaltige 4.096-Summaryprofil ist derzeit nicht
+belegt.
 
 ## Performance-Steckbrief
 
@@ -338,15 +358,17 @@ keine Produktivaktivierung oder fachliche Freigabe der drei Consumer von selbst.
   Slot.
 - Stufe-2-Ausfall → extraktives Label (Stufe 1 bleibt). Slice-4-Ausfall → extraktive Bullets in
   der Queue. LLM ändert keine Mitgliedschaft.
-- Slice 4 erst nach Prefill-Messung; DoD nicht „Gemini unter 8 s“. LLM-Prompt nutzt das
-  bestehende Ranking, nicht den vollen 20er-Snapshot.
+- Produktivaktivierung erst nach Prefill-/Speichermessung; DoD nicht „Gemini unter 8 s“.
+  Summary V2 nutzt den deterministischen Packer, nicht den vollen 20er-Legacy-Snapshot.
 - Tests analog `test:spacy-sidecar` / `test:wordcloud-encoder`: ohne Modell-Download, kein
   öffentlicher Port, Ressourcenlimits, Hotpath-Isolation, Lastfall „drei Aufträge gleichzeitig“.
 - Freigabestufen unverändert: Offline-Vergleich → isolierter Zwei-Server-Laborpfad →
   produktionsnahe Last-/Fehler-/Security-/Privacy-/Kostenprüfung, erst danach bewusste
   Produktivaktivierung.
 - Runtime R setzt diese Leitplanken technisch um. Die ADR autorisiert weder die Aktivierung
-  noch die fachlichen Consumer aus 1.14c Stufe 2, 8.9c Slice 4 oder #456 Slice 5.
+  noch den offenen Label-Consumer aus 1.14c Stufe 2. Lernziel- und Summary-V2-Consumer sind
+  implementiert, bleiben aber bis zu realen Consumer-/Hardwaremessungen und einer getrennten
+  Betreiberentscheidung produktiv aus.
 
 ---
 
@@ -364,7 +386,7 @@ keine Produktivaktivierung oder fachliche Freigabe der drei Consumer von selbst.
 
 ## Ergänzung 2026-09-22: Runtime-Voraussetzung für Issue #456
 
-**Status:** Runtime R am 2026-10-05 technisch implementiert und lokal mit echtem Modell geprüft; keine Produktivaktivierung oder Consumer-Freigabe.
+**Status:** Runtime R am 2026-10-05 technisch implementiert und lokal mit echtem kurzem Labelauftrag geprüft; Lernziel- und Summary-V2-Consumer implementiert, aber noch keine Produktivaktivierung oder reale Consumer-/Slice-8-Betriebsfreigabe.
 [Issue #456](https://github.com/kqc-real/arsnova.eu/issues/456) erweitert den bisherigen
 Geltungsbereich (Labels und Summary) um einen dritten Auftrag: **Lernzielableitung**.
 Frühere Aussagen über zwei Aufträge beschreiben den bisherigen Scope; die übrigen
@@ -386,8 +408,9 @@ sind nachzuweisen. Produktivaktivierung bleibt eine separate Betreiberentscheidu
 R enthält bereits versionierte Shared-Ein-/Ausgabeschemas, Auftragserkennung und
 Adapterübersetzung für **Label, Summary und Lernzielableitung**. Dies umfasst technische
 Vertragstests für gültige und schemainkompatible Antworten sowie unzulässige Referenzen.
-Lernziel-Fixtures reichen für diese technische Prüfung; fachlicher Ableitungsprompt,
-Ableitungsqualität und Host-UI bleiben #456 Slice 5.
+Lernziel-Fixtures reichen für diese technische Prüfung. Fachlicher Ableitungsprompt,
+Lebenszyklus und Host-UI sind in #456 Slice 5 umgesetzt; reale Ableitungsqualität und
+Zielhostmessung bleiben Teil der kombinierten Slice-8-Abnahme.
 
 Die Slot-Abnahme prüft alle drei Auftragspaarungen in beiden Belegungsreihenfolgen,
 drei gleichzeitige Anfragen und die Freigabe nach Abbruch/Timeout jedes Auftragstyps.
@@ -422,5 +445,12 @@ der Summary bleibt Voraussetzung für 8.9c Slice 4 und die Gesamt-/Betriebsabnah
 der lokale Lauf für R ersetzt sie nicht. Kein stilles Hochsetzen des Kontexts oder
 GPU-/SaaS-Wechsel. Bei fehlender Eignung bleibt der betreffende generative Pfad
 deaktiviert und seine Abnahme offen; Kompass, extraktive Labels und manuelle Ziele bleiben nutzbar.
+
+Der integrierte Summary-V2-Packer bestätigt diese Grenze konkret: Im festen 4.096-Profil
+passt der reichhaltige Referenzkontext nicht, sodass kontrolliert die ausgewiesene
+Q&A-Textbaseline gepackt wird. Für `qa_summary` V2 und `learning_objectives` stand in der
+Slice-8-Integration keine reale Zielruntime zur Verfügung. Beide Betriebsnachweise bleiben
+offen; Details stehen in
+[Issue #456 – Slice-8-Abnahme](../../implementation/ISSUE-456-SLICE-8-ABNAHME.md).
 
 Der finale Moderationsprompt bleibt Folgearbeit; der Lernzielauftrag gehört zu #456.

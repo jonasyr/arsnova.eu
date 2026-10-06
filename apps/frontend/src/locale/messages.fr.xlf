@@ -35325,6 +35325,498 @@
           <context context-type="linenumber">521</context>
         </context-group>
       </trans-unit>
+      <trans-unit id="learningObjectives.derivationInvalidOperation" datatype="html">
+        <source>Die automatische Herleitung ist nicht mehr gültig. Starte sie erneut.</source>
+        <target>La génération automatique n’est plus valide. Relance-la.</target>
+      </trans-unit>
+      <trans-unit id="learningObjectives.derivationAgain" datatype="html">
+        <source>Erneut automatisch formulieren</source>
+        <target>Générer à nouveau automatiquement</target>
+      </trans-unit>
+      <trans-unit id="learningObjectives.derivationApplyFailed" datatype="html">
+        <source>Die Vorschläge konnten nicht gespeichert werden. Deine bisherigen Lernziele bleiben erhalten.</source>
+        <target>Les suggestions n’ont pas pu être enregistrées. Tes objectifs d’apprentissage existants restent inchangés.</target>
+      </trans-unit>
+      <trans-unit id="learningObjectives.derivationBundleConflict" datatype="html">
+        <source>Die Lernziele wurden während der automatischen Herleitung geändert. Deine Änderungen bleiben erhalten. Starte die Herleitung erneut.</source>
+        <target>Les objectifs d’apprentissage ont été modifiés pendant la génération automatique. Tes modifications sont conservées. Relance la génération.</target>
+      </trans-unit>
+      <trans-unit id="learningObjectives.derivationBusy" datatype="html">
+        <source>Das lokale Modell ist gerade ausgelastet. Deine Lernziele bleiben unverändert. Versuche es bewusst noch einmal.</source>
+        <target>Le modèle local est actuellement occupé. Tes objectifs d’apprentissage restent inchangés. Réessaie lorsque tu le souhaites.</target>
+      </trans-unit>
+      <trans-unit id="learningObjectives.derivationCancel" datatype="html">
+        <source>Herleitung abbrechen</source>
+        <target>Annuler la génération</target>
+      </trans-unit>
+      <trans-unit id="learningObjectives.derivationCapacity" datatype="html">
+        <source>Für weitere Vorschläge ist kein Platz. Lösche zuerst nicht mehr benötigte Lernziele.</source>
+        <target>Il n’y a plus de place pour d’autres suggestions. Supprime d’abord les objectifs d’apprentissage devenus inutiles.</target>
+      </trans-unit>
+      <trans-unit id="learningObjectives.derivationCapacityLimitation" datatype="html">
+        <source>Nicht übernommene Vorschläge: <x id="count" equiv-text="omittedForCapacity"/>. Der Platz für bestehende Lernziele blieb reserviert.</source>
+        <target>Suggestions non ajoutées : <x id="count" equiv-text="omittedForCapacity"/>. L’espace est resté réservé aux objectifs d’apprentissage existants.</target>
+      </trans-unit>
+      <trans-unit id="learningObjectives.derivationCircuitOpen" datatype="html">
+        <source>Das lokale Modell erholt sich gerade von Fehlern. Versuche es später bewusst noch einmal.</source>
+        <target>Le modèle local récupère actuellement après des erreurs. Réessaie plus tard lorsque tu le souhaites.</target>
+      </trans-unit>
+      <trans-unit id="learningObjectives.derivationCompleted" datatype="html">
+        <source>Neue Vorschläge als Entwurf hinzugefügt: <x id="count" equiv-text="applied.length"/>. Prüfe und bestätige sie fachlich.</source>
+        <target>Nouvelles suggestions ajoutées comme brouillons : <x id="count" equiv-text="applied.length"/>. Vérifie leur contenu et confirme-les.</target>
+      </trans-unit>
+      <trans-unit id="learningObjectives.derivationCompletedEmpty" datatype="html">
+        <source>Die Herleitung ist abgeschlossen. Es wurden keine neuen Vorschläge hinzugefügt.</source>
+        <target>La génération est terminée. Aucune nouvelle suggestion n’a été ajoutée.</target>
+      </trans-unit>
+      <trans-unit id="learningObjectives.derivationDisabled" datatype="html">
+        <source>Automatische Vorschläge sind auf diesem System nicht aktiviert. Du kannst Lernziele weiterhin manuell formulieren.</source>
+        <target>Les suggestions automatiques ne sont pas activées sur ce système. Tu peux toujours rédiger les objectifs d’apprentissage manuellement.</target>
+      </trans-unit>
+      <trans-unit id="learningObjectives.derivationDuplicate" datatype="html">
+        <source>Die automatische Herleitung enthielt doppelte Vorschläge. Starte sie erneut.</source>
+        <target>La génération automatique contenait des suggestions en double. Relance-la.</target>
+      </trans-unit>
+      <trans-unit id="learningObjectives.derivationHelp" datatype="html">
+        <source>Erst nach deiner ausdrücklichen Aktion werden geeignete aktive Aufgaben mit ihren Lösungen an das lokale Modell übergeben. Vorschläge werden als Entwurf ergänzt; manuelle, bearbeitete oder bestätigte Lernziele bleiben unverändert.</source>
+        <target>Les tâches actives appropriées et leurs solutions ne sont transmises au modèle local qu’après ton action explicite. Les suggestions sont ajoutées comme brouillons ; les objectifs d’apprentissage manuels, modifiés ou confirmés restent inchangés.</target>
+      </trans-unit>
+      <trans-unit id="learningObjectives.derivationIdCollision" datatype="html">
+        <source>Die Vorschläge können nicht sicher zugeordnet werden. Deine bestehenden Lernziele bleiben unverändert. Starte die Herleitung erneut.</source>
+        <target>Les suggestions ne peuvent pas être associées de manière sûre. Tes objectifs d’apprentissage existants restent inchangés. Relance la génération.</target>
+      </trans-unit>
+      <trans-unit id="learningObjectives.derivationInputTooLarge" datatype="html">
+        <source>Mindestens eine Aufgabe enthält zu viel Inhalt für die automatische Herleitung. Kürze sie und versuche es erneut.</source>
+        <target>Au moins une tâche contient trop de contenu pour la génération automatique. Raccourcis-la et réessaie.</target>
+      </trans-unit>
+      <trans-unit id="learningObjectives.derivationInvalidQuiz" datatype="html">
+        <source>Mindestens eine Aufgabe kann nicht sicher für die automatische Herleitung verwendet werden. Prüfe das Quiz und versuche es erneut.</source>
+        <target>Au moins une tâche ne peut pas être utilisée de manière sûre pour la génération automatique. Vérifie le quiz et réessaie.</target>
+      </trans-unit>
+      <trans-unit id="learningObjectives.derivationInvalidResponse" datatype="html">
+        <source>Die Antwort konnte nicht sicher zugeordnet werden. Deine Lernziele bleiben unverändert.</source>
+        <target>La réponse n’a pas pu être associée de manière sûre. Tes objectifs d’apprentissage restent inchangés.</target>
+      </trans-unit>
+      <trans-unit id="learningObjectives.derivationLimitations" datatype="html">
+        <source>Hinweise zur Herleitung:</source>
+        <target>Remarques sur la génération :</target>
+      </trans-unit>
+      <trans-unit id="learningObjectives.derivationMisconfigured" datatype="html">
+        <source>Automatische Vorschläge sind auf diesem System noch nicht vollständig eingerichtet. Du kannst Lernziele weiterhin manuell formulieren.</source>
+        <target>Les suggestions automatiques ne sont pas encore entièrement configurées sur ce système. Tu peux toujours rédiger les objectifs d’apprentissage manuellement.</target>
+      </trans-unit>
+      <trans-unit id="learningObjectives.derivationNoEligible" datatype="html">
+        <source>Es gibt noch keine geeignete aktive Aufgabe mit Lösung.</source>
+        <target>Il n’y a pas encore de tâche active appropriée avec une solution.</target>
+      </trans-unit>
+      <trans-unit id="learningObjectives.derivationPending" datatype="html">
+        <source>Vorschläge werden ausschließlich aus den Quizaufgaben formuliert.</source>
+        <target>Les suggestions sont générées exclusivement à partir des tâches du quiz.</target>
+      </trans-unit>
+      <trans-unit id="learningObjectives.derivationRetry" datatype="html">
+        <source>Nochmal versuchen</source>
+        <target>Réessayer</target>
+      </trans-unit>
+      <trans-unit id="learningObjectives.derivationSourceChanged" datatype="html">
+        <source>Mindestens eine verwendete Aufgabe wurde während der automatischen Herleitung geändert oder deaktiviert. Deine Lernziele bleiben unverändert. Starte die Herleitung erneut.</source>
+        <target>Au moins une tâche utilisée a été modifiée ou désactivée pendant la génération automatique. Tes objectifs d’apprentissage restent inchangés. Relance la génération.</target>
+      </trans-unit>
+      <trans-unit id="learningObjectives.derivationStart" datatype="html">
+        <source>Automatisch aus Aufgaben formulieren</source>
+        <target>Générer automatiquement à partir des tâches</target>
+      </trans-unit>
+      <trans-unit id="learningObjectives.derivationTimeout" datatype="html">
+        <source>Die automatische Herleitung hat zu lange gedauert. Deine Lernziele bleiben unverändert.</source>
+        <target>La génération automatique a pris trop de temps. Tes objectifs d’apprentissage restent inchangés.</target>
+      </trans-unit>
+      <trans-unit id="learningObjectives.derivationTitle" datatype="html">
+        <source>Automatische Vorschläge</source>
+        <target>Suggestions automatiques</target>
+      </trans-unit>
+      <trans-unit id="learningObjectives.derivationUnavailable" datatype="html">
+        <source>Die automatische Herleitung ist gerade nicht verfügbar. Versuche es später erneut.</source>
+        <target>La génération automatique est actuellement indisponible. Réessaie plus tard.</target>
+      </trans-unit>
+      <trans-unit id="learningObjectives.derivationAborted" datatype="html">
+        <source>Die automatische Herleitung wurde abgebrochen. Deine Lernziele bleiben unverändert.</source>
+        <target>La génération automatique a été annulée. Tes objectifs d’apprentissage restent inchangés.</target>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationDiagnosis" datatype="html">
+        <source>Diagnose</source>
+        <target>diagnostic</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/moderation-compass-dialog.component.html</context>
+          <context context-type="linenumber">304</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationDiagnosisIntro" datatype="html">
+        <source> Die Vorschau zeigt Verträge, Umfang und Kürzungen des aktuellen Kontexts. Inhalte und technische Anweisungen werden nicht angezeigt.</source>
+        <target>L&apos;aperçu montre les contrats, la portée et les troncatures du contexte actuel. Le contenu et les instructions techniques ne sont pas affichés.</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/moderation-compass-dialog.component.html</context>
+          <context context-type="linenumber">310,313</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationPreviewReload" datatype="html">
+        <source>Kontextvorschau neu laden</source>
+        <target>Recharger l&apos;aperçu du contexte</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/moderation-compass-dialog.component.html</context>
+          <context context-type="linenumber">323</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationPreviewLoad" datatype="html">
+        <source>Kontextvorschau laden</source>
+        <target>Charger l&apos;aperçu du contexte</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/moderation-compass-dialog.component.html</context>
+          <context context-type="linenumber">325</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationPreviewLoading" datatype="html">
+        <source> Kontextvorschau wird geladen.</source>
+        <target>L&apos;aperçu contextuel est en cours de chargement.</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/moderation-compass-dialog.component.html</context>
+          <context context-type="linenumber">334,336</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationPreviewFailed" datatype="html">
+        <source> Kontextvorschau konnte nicht geladen werden. Du kannst es erneut versuchen.</source>
+        <target>L&apos;aperçu contextuel n&apos;a pas pu être chargé. Vous pouvez réessayer.</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/moderation-compass-dialog.component.html</context>
+          <context context-type="linenumber">338,340</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationPreviewContracts" datatype="html">
+        <source>Verträge und Stand</source>
+        <target>Contrats et statut</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/moderation-compass-dialog.component.html</context>
+          <context context-type="linenumber">347</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationPreviewMode" datatype="html">
+        <source>Modus</source>
+        <target>mode</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/moderation-compass-dialog.component.html</context>
+          <context context-type="linenumber">350</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationPreviewPackedAt" datatype="html">
+        <source>Stand</source>
+        <target>État au</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/moderation-compass-dialog.component.html</context>
+          <context context-type="linenumber">354</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationPreviewSnapshotHash" datatype="html">
+        <source>Snapshot-Hash</source>
+        <target>Hachage d&apos;instantané</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/moderation-compass-dialog.component.html</context>
+          <context context-type="linenumber">358</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationPreviewContract" datatype="html">
+        <source>Vorschauvertrag</source>
+        <target>Contrat d&apos;aperçu</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/moderation-compass-dialog.component.html</context>
+          <context context-type="linenumber">362</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationPreviewContextContract" datatype="html">
+        <source>Kontextvertrag</source>
+        <target>Contrat de contexte</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/moderation-compass-dialog.component.html</context>
+          <context context-type="linenumber">366</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationPreviewInstructionVersion" datatype="html">
+        <source>Anweisungsversion</source>
+        <target>Version des instructions</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/moderation-compass-dialog.component.html</context>
+          <context context-type="linenumber">370</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationPreviewDefinitionVersion" datatype="html">
+        <source>Definitionsversion</source>
+        <target>Version de définition</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/moderation-compass-dialog.component.html</context>
+          <context context-type="linenumber">374</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationPreviewAdapter" datatype="html">
+        <source>Adapter</source>
+        <target>adaptateur</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/moderation-compass-dialog.component.html</context>
+          <context context-type="linenumber">378</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationPreviewCache" datatype="html">
+        <source>Cache</source>
+        <target>Cache</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/moderation-compass-dialog.component.html</context>
+          <context context-type="linenumber">382</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationPreviewScope" datatype="html">
+        <source>Datenumfang</source>
+        <target>Portée des données</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/moderation-compass-dialog.component.html</context>
+          <context context-type="linenumber">387</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationPreviewQuestionCountHint" datatype="html">
+        <source> Bei Fragen: dargestellt / insgesamt.</source>
+        <target>Pour les questions : affichées / total.</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/moderation-compass-dialog.component.html</context>
+          <context context-type="linenumber">388,390</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationPreviewSourceGroups" datatype="html">
+        <source>Quellengruppen</source>
+        <target>Groupes de sources</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/moderation-compass-dialog.component.html</context>
+          <context context-type="linenumber">400</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationPreviewNoSources" datatype="html">
+        <source> Keine Quellen im gepackten Kontext.</source>
+        <target>Aucune source dans le contexte compacté.</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/moderation-compass-dialog.component.html</context>
+          <context context-type="linenumber">408,410</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationPreviewBudget" datatype="html">
+        <source>Kontextbudget</source>
+        <target>Budget contextuel</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/moderation-compass-dialog.component.html</context>
+          <context context-type="linenumber">413</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationPreviewInputBudget" datatype="html">
+        <source>Gepackte Eingabe / Kontextfenster</source>
+        <target>Entrée compactée / fenêtre de contexte</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/moderation-compass-dialog.component.html</context>
+          <context context-type="linenumber">416</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationPreviewOutputReserve" datatype="html">
+        <source>Antwortreserve</source>
+        <target>Réserve de réponse</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/moderation-compass-dialog.component.html</context>
+          <context context-type="linenumber">420</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationPreviewSafetyMargin" datatype="html">
+        <source>Sicherheitsmarge</source>
+        <target>Marge de sécurité</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/moderation-compass-dialog.component.html</context>
+          <context context-type="linenumber">424</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationPreviewLimitations" datatype="html">
+        <source>Einschränkungen</source>
+        <target>Limitations</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/moderation-compass-dialog.component.html</context>
+          <context context-type="linenumber">430</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationPreviewTruncations" datatype="html">
+        <source>Kürzungen</source>
+        <target>Troncatures</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/moderation-compass-dialog.component.html</context>
+          <context context-type="linenumber">438</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationSummarySourceTopic" datatype="html">
+        <source>Thema</source>
+        <target>Thème</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/moderation-compass-dialog.component.ts</context>
+          <context context-type="linenumber">223</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationSummarySourceObjective" datatype="html">
+        <source>Lernziel</source>
+        <target>Objectif d&apos;apprentissage</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/moderation-compass-dialog.component.ts</context>
+          <context context-type="linenumber">227</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationSummarySourceQuizResult" datatype="html">
+        <source>Quiz-Ergebnis</source>
+        <target>Résultat du quiz</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/moderation-compass-dialog.component.ts</context>
+          <context context-type="linenumber">229</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationSummarySourceCompass" datatype="html">
+        <source>Kompass</source>
+        <target>Boussole</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/moderation-compass-dialog.component.ts</context>
+          <context context-type="linenumber">233</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationSummaryEvidenceToggle" datatype="html">
+        <source>Belege (<x id="count" equiv-text="count"/>)</source>
+        <target>Preuves (<x id="count" equiv-text="count"/>)</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/moderation-compass-dialog.component.ts</context>
+          <context context-type="linenumber">252</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationPreviewSectionQuestions" datatype="html">
+        <source>Fragen</source>
+        <target>Questions</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/moderation-compass-dialog.component.ts</context>
+          <context context-type="linenumber">412</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationPreviewSectionTopics" datatype="html">
+        <source>Themen</source>
+        <target>Thèmes</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/moderation-compass-dialog.component.ts</context>
+          <context context-type="linenumber">414</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationPreviewSectionCompass" datatype="html">
+        <source>Kompasssignale</source>
+        <target>Signaux de boussole</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/moderation-compass-dialog.component.ts</context>
+          <context context-type="linenumber">416</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationPreviewSectionLearning" datatype="html">
+        <source>Lernkontext</source>
+        <target>Contexte d&apos;apprentissage</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/moderation-compass-dialog.component.ts</context>
+          <context context-type="linenumber">418</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationPreviewSectionResults" datatype="html">
+        <source>Freigegebene Ergebnisse</source>
+        <target>Résultats publiés</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/moderation-compass-dialog.component.ts</context>
+          <context context-type="linenumber">420</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationPreviewSectionFeedback" datatype="html">
+        <source>Blitzlicht</source>
+        <target>Feedback express</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/moderation-compass-dialog.component.ts</context>
+          <context context-type="linenumber">422</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationPreviewStateAvailable" datatype="html">
+        <source>verfügbar</source>
+        <target>disponible</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/moderation-compass-dialog.component.ts</context>
+          <context context-type="linenumber">429</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationPreviewStateDisabled" datatype="html">
+        <source>deaktiviert</source>
+        <target>désactivé</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/moderation-compass-dialog.component.ts</context>
+          <context context-type="linenumber">431</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationPreviewStatePending" datatype="html">
+        <source>ausstehend</source>
+        <target>en attente</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/moderation-compass-dialog.component.ts</context>
+          <context context-type="linenumber">433</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationPreviewStateFailed" datatype="html">
+        <source>fehlgeschlagen</source>
+        <target>échec</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/moderation-compass-dialog.component.ts</context>
+          <context context-type="linenumber">435</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationPreviewStateNotReleased" datatype="html">
+        <source>nicht freigegeben</source>
+        <target>non publié</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/moderation-compass-dialog.component.ts</context>
+          <context context-type="linenumber">437</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationPreviewStateNotApplicable" datatype="html">
+        <source>nicht zutreffend</source>
+        <target>sans objet</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/moderation-compass-dialog.component.ts</context>
+          <context context-type="linenumber">439</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationPreviewStateUnavailable" datatype="html">
+        <source>nicht verfügbar</source>
+        <target>indisponible</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/moderation-compass-dialog.component.ts</context>
+          <context context-type="linenumber">441</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationPreviewModeFullContext" datatype="html">
+        <source>Vollständiger Kontext</source>
+        <target>Contexte complet</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/moderation-compass-dialog.component.ts</context>
+          <context context-type="linenumber">447</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationPreviewModeLegacy" datatype="html">
+        <source>Legacy-Text</source>
+        <target>Texte hérité</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/moderation-compass-dialog.component.ts</context>
+          <context context-type="linenumber">450</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationPreviewModeExtractive" datatype="html">
+        <source>Lokaler extraktiver Fallback</source>
+        <target>Repli extractif local</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/moderation-compass-dialog.component.ts</context>
+          <context context-type="linenumber">452</context>
+        </context-group>
+      </trans-unit>
     </body>
   </file>
 </xliff>

@@ -1,16 +1,16 @@
 import type { IncomingMessage } from 'node:http';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  MODERATION_ANALYSIS_CONTEXT_CONTRACT_VERSION,
+  MODERATION_PROMPT_CONTEXT_REFERENCE_FIXTURE_V1,
+  ModerationAnalysisContextV1Schema,
+  QaSummaryExecutionV2Schema,
+} from '@arsnova/shared-types';
 import { trpcDodIt } from './test-utils/trpc-dod-evidence';
-import { qaSummaryQuestionSourceId } from '@arsnova/shared-types';
 
 const { prismaMock, hostAuthMocks } = vi.hoisted(() => ({
   prismaMock: {
-    session: {
-      findUnique: vi.fn(),
-    },
-    qaQuestion: {
-      findMany: vi.fn(),
-    },
+    session: { findUnique: vi.fn() },
   },
   hostAuthMocks: {
     extractHostTokenMock: vi.fn(),
@@ -19,9 +19,7 @@ const { prismaMock, hostAuthMocks } = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('../db', () => ({
-  prisma: prismaMock,
-}));
+vi.mock('../db', () => ({ prisma: prismaMock }));
 
 vi.mock('../lib/hostAuth', async () => {
   const { buildHostAuthTestMock } = await import('./lib/hostAuth-vitest-mock');
@@ -33,8 +31,11 @@ vi.mock('../lib/hostAuth', async () => {
 });
 
 import { qaRouter } from '../routers/qa';
+import {
+  QA_SUMMARY_ADAPTER_CAPABILITIES,
+  prepareModerationSummaryContextFromAnalysis,
+} from '../lib/moderationSummaryContext';
 import { resetQaSummaryQueueForTests, waitForQaSummaryIdleForTests } from '../lib/qaSummaryQueue';
-import { buildQaSummaryAnalysisSnapshot } from '../lib/qaSummarySnapshot';
 
 function hostCtx(token: string | null) {
   return {
@@ -47,42 +48,69 @@ function hostCtx(token: string | null) {
 const caller = qaRouter.createCaller(hostCtx(null));
 const hostCaller = qaRouter.createCaller(hostCtx('host-token-123'));
 const SESSION_ID = '6a8edced-5f8f-4cfa-9176-454fac9570ad';
-const QUESTION_IDS = [
-  '11111111-1111-4111-8111-111111111111',
-  '22222222-2222-4222-8222-222222222222',
-  '33333333-3333-4333-8333-333333333333',
-] as const;
-const SOURCE_ID = qaSummaryQuestionSourceId(QUESTION_IDS[0]);
+const plan = {
+  capabilities: QA_SUMMARY_ADAPTER_CAPABILITIES,
+  selectedMode: 'full-context' as const,
+  fallback: null,
+  inferenceConfigured: true,
+};
 
-const snapshot = buildQaSummaryAnalysisSnapshot({
-  locale: 'de',
-  questions: QUESTION_IDS.map((id, index) => ({
-    id,
-    text: `Offene Frage ${index + 1}?`,
-  })),
-  maxSources: 20,
+const fixture = structuredClone(MODERATION_PROMPT_CONTEXT_REFERENCE_FIXTURE_V1);
+const analysis = ModerationAnalysisContextV1Schema.parse({
+  schemaVersion: fixture.schemaVersion,
+  contractVersion: MODERATION_ANALYSIS_CONTEXT_CONTRACT_VERSION,
+  assembledAt: '2026-01-15T10:05:00.000Z',
+  context: { ...fixture.context, representation: 'analysis-candidates' },
 });
+const prepared = prepareModerationSummaryContextFromAnalysis({
+  analysis,
+  plan,
+  packedAt: new Date('2026-01-15T10:06:00.000Z'),
+});
+const sourceId = prepared.request.promptContext.context.sources[0]!.id;
 
-describe('qa summary (Story 8.9c)', () => {
+function activeSession() {
+  return {
+    id: SESSION_ID,
+    code: 'CODE12',
+    type: 'Q_AND_A',
+    status: 'ACTIVE',
+    endedAt: null,
+    expiresAt: new Date('2027-01-01T00:00:00.000Z'),
+    qaEnabled: true,
+    qaOpen: true,
+    qaClosesAt: new Date('2027-01-01T00:00:00.000Z'),
+  };
+}
+
+describe('qa summary V2 (issue #456 slice 7)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.unstubAllEnvs();
     vi.stubEnv('QA_SUMMARY_ENABLED', '');
     resetQaSummaryQueueForTests({
-      loadSnapshot: async () => snapshot,
+      prepare: async () => prepared,
+      plan: () => plan,
       processor: async () => ({
-        status: 'ready',
-        statements: [{ text: 'Es gibt eine Klausurfrage.', sourceIds: [SOURCE_ID] }],
-        suggestedNextSteps: [],
-        limitations: [],
-        modelVersion: 'stub',
+        output: {
+          status: 'ready',
+          statements: [{ text: 'Ein belegtes Anliegen.', sourceIds: [sourceId] }],
+          suggestedNextSteps: [],
+          limitations: [],
+          modelVersion: 'test-model',
+        },
+        execution: QaSummaryExecutionV2Schema.parse({
+          attemptedMode: 'full-context',
+          effectiveMode: 'full-context',
+          fallback: null,
+        }),
       }),
     });
     hostAuthMocks.extractHostTokenMock.mockImplementation((req: unknown) => {
-      const t = (req as { headers?: { 'x-host-token'?: string } } | undefined)?.headers?.[
+      const token = (req as { headers?: { 'x-host-token'?: string } } | undefined)?.headers?.[
         'x-host-token'
       ];
-      return typeof t === 'string' ? t : null;
+      return typeof token === 'string' ? token : null;
     });
     hostAuthMocks.extractHostTokenFromConnectionParamsMock.mockReturnValue(null);
     hostAuthMocks.isHostSessionTokenValidMock.mockResolvedValue(true);
@@ -99,17 +127,14 @@ describe('qa summary (Story 8.9c)', () => {
       procedure: 'qa.summaryRuntime',
       case: 'happy',
       mode: 'direct',
-      title: 'liefert den Kill-Switch-Zustand nur an den Host und bleibt default aus',
+      title: 'liefert den V2-Kill-Switch-Zustand ausschließlich an den Host',
     },
     async () => {
-      prismaMock.session.findUnique.mockResolvedValue({
-        id: SESSION_ID,
-        code: 'CODE12',
-      });
-
-      await expect(hostCaller.summaryRuntime({ sessionId: SESSION_ID })).resolves.toEqual({
+      prismaMock.session.findUnique.mockResolvedValue(activeSession());
+      await expect(hostCaller.summaryRuntime({ sessionId: SESSION_ID })).resolves.toMatchObject({
+        schemaVersion: 2,
         enabled: false,
-        inferenceConfigured: false,
+        capabilities: { contractVersion: 'qa-summary-adapter-capabilities-v1' },
         result: null,
       });
     },
@@ -124,14 +149,9 @@ describe('qa summary (Story 8.9c)', () => {
       title: 'lehnt qa.summaryRuntime ohne Host-Token ab',
     },
     async () => {
-      prismaMock.session.findUnique.mockResolvedValue({
-        id: SESSION_ID,
-        code: 'CODE12',
-      });
-
+      prismaMock.session.findUnique.mockResolvedValue(activeSession());
       await expect(caller.summaryRuntime({ sessionId: SESSION_ID })).rejects.toMatchObject({
         code: 'UNAUTHORIZED',
-        message: 'Host-Authentifizierung erforderlich.',
       });
     },
   );
@@ -141,22 +161,57 @@ describe('qa summary (Story 8.9c)', () => {
       procedure: 'qa.requestSummary',
       case: 'happy',
       mode: 'direct',
-      title: 'startet on demand eine Host-Zusammenfassung und kehrt sofort zurück',
+      title: 'startet bewusst den V2-Kontextpfad und liefert quellengebunden aus',
     },
     async () => {
       vi.stubEnv('QA_SUMMARY_ENABLED', 'true');
-      prismaMock.session.findUnique.mockResolvedValue({
-        id: SESSION_ID,
-        code: 'CODE12',
-      });
+      prismaMock.session.findUnique.mockResolvedValue(activeSession());
 
       const pending = await hostCaller.requestSummary({ sessionId: SESSION_ID, locale: 'de' });
-      expect(pending.enabled).toBe(true);
       expect(pending.result?.status).toBe('pending');
       await waitForQaSummaryIdleForTests();
       const ready = await hostCaller.summaryRuntime({ sessionId: SESSION_ID });
-      expect(ready.result?.status).toBe('ready');
-      expect(ready.result?.statements[0]?.sourceIds).toEqual([SOURCE_ID]);
+      expect(ready.result).toMatchObject({
+        schemaVersion: 2,
+        status: 'ready',
+        statements: [{ sourceIds: [sourceId] }],
+        execution: { effectiveMode: 'full-context' },
+      });
+    },
+  );
+
+  trpcDodIt(
+    {
+      procedure: 'qa.summaryContextPreview',
+      case: 'happy',
+      mode: 'direct',
+      title: 'liefert dem Host exakt denselben sicheren gepackten Kontext',
+    },
+    async () => {
+      prismaMock.session.findUnique.mockResolvedValue(activeSession());
+      const preview = await hostCaller.summaryContextPreview({
+        sessionId: SESSION_ID,
+        locale: 'de',
+      });
+      expect(preview.promptContext).toEqual(prepared.request.promptContext);
+      expect(preview).not.toHaveProperty('instructionText');
+      expect(preview).not.toHaveProperty('definitionText');
+    },
+  );
+
+  trpcDodIt(
+    {
+      procedure: 'qa.summaryContextPreview',
+      case: 'error',
+      mode: 'direct',
+      contract: 'UNAUTHORIZED',
+      title: 'lehnt qa.summaryContextPreview ohne Host-Token ab',
+    },
+    async () => {
+      prismaMock.session.findUnique.mockResolvedValue(activeSession());
+      await expect(
+        caller.summaryContextPreview({ sessionId: SESSION_ID, locale: 'de' }),
+      ).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
     },
   );
 
@@ -169,31 +224,18 @@ describe('qa summary (Story 8.9c)', () => {
       title: 'lehnt qa.requestSummary ohne Host-Token ab',
     },
     async () => {
-      prismaMock.session.findUnique.mockResolvedValue({
-        id: SESSION_ID,
-        code: 'CODE12',
-      });
-
+      vi.stubEnv('QA_SUMMARY_ENABLED', 'true');
+      prismaMock.session.findUnique.mockResolvedValue(activeSession());
       await expect(
         caller.requestSummary({ sessionId: SESSION_ID, locale: 'de' }),
-      ).rejects.toMatchObject({
-        code: 'UNAUTHORIZED',
-        message: 'Host-Authentifizierung erforderlich.',
-      });
+      ).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
     },
   );
 
-  it('lehnt qa.requestSummary ab wenn der Kill-Switch aus ist', async () => {
-    prismaMock.session.findUnique.mockResolvedValue({
-      id: SESSION_ID,
-      code: 'CODE12',
-    });
-
+  it('lehnt den bewussten Auftrag ab wenn der Produkt-Kill-Switch aus ist', async () => {
+    prismaMock.session.findUnique.mockResolvedValue(activeSession());
     await expect(
       hostCaller.requestSummary({ sessionId: SESSION_ID, locale: 'de' }),
-    ).rejects.toMatchObject({
-      code: 'FORBIDDEN',
-      message: 'Die Moderationszusammenfassung ist nicht aktiviert.',
-    });
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
 });

@@ -3,14 +3,14 @@
 # Versionierter Moderations-Prompt-Kontext (#456)
 
 **Zielgruppe:** Product Owner, Entwicklerinnen und Entwickler von Shared Types, Backend, Frontend und Runtime
-**Stand:** 2026-10-04
-**Repo-Abgleich:** Slice-4-Arbeitsstand auf Basis `3892a85ae`
-**Status:** Slice 1/8 definiert Vertrag, Zustände, Quellen, Bedeutungslexikon, Referenzdaten und Speicherentscheidung. Slice 2/8 implementiert den backend-internen, hostautorisierten Q&A- und Themenzugriff N5–N7. Slice 3/8 ergänzt gemeinsame Kompassregeln sowie die internen, hostautorisierten Projektionen N8/N9 für freigegebene Quizaggregate und sessiongebundenes Quick Feedback. Slice 4/8 implementiert manuelle Lernziele in Quizvorbereitung und Live-Session einschließlich Local-first-Sync, Import/Export, Serverprojektion, Host-UI und Konfliktbehandlung. Vollständiger Kontextbuilder, Tokenpacker, Runtime-Ableitung und Adapterintegration bleiben geplant.
+**Stand:** 2026-10-05
+**Repo-Abgleich:** integrierter Arbeitsstand der Slices 5–8 auf Runtime-R-Basis `a8915068`
+**Status:** Slices 1–7 sind im Repo vom versionierten Fachvertrag bis zum hostgeschützten Summary-V2-Anfrage-, Vorschau- und Fallbackpfad implementiert. Slice 8 liefert den reproduzierbaren Demo-Quiz-Abnahmerunner und die Zuordnung der Gesamtanforderungen. Produktivflags bleiben aus. Die reale Summary-/Lernzielmessung auf der vorgesehenen CPU-Hardware und ein reichhaltiges Vollkontextprofil innerhalb von 4.096 bleiben ausdrücklich offen.
 **Issue:** [#456 – Vollständiger LLM-Kontext für Moderationsprompt vorbereiten](https://github.com/kqc-real/arsnova.eu/issues/456)
 **Roadmap:** [#463 – Release 1.3.0](https://github.com/kqc-real/arsnova.eu/issues/463)
 **ADR:** [ADR-0036 – Lernziel-Datenhaltung und getrennte Live-Projektion](../architecture/decisions/0036-learning-objective-storage-and-live-projection.md)
 
-## 1. Ergebnis und Grenze der Slices 1 bis 4
+## 1. Ergebnis und Grenze der Slices 1 bis 8
 
 Slice 1 schafft eine gemeinsame Sprache für den späteren Moderationskontext. Der Vertrag kann ausdrücken, **welche** zulässigen Informationen vorliegen, welchen Zustand sie haben, worauf sie sich beziehen und welche Quellen sie tragen. Das verbindliche Sechs-Fragen-Szenario liegt als deterministische Referenz vor. Die Daten werden in diesem Slice noch nicht aus einer Live-Session geladen und nicht an ein Modell gesendet.
 
@@ -20,39 +20,52 @@ Slice 3 führt die seiteneffektfreien Kompassregeln in `libs/shared-types` zusam
 
 Slice 4 setzt N2–N4 für manuelle Lernziele um. Quizziele werden in einem strikt validierten Sidecar derselben Yjs-Sammlung synchronisiert, als Export V2 gesichert und beim Live-Upload atomar in die temporäre Serverkopie übernommen. Beim Erzeugen oder kontrollierten Ersetzen eines Sessionquiz entsteht daraus ein sessionautoritärer, lösungsfreier Zielbestand. Reine Q&A-Sessions können darin manuelle Session- oder Q&A-bezogene Ziele führen. Hostschreibvorgänge verwenden globale und zielbezogene Revisionen; Reload, konkurrierende Tabs, Quizersetzung und entfernte Quellen werden nicht als stiller Last-write-wins-Fall behandelt.
 
+Slice 5 implementiert N1 als eigenen Vorbereitungsablauf. Eine ausdrückliche Aktion übermittelt ausschließlich aktive, lösungshaltige Quizaufgaben an die private Open-Weight-Runtime. Einmal-Capability, gemeinsames 2.500-UTF-8-Byte-Limit, deterministische sequenzielle Batches, ein Gesamttimeout und ein striktes Draft-Resultat begrenzen den Auftrag. Modellvorschläge überschreiben weder manuelle noch bestätigte Ziele. Der vollständige Vertrag und Fehlerlebenszyklus stehen in [Modellgestützte Lernzielableitung](learning-objective-derivation.md).
+
+Slice 6 implementiert N10 als backend-internen, hostautorisierten Gesamtbuilder. Er verbindet N5–N9 mit dem sessionautoritativen, lösungsfreien Lernzielbestand, prüft Hostrecht, Retention und relevante Revisionen vor und nach den Reads und gibt ausschließlich ein validiertes `ModerationAnalysisContextV1` zurück. N11 wählt daraus dependency-geschlossen und deterministisch einen `ModerationPromptContextV1`; N12 bildet den semantischen Hash und einen kurzlebigen, begrenzten Cache, der nur nach einem vollständig neu autorisierten N10-Lauf erreichbar ist.
+
+Slice 7 implementiert N13–N15 im vorhandenen Summary-Lebenszyklus. `QaSummaryInferenceRequestV2` bindet den gepackten Kontext an ausdrückliche Anfrage-, Ausgabe-, Instruktions- und Definitionsversionen. Der Adapter handelt `full-context` und `legacy-text` aus und degradiert ohne kompatiblen oder verfügbaren Modellpfad auf einen quellengebundenen extraktiven Backend-Fallback. `qa.summaryContextPreview` verwendet denselben frisch autorisierten Packer. Die Queue baut vor und nach Inferenz erneut auf, vergleicht den semantischen Hash und liefert bei Quellenänderung nicht die alte Modellantwort aus. Rechteentzug und Purge verhindern eine spätere quellenhaltige Anzeige.
+
+Slice 8 stellt einen lokalen, gegen Produktionsziele gesperrten Demo-Quiz-Runner bereit. Die netzwerkfreie Validierung erzwingt mindestens 250 Teilnahmen mit jeweils mindestens zehn sinnvollen Fragen zum kanonischen Demo-Quiz beziehungsweise zu arsnova.eu. Die eigentliche Betriebsabnahme bleibt dort offen, wo keine reale Zielruntime zur Verfügung stand oder das feste 4.096-Profil den reichhaltigen Kontext nicht aufnehmen kann.
+
 Damit gelten insbesondere folgende Grenzen:
 
-- Der bestehende 8.9c-Summary-Pfad und `QaSummaryInferenceRequestSchema` bleiben unverändert.
-- N5–N9 liefern validierte Fachfragmente; der vollständige serverseitige N10-Kontextbuilder aus Slice 6 fehlt weiterhin.
-- Die Lernzielpersistenz und Host-Oberflächen sind vorhanden; die modellgestützte Ableitung aus Lösungen bleibt bis Slice 5 und Runtime-PR R ausdrücklich unverdrahtet.
-- Es gibt noch keine Tokenisierung, Budgetauswahl, Kontextvorschau oder Cacheverdrahtung für einen vollständigen Moderationskontext; der Latest-Themenbeleg ist nur ein interner Eingangsbestand.
-- Die private Runtime aus Story 8.9d ist technisch implementiert, produktiv deaktiviert und noch nicht an die Lernzielableitung verdrahtet. Der Gemini-Entwicklungshelfer, der bestehende Summary-HTTP-Adapter und der Encoder bleiben getrennte Pfade.
-- Ein Vertragstest oder eine Fixture belegt keine Promptqualität und keine didaktische Wirksamkeit.
+- Der bestehende `QaSummaryInferenceRequestSchema`-Textauftrag bleibt als ausdrücklicher Legacy-Modus erhalten; V2 wird nicht als unbekanntes Zusatzfeld hineingemischt.
+- N10–N12 bleiben intern. Der neue Hostpfad liefert nur die gepackte Vorschau beziehungsweise das gebundene Ergebnis, nicht den ungefilterten Analysekandidatengraphen.
+- Lernziele werden lösungsfrei in den Gesamtgraphen übernommen. Eine Q&A-Zielreferenz außerhalb der gerankten 200 Kandidaten wird nur nach einer aktuellen Statusprüfung als `reference-only` aufgelöst; archivierte, gelöschte oder nicht mehr zulässige Referenzen werden samt Ziel ausgelassen und als Grenze ausgewiesen.
+- Vorschau, Inferenz-Lebenszyklus und erneute Quellen-/Rechteprüfung sind umgesetzt. Die Vorschau zeigt Diagnosemetadaten und den gepackten Vertrag, aber keine technischen Systemtexte und keinen ungepackten Vollbestand.
+- Die private Runtime aus Story 8.9d ist technisch implementiert und an die Lernzielvorbereitung verdrahtet, bleibt aber produktiv standardmäßig deaktiviert. Der Gemini-Entwicklungshelfer, der bestehende Summary-HTTP-Adapter und der Encoder bleiben getrennte Pfade.
+- Ein Vertragstest, eine Fixture oder der extraktive Fallback belegt keine Promptqualität und keine didaktische Wirksamkeit.
+- Der Begriff Adaptermodus `full-context` bezeichnet die V2-Vertragsfähigkeit. Im aktuellen 4.096-Profil passt der reichhaltige Referenzkontext nicht; der Packer weist die kontrollierte Q&A-Baseline und ihre Kürzungen aus. Das ist keine bestandene Vollkontext-Betriebsabnahme.
 
-Der neue Vertrag und die internen Fachfragmente sind deshalb **vorbereitete, noch nicht produktiv zum Gesamtauftrag verdrahtete Schnittstellen**. Feature-Flags bleiben unverändert; die Slices 2 bis 4 ändern weder Summary-Auswahl noch Modellauftrag. Slice 4 fügt ausschließlich hostgeschützte Lernziel-APIs und Hostoberflächen hinzu; Teilnehmer-DTOs bleiben unverändert. Nur ein ohnehin hostgestarteter erfolgreicher semantischer Q&A-Lauf aktualisiert zusätzlich den minimierten internen Themenbeleg. Die sichtbaren Kompasskarten behalten ihren bisherigen Host-UI-Vertrag, beziehen ihre Entscheidung nun aber aus dem gemeinsamen Regelmodul.
+Der Kontextvertrag, Gesamtbuilder und Packer sind nun technisch mit Summary V2 und der ausdrücklichen Hostvorschau verdrahtet. Produktiv bleiben sie wegen der deaktivierten Flags und der offenen Betriebsnachweise aus. Teilnehmer- und Presenter-DTOs erhalten weiterhin keine internen Kontextfelder. Nur ein ohnehin hostgestarteter erfolgreicher semantischer Q&A-Lauf aktualisiert zusätzlich den minimierten internen Themenbeleg; Kontextaufbau startet weder Klassifikation noch Clustering oder Lernzielableitung.
 
 ## 2. Repo-Abgleich und Integrationslandkarte
 
-Die historische Slice-1-Landkarte begann auf `64830fad`. Die rechte Spalte ergänzt den tatsächlichen Slice-4-Stand statt eines angenommenen Zielsystems:
+Die historische Slice-1-Landkarte begann auf `64830fad`. Die rechte Spalte beschreibt den integrierten Stand statt eines angenommenen Zielsystems:
 
-| Bereich                              | Vor Slice 1 vorhanden                                                                                                                                                                             | Stand nach Slice 4 / noch fehlende Integration                                                                                                                                |
+| Bereich                              | Vor Slice 1 vorhanden                                                                                                                                                                             | Integrierter Stand / offene Grenze                                                                                                                                            |
 | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Q&A-Kurzfassung                      | `QaSummaryInferenceRequestSchema` mit `locale`, `snapshotHash` und höchstens 40 Quellen `{ id, kind, text }`; produktiver Snapshot standardmäßig höchstens 20 Fragen mit je höchstens 500 Zeichen | unverändert; vollständigen Kontext erst in Slice 7 über Adapterfähigkeit anbinden                                                                                             |
+| Q&A-Kurzfassung                      | `QaSummaryInferenceRequestSchema` mit `locale`, `snapshotHash` und höchstens 40 Quellen `{ id, kind, text }`; produktiver Snapshot standardmäßig höchstens 20 Fragen mit je höchstens 500 Zeichen | V1 bleibt Legacy; V2 bindet den gepackten Kontext, typisierte Belege, Adapterfähigkeit und Fallback. Reichhaltiger Kontext passt noch nicht in das feste 4.096-Profil         |
 | Q&A-Bewertungen                      | `QaQuestion` speichert positive und negative Stimmen sowie `upvoteCount`; der Legacy-Name `upvoteCount` bezeichnet im aktuellen Pfad den Nettowert                                                | N6 projiziert Richtungszähler und Revisionen; gemeinsame SQL-Berechnung liegt in `qaRankingSql.ts`                                                                            |
 | Q&A-Klassifikation                   | Status, Kategorie `content`/`organization`/`technical`, Konfidenz, Modellversion und Analysezeit im Hostpfad                                                                                      | N6 liest nur vorhandene persistierte Ergebnisse; Kontextaufbau startet keine Klassifikation                                                                                   |
 | Semantische Themen                   | begrenzter Snapshot, Encoder, Clustering, optionale Labelherkunft und Analysezustände in 1.14c                                                                                                    | N7 projiziert den letzten geeigneten `ALL_ELIGIBLE`-Analysestand mit vollständigen Cluster-Mitgliedschaften; Neuberechnung und LLM-Label bleiben außerhalb des Kontextaufbaus |
 | Regelkompass                         | deterministische Karten- und Priorisierungslogik im Session-Host                                                                                                                                  | Schwellen, Faktenermittlung und Priorisierung liegen gemeinsam in `moderation-compass-rules.ts`; Frontend und N9 verwenden dieses Modul                                       |
-| Quizbibliothek                       | `QuizDocument` local-first in Signals, lokalen Spiegeln und Yjs/IndexedDB; Exportformat Version 1                                                                                                 | eigener Yjs-/Local-Mirror-Sidecar, stabile Aufgabenreferenzen, exakte Exportunion V1/V2 und kontrollierter Upload; Modellableitung fehlt                                      |
-| Live-Quiz                            | zeitlich begrenzte Prisma-Quizkopie mit Lösungen für den Quizbetrieb                                                                                                                              | sessionautoritative, lösungsfreie Lernzielkopie mit Host-CAS, Q&A-only-Zielen und kontrollierter Quizersetzung; Übernahme in N10 folgt erst in Slice 6                        |
+| Quizbibliothek                       | `QuizDocument` local-first in Signals, lokalen Spiegeln und Yjs/IndexedDB; Exportformat Version 1                                                                                                 | eigener Yjs-/Local-Mirror-Sidecar, stabile Aufgabenreferenzen, exakte Exportunion V1/V2, kontrollierter Upload und explizite Modellableitung                                  |
+| Live-Quiz                            | zeitlich begrenzte Prisma-Quizkopie mit Lösungen für den Quizbetrieb                                                                                                                              | sessionautoritative, lösungsfreie Lernzielkopie mit Host-CAS, Q&A-only-Zielen und kontrollierter Quizersetzung; N10 übernimmt nur aktuell auflösbare Zielreferenzen           |
 | Freigegebene Ergebnisse und Feedback | vorhandene Host-Aggregate und Freigabe-/Phasengrenzen                                                                                                                                             | N8 projiziert explizit abgeschlossene Quizfragen; sessiongebundenes Quick Feedback wird purge-gefenced und begrenzt gelesen; N9 erzeugt typisierte Signale                    |
-| Runtime                              | ADR-0035 und bestehender privater Summary-HTTP-Vertrag; keine abgenommene `llama-server`-Runtime                                                                                                  | separater Runtime-PR R nach Slice 4, vor Slice 5                                                                                                                              |
+| Runtime                              | ADR-0035 und bestehender privater Summary-HTTP-Vertrag; keine abgenommene `llama-server`-Runtime                                                                                                  | Runtime R trägt Lernziel- und Summary-V2-Consumer; Produktivflags, reale Consumerläufe und CPU-/Prefill-/RSS-Abnahme bleiben offen                                            |
 
 ### 2.1 Maßgebliche bestehende Pfade
 
 - Shared Summary-Vertrag: `libs/shared-types/src/schemas.ts`
+- Summary-V2-, Fähigkeits-, Fallback- und Vorschauverträge: `libs/shared-types/src/qa-summary-v2.ts`
 - Summary-Snapshot und Hash: `apps/backend/src/lib/qaSummarySnapshot.ts`
 - Queue und flüchtiger Ergebniszustand: `apps/backend/src/lib/qaSummaryQueue.ts`
-- HTTP-Adapter: `apps/backend/src/lib/qaSummaryAdapter.ts`
+- Legacy-HTTP-Adapter: `apps/backend/src/lib/qaSummaryAdapter.ts`
+- V2-Vorbereitung, Adapterwahl und technisches Budgetprofil: `apps/backend/src/lib/moderationSummaryContext.ts`
+- V2-Runtime-/Fallbackadapter und Quellenbindung: `apps/backend/src/lib/qaSummaryRuntimeAdapter.ts`, `qaSummaryExtractive.ts` und `qaSummaryValidateV2.ts`
+- Private llama.cpp-Übersetzung: `apps/backend/src/lib/openWeightLlmClient.ts`
 - Gemeinsame Q&A-Ranking-SQL-Projektion: `apps/backend/src/lib/qaRankingSql.ts`
 - Interner Q&A-/Themenkontext N5–N7: `apps/backend/src/lib/moderationQaContext.ts`
 - Minimierter semantischer Themenbeleg: `apps/backend/src/lib/qaSemanticTopicSnapshot.ts`
@@ -60,14 +73,19 @@ Die historische Slice-1-Landkarte begann auf `64830fad`. Die rechte Spalte ergä
 - Moderationskompass: `apps/frontend/src/app/features/session/session-host/moderation-compass.ts`
 - Gemeinsame Kompassregeln: `libs/shared-types/src/moderation-compass-rules.ts`
 - Interne Quiz-/Kompassprojektion N8/N9: `apps/backend/src/lib/moderationTeachingSignals.ts`
+- Hostautorisierter Gesamtbuilder N10: `apps/backend/src/lib/moderationPromptContext.ts`
+- Deterministisches Packing, Hash und Cache N11/N12: `apps/backend/src/lib/moderationPromptContextPacking.ts`
 - Interner Quick-Feedback-Snapshot: `apps/backend/src/lib/quickFeedbackModerationSnapshot.ts`
 - Local-first Quizmodell, Import, Export und Upload: `apps/frontend/src/app/features/quiz/data/quiz-store.service.ts`
 - Quiz-Lernzieloberfläche: `apps/frontend/src/app/features/quiz/quiz-learning-objectives/`
 - Live-Session-Lernzieloberfläche: `apps/frontend/src/app/features/session/session-host/session-learning-objectives-dialog.component.*`
 - Export- und Uploadschemas: `libs/shared-types/src/schemas.ts`
 - Lernzielverträge: `libs/shared-types/src/learning-objectives.ts`
+- Ableitungsverträge und -service: `libs/shared-types/src/learning-objective-derivation*.ts` und `apps/backend/src/lib/learningObjectiveDerivation*.ts`
 - Session-Lernzielprojektion und CAS: `apps/backend/src/lib/sessionLearningObjectives.ts`
 - Serverkopie und Sessionlebenszyklus: `prisma/schema.prisma` und [session-lifecycle.md](session-lifecycle.md)
+- Hostgeschützte Summary-Routen: `apps/backend/src/routers/qa.ts`
+- Vorschau- und V2-Ergebnisoberfläche: `apps/frontend/src/app/features/session/session-host/moderation-compass-dialog.component.*`
 
 Diese Pfade bleiben für ihre heutigen Aufgaben maßgeblich. Der neue Vertrag ersetzt keine bestehende Fachberechnung und eröffnet keine zweite NLP- oder Themenpipeline.
 
@@ -96,6 +114,34 @@ Beim Lesen lädt N7 die betroffenen Fragen erneut aus der autoritativen Session,
 | Ablauf | initiale Hostautorisierung und Evidenzlese, Host-/Zustandsprüfung vor dem Abschluss, abschließende Evidenzlese und letzte Host-/Zustandsprüfung | Quiz- und Feedbackfingerprints müssen bei beiden Evidenzlesungen identisch sein; außerdem muss der autorisierte Zustand sowohl davor als auch danach dem Ausgangszustand entsprechen. Änderungen führen zu `CONFLICT`; die Fragmente werden weder öffentlich geroutet noch automatisch bei Vote, Join oder WebSocket-Ereignissen aufgebaut                                                    |
 
 Ergebnisquellen enthalten keine Personenkennungen, Ranglisten, Bonuscodes oder `isCorrect`-Optionsmarkierungen. Vollständige Options-Buckets enthalten auch Null-Buckets; Ratingwerte werden bereits in der SQL-Projektion auf eine feste Skala aggregiert. Runden werden getrennt dargestellt und nie addiert. Eine numerische Rundenprojektion entspricht bei vorhandenem Vergleich der effektiven zweiten Runde. Überschreitet die vollständige Freitext-, numerische oder strukturierte Antwortpopulation die Grenze von 500 Rohwerten, werden ausschließlich davon abhängige Detailbelege oder Vergleichskennzahlen ausgelassen und als `budget-truncated` begrenzt ausgewiesen; eine begrenzte Teilmenge wird nie als vollständige Population ausgegeben. Weiterhin exakt berechenbare, mengenbasierte Aggregate bleiben davon getrennt verfügbar. Quick-Feedback-Werte tragen intern einen Rundenbeginn und den Nachweis der Teilnehmer-Capability-Prüfung; beide internen Felder werden vom öffentlichen Ergebnis-Schema weiterhin entfernt. Ein fehlendes oder nicht unterstütztes Modul bleibt von einer gemessenen Nullpopulation unterscheidbar.
+
+### 2.4 Interner Datenfluss in Slice 6
+
+| Stufe | Autoritative Eingabe                                                                       | Ergebnis und feste Grenze                                                                                                   |
+| ----- | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| N10   | frisch hostautorisierter N5-Zustand, N6/N7, N8/N9 und sessionautoritativer Lernzielbestand | validiertes `ModerationAnalysisContextV1`; explizite Locale; lösungsfrei; höchstens 1.500 interne Analysequellen            |
+| N11   | vollständiger Analysekandidatengraph und festes Modellprofil                               | dependency-geschlossener, deterministisch priorisierter `ModerationPromptContextV1`; höchstens 500 Quellen im Modellauftrag |
+| N12   | gepackter Kontext, Instruktion, Definitionen und semantische Revisionen                    | SHA-256-Snapshot-Hash sowie 30 Sekunden gültiger LRU-Cache mit höchstens 64 Einträgen und Session-Purge-Fence               |
+
+N10 führt die Fachfragmente innerhalb eines `RepeatableRead`-Laufs zusammen und prüft Hostrecht, Retention, Sessionzustand und relevante Revisionen anschließend erneut. Eine Locale wird nicht aus Browser- oder Routenzustand erraten. Lernzielreferenzen auf Q&A-Fragen außerhalb der 200 gerankten N6-Kandidaten werden set-basiert gegen den aktuellen zulässigen Status geprüft und ausschließlich als `reference-only` aufgenommen. Damit der Analysevertrag auch bei maximal breiten Lernzielen geschlossen bleibt, werden höchstens 200 eindeutige Q&A-Referenzen in vollständigen Zielbündeln übernommen; bestätigt geht vor prüfbedürftig, prüfbedürftig vor Entwurf, danach entscheidet die stabile Ziel-ID. Ein Bündel wird nie halb gekürzt. Eine Kapazitätsauslassung wird als `budget-truncated`, eine nicht mehr auflösbare Quelle getrennt als `source-redacted` ausgewiesen.
+
+N11 wählt in fester Code-Unit-Reihenfolge und in getrennten Lanes unter anderem organisatorische und technische Fragen, Themen, angeheftete, ausstehende, kontroverse, stark unterstützte und unbeantwortete Fragen, Lernziele, Kompasssignale, freigegebene Ergebnisse und Feedback. Jede Auswahl nimmt ihre transitiven Quellen mit; ein verwaister Bezug macht den Kandidaten ungültig. Eine autorisierte Themenrepräsentanz außerhalb der 200 gerankten Fragen darf als themengebundener Volltext mitgeführt werden, ohne eine erfundene Fragenmetrik zu erhalten; sie zählt wie jeder andere Q&A- oder Quizfragentext gegen dieselbe 200er-Grenze. Normalisierte Textduplikate werden nur zusammengeführt, wenn zugleich sämtliche fachlichen Fragenmetadaten identisch sind. Die Normalisierung ist bewusst konservativ: kanonisch äquivalentes Unicode, Leerraum, echte äußere Anführungszeichen sowie einleitende oder abschließende Fragezeichen werden vereinheitlicht; Groß-/Kleinschreibung, Unicode-Kompatibilitätszeichen, interne Apostrophe und mathematische oder sonstige bedeutungstragende Operatoren bleiben erhalten. Die Repräsentantin trägt dann eine explizite Gruppengröße. Gleicher Text mit abweichendem Status, Stimmenstand, NLP-Zustand oder Themenbezug bleibt getrennt. Direkte Kompass- und Lernzielreferenzen bleiben ebenfalls getrennt; Themenrepräsentanz und extraktive Labelquelle werden bei einem echten Duplikat auf die kanonische enthaltene Quelle umgebogen, während die vollständige Mitgliedsliste und damit die Themenhäufigkeit unverändert bleiben.
+
+Das Budget zählt konservativ jedes UTF-8-Byte als höchstens ein Modelltoken. Verbindliches tatsächliches Modellmaterial ist in Slice 7 exakt `instructionText` plus `definitionText` plus kanonisch serialisierter `context`; `packedAt`, Hash und Budgetbericht sind ausschließlich Transport- und Diagnosefelder und dürfen nicht zusätzlich in den Modellprompt geraten. Antwortreserve und Sicherheitsmarge bleiben gesondert. Der Hash bindet die tatsächlichen Instruktions- und Definitionstexte, alle semantischen Kontextwerte und die Auswahlversion ein, lässt aber reine Transportzeitstempel aus. Textgleiche, metadatenergänzte und vollständige Referenzfixtures erlauben einen deterministischen Ablationsvergleich.
+
+Der Cache besitzt bewusst keinen Abruf nur per Session-ID: Vor jedem Treffer muss N10 den vollständigen, frisch autorisierten Analysekontext erneut liefern. Revision, Modellprofil, Instruktion, Definitionen oder semantischer Inhalt ändern den Schlüssel. Sessionlöschung beziehungsweise Purge invalidiert vorhandene Einträge und setzt eine kurzlebige, global konservative O(1)-Sperre gegen Wiederbefüllen. Reiner Purge-Verkehr kann dadurch keinen unbegrenzten Sitzungsindex im Cache aufbauen.
+
+### 2.5 Anfrage, Vorschau und Auslieferung in Slice 7
+
+| Stufe | Autoritative Eingabe                                                           | Ergebnis und feste Grenze                                                                                                                                                        |
+| ----- | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| N13   | gepackter N11/N12-Kontext und ausdrückliche Adapterfähigkeiten                 | strikt versionierter `qa-summary-context-v2`-Auftrag oder ausdrücklicher `legacy-text`-/`extractive`-Fallback; keine still ignorierten Zusatzfelder                              |
+| N14   | derselbe frisch autorisierte Packer wie N13                                    | hostgeschützte `qa-summary-context-preview-v1`-Diagnose mit Bereichszuständen, Mengen, Quellenarten, Budget, Cache und Kürzungscodes; kein automatischer Abruf beim Dialogöffnen |
+| N15   | erneuter N10–N12-Aufbau nach Verarbeitung und vor späterer Runtimeauslieferung | alter Modelloutput nur bei weiterhin gleichem Hash und gültigem Hostrecht; sonst neuer, quellengebundener Fallback beziehungsweise quellenfreier Rechtefehler                    |
+
+Der V2-Runtimepfad sendet genau drei Chatnachrichten: technische Instruktion als Systemnachricht, versionierte Bedeutungsdefinition als zweite Systemnachricht und ausschließlich das kanonische JSON von `promptContext.context` als Usernachricht. Der Transporthash, `packedAt` und der Budgetbericht werden nicht als zweiter Datenblock an das Modell geschickt. Die statische Antwortschemaerzwingung wird nach dem Lauf durch dynamischen Quellenabschluss ergänzt.
+
+Timeout und Queueüberlast liefern den extraktiven Backend-Fallback. Ändert sich eine zulässige Quelle während des Auftrags, wird die Antwort nicht gegen den alten Stand angezeigt; stattdessen entsteht ein neuer extraktiver Stand mit `source_changed`. Rechteentzug oder abgelaufene Nachbereitungsberechtigung führen zu einem quellenfreien Fehler. Session-Purge entfernt Ergebnis, Warteschlangenzugang und Cache und bricht den aktiven Auftrag ab.
 
 ## 3. Drei strikt getrennte Ebenen
 
@@ -245,7 +291,7 @@ Der gepackte Modellauftrag besitzt **Source-ID-Referenzabschluss**: Jede `source
 Der genaue Graphvertrag besteht aus zwei Stufen:
 
 1. Analyse- und Promptprojektion prüfen gemeinsam eindeutige Kennungen, passende Quellenarten und verfügbare Fachbereiche. Dargestellte Fragen benötigen enthaltenen Q&A-Text. Soweit ein Themenmitglied zugleich als dargestellte Frage vorliegt, sind Frage- und Themenreferenz bidirektional konsistent; Themenrepräsentanz, extraktive Labelquelle und alle `representedQuestionSourceIds` müssen enthaltene Mitgliedstexte sein. Der singuläre `question`-Scope eines Ergebnisaggregats referenziert genau eine `quiz-question`, deren `quizScopeId` mit dem Aggregat übereinstimmt.
-2. Die Promptprojektion weist darüber hinaus jede Quelle ab, die vom **ausgewählten** Fachgraphen nicht erreichbar ist. Jeder enthaltene Q&A-Text muss zugleich in `questions.items` dargestellt sein. Die eindeutige Menge dargestellter Themenmitgliedstexte muss `topics.corpus.representedQuestions` entsprechen. Q&A- und Quizfragentexte teilen sich die Grenze `selectionLimits.questions`; Bereichszahlen dürfen auch ihre übrigen Auswahlgrenzen nicht überschreiten.
+2. Die Promptprojektion weist darüber hinaus jede Quelle ab, die vom **ausgewählten** Fachgraphen nicht erreichbar ist. Ein enthaltener Q&A-Text muss entweder in `questions.items` dargestellt oder als repräsentative beziehungsweise labeltragende Quelle eines ausgewählten Themas erreichbar sein; dieser Themenpfad darf keine Fragenmetrik erfinden. Die eindeutige Menge dargestellter Themenmitgliedstexte muss `topics.corpus.representedQuestions` entsprechen. Sämtliche enthaltenen Q&A- und Quizfragentexte – auch reine Themenrepräsentanzen – teilen sich die Grenze `selectionLimits.questions`; Bereichszahlen dürfen auch ihre übrigen Auswahlgrenzen nicht überschreiten.
 
 Ein manuelles Lernziel mit `tasks`-Scope darf zulässige Q&A- oder Quizfragen referenzieren; mehrere Quizaufgaben müssen demselben `quizScopeId` angehören. Bei `origin.kind: model-derived` sind `session`-Scopes ausgeschlossen und sowohl `derivedFromSourceIds` als auch etwaige Aufgabenreferenzen ausschließlich `quiz-question`. Die eindeutigen Ableitungsquellen gehören demselben Quizscope an. Bei `quiz` stimmt ihre `quizScopeId` mit dem Ziel überein, bei `section` zusätzlich ihre `sectionScopeId`; bei `tasks` muss jede Ableitungsquelle in `taskSourceIds` liegen. Damit bleibt eine reine Q&A-Session bei manuellen Zielen; die modellgestützte Ableitung gehört zum getrennten Quiz-Vorbereitungsauftrag.
 
@@ -335,23 +381,28 @@ QaSummaryInferenceRequestSchema (bestehender Summary-Auftrag)
 
 MODERATION_PROMPT_CONTEXT_CONTRACT_VERSION = moderation-prompt-context-v1
   versionierter, gepackter Kontext mit typisierten Quellen und Budgetbericht
+
+QaSummaryInferenceRequestV2Schema
+  schemaVersion 2 + qa-summary-context-v2 + qa-summary-model-output-v2
+  + technische Instruktion + Definition + ModerationPromptContextV1
 ```
 
-`moderation-prompt-context-v1` ist kein optionaler Zusatzblock in `QaSummaryInferenceRequestSchema`. Das bestehende nicht-strikte Zod-Objekt könnte unbekannte Felder beim Parsen still entfernen und dadurch eine scheinbar erfolgreiche, tatsächlich aber unvollständige Verarbeitung melden. Deshalb muss die spätere Adapterintegration die unterstützte Anfrage- und Ausgabeversion ausdrücklich aushandeln beziehungsweise konfigurieren.
+`moderation-prompt-context-v1` ist kein optionaler Zusatzblock in `QaSummaryInferenceRequestSchema`. Ein Legacy-Parser könnte unbekannte Felder entfernen und dadurch eine scheinbar erfolgreiche, tatsächlich aber unvollständige Verarbeitung melden. `QaSummaryAdapterCapabilitiesSchema` handelt deshalb `full-context` und `legacy-text` ausdrücklich aus und bindet im V2-Modus Anfrage-, Ausgabe-, Promptkontext- und Definitionsversion.
 
-Für den weiterhin unveränderten Summary-Adapter gilt:
+Für die kontrollierte Kompatibilität gilt:
 
-- `QaSummaryInferenceRequestSchema`, `QaSummaryModelOutputSchema`, Queue, Snapshot und UI bleiben unverändert.
-- Das neue Quellenregister erweitert `QaSummarySourceKindEnum` nicht still.
-- Ein Adapter ohne V1-Kontextfähigkeit erhält weiterhin nur den bestehenden Textauftrag oder einen ausdrücklich ausgewiesenen extraktiven/regelhaften Fallback.
+- `QaSummaryInferenceRequestSchema` und `QaSummaryModelOutputSchema` bleiben als Legacy-Wire-Vertrag erhalten; V2 erweitert sie nicht still.
+- Das V2-Quellenregister besitzt einen eigenen, typisierten Präsentationsvertrag und erweitert `QaSummarySourceKindEnum` nicht rückwirkend.
+- Ein Adapter ohne V2-Kontextfähigkeit erhält nur den bestehenden Textauftrag; das V2-Ergebnis weist `adapter_incompatible` und den effektiven `legacy-text`-Modus aus.
+- Fehlt auch der Legacy-Adapter oder scheitert der Lauf, erzeugt die Backend-Queue einen ausdrücklich markierten, quellengebundenen `extractive`-Fallback.
 - Eine unbekannte Kontextversion wird abgelehnt; sie fällt nicht durch Zod-Stripping auf eine scheinbar kompatible Teilmenge zurück.
-- Erst Slice 7 erzeugt einen ausführbaren neuen Adapterauftrag. Erst Slice 8 kann die Gesamtintegration abnehmen.
+- `QaSummaryRuntimeCompatibleDTOSchema` versucht V2 zuerst; andernfalls würde das absichtlich schmale Legacy-Schema neue Felder entfernen.
 
 Auch Quiz-Legacy bleibt kontrolliert: `exportVersion: 1` enthält keine Lernziele oder stabilen Quellenreferenzen. Der Slice-4-Import behandelt diesen Zustand als »nicht vorhanden« und erzeugt für die neue lokale Kopie kontrollierte Kennungen, aber keine Ziele aus Fragetexten. Native Exporte verwenden V2; der Host erhält wegen nicht verlustfrei kompatibler älterer Builds einen ausdrücklichen Hinweis.
 
 ## 10. Berechtigungs- und Datengrenzen
 
-Der backend-interne N5–N9-Aufbau wird ausschließlich nach validierter Hostautorisierung ausgeführt. Sessioncode, Route, URL-Parameter und Browserzustand sind keine Berechtigungsquelle. Teilnehmer- und Presenter-DTOs erhalten keine internen Kontextfelder. Der spätere Gesamtbuilder und die Vorschau müssen dieselbe Grenze weiterführen; die Slices 2 und 3 stellen dafür keinen öffentlichen oder tRPC-basierten Ersatzweg bereit.
+N5–N15 werden ausschließlich nach validierter Hostautorisierung ausgeführt. Sessioncode, Route, URL-Parameter und Browserzustand sind keine Berechtigungsquelle. `qa.summaryRuntime`, `qa.requestSummary` und `qa.summaryContextPreview` validieren den tatsächlichen Hosttoken und die Host-Nachbereitungsfrist. Teilnehmer- und Presenter-DTOs erhalten keine internen Kontextfelder.
 
 Unabhängig von der Autorisierung gelten Datenminimierung und Freigabe:
 
@@ -362,7 +413,7 @@ Unabhängig von der Autorisierung gelten Datenminimierung und Freigabe:
 - keine Rohprompts oder vollständigen Texte in Standardlogs; Telemetrie bleibt auf Mengen, Versionen, Budget, Laufzeiten und Fehlerklassen begrenzt;
 - Fragen, Quiztexte und Lernziele bleiben untrusted content und können weder Instruktionen noch Rechte ändern.
 
-Löschung, Rechteentzug oder Revision während eines späteren Modelllaufs erfordern vor Anzeige eine erneute Quellenprüfung. Bereits Slice 2 prüft Hostrecht, Retention und relevante Revisionen nach seinem konsistenten Lese-Snapshot erneut. Slice 3 wiederholt diese Prüfung und vergleicht außerdem die Fingerprints der freigegebenen Quiz- und Feedbackevidenz. Das ersetzt N15 vor der späteren Auslieferung nicht: Ein früher gültiger Hash ist keine dauerhafte Auslieferungsberechtigung.
+Löschung, Rechteentzug oder Revision während eines Modelllaufs werden nicht durch einen früher gültigen Hash überschrieben. N15 baut vor und nach dem Lauf mit dem flüchtig im Queuejob gehaltenen Hosttoken neu auf. Nach Abschluss prüft `summaryRuntime` einen nicht mehr pendingen Stand erneut. Quellenänderung liefert einen an den neuen Stand gebundenen extraktiven Fallback; Rechteverlust liefert keine alten Quellen. Das Queue-Credential wird nach jedem Ausgang gelöscht und bei Session-Purge sofort entfernt.
 
 ## 11. Lernziel-Datenhaltung und Hostablauf
 
@@ -379,32 +430,40 @@ Löschung, Rechteentzug oder Revision während eines späteren Modelllaufs erfor
 - Semantisch relevante Änderungen an einer Herleitungsfrage markieren modellabgeleitete Ziele als `needs-review`; gelöschte Scope- oder Herleitungsquellen markieren jedes betroffene Ziel entsprechend. Der Text bleibt erhalten. Ein unaufgelöster Bezug kann nicht als bestätigt gespeichert werden und wird nicht durch eine andere Quelle ersetzt.
 - Aktive Sessions sind beschreibbar. Nach dem fachlichen Ende bleibt der Zielbestand im bestehenden Host-Nachbereitungsfenster nur lesbar; danach wird er nicht mehr fachlich ausgeliefert. Session- und Orphan-Quiz-Cascades bereinigen die Serverkopien. Ein Legal Hold verlängert nur technische Aufbewahrung, nicht die Hostzugriffsfrist.
 
-Der separate lösungshaltige Ableitungsauftrag bleibt trotz vorbereiteter Herkunftsfelder bis Slice 5 unimplementiert. Ebenso liest erst der vollständige N10-Builder aus Slice 6 den sessionautoritativen Bestand in den Moderationskontext ein. Ohne Ziele bleiben Live-Session, Regelkompass und Summary-Fallback vollständig nutzbar.
+Der separate lösungshaltige Ableitungsauftrag ist in Slice 5 als ausdrückliche Hostaktion umgesetzt. Er ergänzt ausschließlich prüfbare Entwürfe und lässt manuelle, bearbeitete oder bestätigte Ziele unverändert. Der vollständige N10-Builder aus Slice 6 liest den sessionautoritativen Bestand nun lösungsfrei und nur mit aktuell auflösbaren Referenzen in den Moderationskontext ein. Ohne Ziele bleiben Live-Session, Regelkompass und Summary-Fallback vollständig nutzbar.
 
 ## 12. Umsetzungs- und Abnahmestatus
 
 Die neuere Acht-Slice-Reihenfolge aus #456 ersetzt die ältere grobe Sechs-Slice-Skizze:
 
-| Schritt      | Inhalt                                                                           | Status nach Slice 4                                                                                   |
-| ------------ | -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| Slice 1      | Verträge, Lexikon, Quellenregister, Zustände, Referenzdaten, ADR                 | im Repo; keine Produktivverdrahtung                                                                   |
-| Slice 2      | autorisierter Q&A-Kontext, Bewertungen, Klassifikation und vorhandene Themen     | im Repo als backend-interne N5–N7-Fragmente; kein öffentlicher Aufruf                                 |
-| Slice 3      | gemeinsame Kompasslogik, freigegebene Quizresultate und Feedback                 | im Repo als backend-interne N8/N9-Fragmente und gemeinsames Regelmodul; kein öffentlicher Aufruf      |
-| Slice 4      | manuelle Lernziele, Persistenz, Yjs/Import/Export/Live-Kopie und Host-UX         | implementiert; noch keine Runtime-Ableitung und noch keine Übernahme in den vollständigen N10-Kontext |
-| Runtime-PR R | gemeinsame private `llama-server`-Runtime für Label, Summary und Lernzielauftrag | geplant; Eingangskriterium für Slice 5                                                                |
-| Slice 5      | bewusste modellgestützte Lernzielableitung                                       | geplant; abhängig von abgenommenem R                                                                  |
-| Slice 6      | vollständiger Builder, deterministische Auswahl, Tokenbudget, Hash und Cache     | geplant; N5–N9 allein erzeugen keinen `ModerationAnalysisContextV1`                                   |
-| Slice 7      | Summary-Anfragepfad, Adapterfähigkeit, Vorschau und erneute Quellenprüfung       | geplant; insbesondere noch kein N14-tRPC-Pfad                                                         |
-| Slice 8      | Gesamtintegration, produktionsnahe Messungen und Abschlussabnahme                | geplant                                                                                               |
+| Schritt      | Inhalt                                                                           | Integrierter Stand / offene Grenze                                                                                |
+| ------------ | -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Slice 1      | Verträge, Lexikon, Quellenregister, Zustände, Referenzdaten, ADR                 | im Repo; Grundlage für N5–N15                                                                                     |
+| Slice 2      | autorisierter Q&A-Kontext, Bewertungen, Klassifikation und vorhandene Themen     | im Repo als backend-interne N5–N7-Fragmente                                                                       |
+| Slice 3      | gemeinsame Kompasslogik, freigegebene Quizresultate und Feedback                 | im Repo als backend-interne N8/N9-Fragmente und gemeinsames Regelmodul                                            |
+| Slice 4      | manuelle Lernziele, Persistenz, Yjs/Import/Export/Live-Kopie und Host-UX         | implementiert; N10 übernimmt den sessionautoritativen, lösungsfreien Bestand                                      |
+| Runtime-PR R | gemeinsame private `llama-server`-Runtime für Label, Summary und Lernzielauftrag | implementiert und mit Merge-Commit `a8915068d1c53e6af463c2507c802a008632dd74` übernommen; produktiv weiterhin aus |
+| Slice 5      | bewusste modellgestützte Lernzielableitung                                       | implementiert; realer `learning_objectives`-Lauf und Qualitätsabnahme offen                                       |
+| Slice 6      | vollständiger Builder, deterministische Auswahl, Tokenbudget, Hash und Cache     | implementiert als backend-interne N10–N12-Stufen                                                                  |
+| Slice 7      | Summary-Anfragepfad, Adapterfähigkeit, Vorschau und erneute Quellenprüfung       | N13–N15, V2-Vertrag, Hostvorschau und Backend-Fallback implementiert                                              |
+| Slice 8      | Gesamtintegration, produktionsnahe Messungen und Abschlussabnahme                | Demo-Quiz-Harness und Anforderungszuordnung vorhanden; reale Hardwaremessung und reichhaltiges 4.096-Profil offen |
 
-»Im Repo« bedeutet für Slice 1, dass gemeinsame Begriffe und Datenverträge prüfbar sind, für Slice 2, dass autorisierte Q&A-/Themenfragmente intern aufgebaut werden können, für Slice 3, dass freigegebene Quiz-/Feedbackfragmente sowie Kompasssignale intern aufgebaut werden können, und für Slice 4, dass Hosts manuelle Ziele tatsächlich vorbereiten und sessiongebunden verwalten können. Es bedeutet nicht, dass ein Live-Aufruf bereits `ModerationPromptContextV1` erzeugt, packt, an einen Adapter sendet oder in einer Vorschau anzeigt. Fokussierte Tests decken zusätzlich zur Q&A-/Themenprojektion die Freigabegrenze, effektive Stimmen, Null-Buckets, numerische und Rundenaggregate, Redis-Purge-Fence, fehlende Feedbackdaten, den DTO-Ausschluss interner Felder sowie Lernziel-Schema-, Import-/Export-, Sync-, Upload-, CAS-, Attach-, Lösch-, Retention- und UI-Zustände ab.
+»Im Repo« bedeutet, dass der Pfad vom autorisierten Fachbestand bis zu Vorschau, Adapterübergabe, Ergebnisbindung und Fallback ausführbar und fokussiert testbar ist. Es bedeutet nicht, dass `OPEN_WEIGHT_LLM_ENABLED` produktiv aktiviert oder der reichhaltige Kontext auf der vorgesehenen CPU-Box vermessen wurde. Fokussierte Tests decken zusätzlich zur Q&A-/Themenprojektion die Freigabegrenze, effektive Stimmen, Null-Buckets, numerische und Rundenaggregate, Redis-Purge-Fence, fehlende Feedbackdaten, den DTO-Ausschluss interner Felder, Lernziel-Schema-, Import-/Export-, Sync-, Upload-, CAS-, Attach-, Lösch-, Retention-, Ableitungs- und UI-Zustände sowie Quellenabschluss, Priorisierung, Budget, Hash, Cache, Purge, Adapterkompatibilität, Rechte-/Quellenwechsel, Fallback und die drei Ablationsfixtures ab.
 
-## 13. Weiterführende Dokumente
+## 13. Offene Slice-8-Betriebsnachweise
+
+Das feste Summaryprofil reserviert von 4.096 konservativen Budgeteinheiten 314 für die technische Instruktion, 203 für die Definition, 640 für die Antwort und 128 als Sicherheitsmarge. Damit bleiben höchstens 2.811 für das kanonische Kontext-JSON. Der reichhaltige Referenzkontext überschreitet bereits mit seinen Basismetadaten diese Grenze; die Implementierung packt daraufhin kontrolliert die ausgewiesene Q&A-Textbaseline neu.
+
+Außerdem stand für diesen Integrationsstand keine vorgesehene reale Runtime-/Hardwareumgebung für einen echten `qa_summary`-V2- oder `learning_objectives`-Lauf zur Verfügung. Der bestehende reale `topic_label`-Kurzlauf von Runtime R ersetzt weder Consumerlauf noch Summary-Prefill-/RSS-Nachweis. Beide Punkte bleiben bis zur in [Issue #456 – Slice-8-Abnahme](../implementation/ISSUE-456-SLICE-8-ABNAHME.md) beschriebenen Messung offen. Issue #456 und die Produktivflags dürfen daraus nicht automatisch als freigegeben gelten.
+
+## 14. Weiterführende Dokumente
 
 - [Moderationskompass](moderation-compass.md)
 - [Q&A-NLP-Kaskade](qa-nlp-moderation.md)
 - [Semantische Themen](word-cloud-semantic.md)
 - [Generative Moderationszusammenfassung](qa-summary.md)
+- [Modellgestützte Lernzielableitung](learning-objective-derivation.md)
+- [Issue #456 – Slice-8-Abnahme](../implementation/ISSUE-456-SLICE-8-ABNAHME.md)
 - [Technisches Onboarding 1.3](moderation-compass-onboarding-1.3.md)
 - [ADR-0035: private LLM-Runtime](../architecture/decisions/0035-self-hosted-llm-runtime-llama-cpp-over-ollama.md)
 - [ADR-0036: Lernziel-Datenhaltung und Live-Projektion](../architecture/decisions/0036-learning-objective-storage-and-live-projection.md)

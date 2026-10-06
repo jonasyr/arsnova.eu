@@ -167,11 +167,12 @@ describe.skipIf(!RUN_PG)('host and participant capabilities (PostgreSQL + Redis)
     expect(replay).toEqual({ ...first, rejoined: true });
     expect(await prisma.participant.count({ where: { sessionId: sessionA.id } })).toBe(1);
 
+    const expiredReplayCreatedAt = new Date(Date.now() - 20 * 60 * 1000);
     await prisma.participantJoinReplay.updateMany({
       where: { sessionId: sessionA.id },
       data: {
-        createdAt: new Date(Date.now() - 20 * 60 * 1000),
-        expiresAt: new Date(Date.now() - 10 * 60 * 1000),
+        createdAt: expiredReplayCreatedAt,
+        expiresAt: new Date(expiredReplayCreatedAt.getTime() + 10 * 60 * 1000),
         encryptedEnvelope: null,
       },
     });

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { ModerationPromptContextV1Schema as BarrelContextSchema } from './index.js';
 import {
+  MODERATION_PROMPT_CONTEXT_METADATA_FIXTURE_V1,
   MODERATION_PROMPT_CONTEXT_MINIMAL_FIXTURE_V1,
   MODERATION_PROMPT_CONTEXT_REFERENCE_FIXTURE_V1,
   MODERATION_PROMPT_REFERENCE_RANKING_FIXTURE_V1,
@@ -16,6 +17,7 @@ import {
   ModerationCompassSectionSchema,
   ModerationPromptContextV1Schema,
   ModerationPromptDefinitionSetV1Schema,
+  ModerationPromptDomainContextV1Schema,
 } from './moderation-prompt-context.js';
 import { QaSummaryInferenceRequestSchema } from './schemas.js';
 
@@ -275,6 +277,33 @@ describe('moderation prompt context v1', () => {
       net: 50,
       total: 110,
     });
+  });
+
+  it('provides comparable text, metadata, and full-context ablation fixtures', () => {
+    const metadata = ModerationPromptContextV1Schema.parse(
+      MODERATION_PROMPT_CONTEXT_METADATA_FIXTURE_V1,
+    );
+    const full = ModerationPromptContextV1Schema.parse(
+      MODERATION_PROMPT_CONTEXT_REFERENCE_FIXTURE_V1,
+    );
+    if (
+      metadata.context.questions.state !== 'available' ||
+      full.context.questions.state !== 'available'
+    ) {
+      throw new Error('Ablation fixtures must expose the same question corpus');
+    }
+
+    expect(metadata.context.questions.items).toHaveLength(
+      MODERATION_PROMPT_REFERENCE_TEXT_FIXTURE_V1.length,
+    );
+    expect(metadata.context.questions.items.map(({ topicSourceIds }) => topicSourceIds)).toEqual(
+      Array.from({ length: 6 }, () => []),
+    );
+    expect(metadata.context.sources.every(({ kind }) => kind === 'qa-question')).toBe(true);
+    expect(metadata.context.topics.state).toBe('not-applicable');
+    expect(metadata.context.compass.state).toBe('not-applicable');
+    expect(full.context.topics.state).toBe('available');
+    expect(MODERATION_PROMPT_REFERENCE_TEXT_FIXTURE_V1).toHaveLength(6);
   });
 
   it('accepts a minimal context and preserves computed zero separately from unavailable null', () => {
@@ -1010,6 +1039,53 @@ describe('moderation prompt context v1', () => {
     recordAt(packedOverLimit, 'context', 'scope', 'selectionLimits').questions = 5;
     expectPromptIssue(packedOverLimit, 'Auswahlgrenze');
     expect(ModerationPromptContextV1Schema.safeParse(analysisCandidate).success).toBe(false);
+  });
+
+  it('allows a bounded topic representative text outside the ranked question items', () => {
+    const topicOnlyRepresentative = cloneReference();
+    const context = recordAt(topicOnlyRepresentative, 'context');
+    const firstTopic = recordAt(context, 'topics', 'items', 0);
+    const representativeSourceId = firstTopic.representativeQuestionSourceId;
+    const questions = arrayAt(context, 'questions', 'items');
+    const questionIndex = questions.findIndex(
+      (question) =>
+        question !== null &&
+        typeof question === 'object' &&
+        (question as Record<string, unknown>).sourceId === representativeSourceId,
+    );
+    expect(questionIndex).toBeGreaterThanOrEqual(0);
+    questions.splice(questionIndex, 1);
+    recordAt(context, 'questions', 'corpus').represented = questions.length;
+
+    expect(ModerationPromptDomainContextV1Schema.safeParse(context).success).toBe(true);
+  });
+
+  it('rejects an included learning-objective Q&A source outside the ranked question items', () => {
+    const objectiveBypass = cloneReference();
+    const context = recordAt(objectiveBypass, 'context');
+    const sourceId = 'qa-question:88888888-8888-4888-8888-888888888888';
+    arrayAt(context, 'sources').push({
+      id: sourceId,
+      kind: 'qa-question',
+      content: {
+        state: 'included',
+        text: 'Dieser Lernzielbeleg liegt außerhalb des gerankten Fragenkorpus.',
+        truncated: false,
+      },
+    });
+    recordAt(context, 'learningContext', 'objectives', 0).scope = {
+      kind: 'tasks',
+      taskSourceIds: [sourceId],
+    };
+
+    const result = ModerationPromptDomainContextV1Schema.safeParse(context);
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ message: expect.stringContaining('Themenbeleg') }),
+      ]),
+    );
   });
 
   it('rejects result sources and evidence while results are not released', () => {

@@ -132,7 +132,7 @@ Die Umsetzung erfolgt additiv und schema-first:
 
 1. Slice 1 definiert Kontext-, Quellen- und Zustandsverträge sowie diese Entscheidung.
 2. Slice 4 ergänzt den versionierten Yjs-/Local-Mirror-Sidecar samt Initialisierungsmarker, den strikt versionierten Export/Import, stabile Referenzen, Live-Upload, sessionautoritative Speicherung, Host-UX und Konfliktbehandlung. Datenbankänderungen sind additiv; `Question.sourceQuestionId` bleibt für Legacykopien nullable, die neue Lernkontextrevision startet bei 0. Alte `quizzes`-Snapshots, v1-Exporte und laufende Sessions ohne Lernziele bleiben gültig. Der administrative Session-Quizexport bleibt ausdrücklich V1, solange er keine vollständige V2-Provenienz liefern kann.
-3. Erst Slice 5 darf nach technischer Abnahme der Runtime den lösungshaltigen Ableitungsauftrag verdrahten.
+3. Slice 5 verdrahtet nach technischer Abnahme der Runtime den lösungshaltigen, ausdrücklich gestarteten Ableitungsauftrag. Einzelheiten zu Capability, Batching, Gesamttimeout, Provenienz und Fehlerlebenszyklus stehen in [Modellgestützte Lernzielableitung](../../features/learning-objective-derivation.md).
 4. Der Live-Kontext übernimmt Ziele erst über den späteren autorisierten Builder. Ein alter Summary-Adapter erhält weiterhin ausschließlich seinen bisherigen Textauftrag; neue Felder werden ihm nicht still angehängt.
 
 Migrationen erzeugen keine Lernziele aus vorhandenen Quiztexten. »Nicht vorhanden« ist ein eigener Zustand und wird weder als leere bestätigte Zielliste noch als fehlgeschlagene Ableitung umgedeutet.
@@ -171,8 +171,8 @@ Der bestehende Quiz-Historiennachweis wird nicht still verändert. `sourceQuesti
 
 ## Implementierungsstand
 
-Mit #456 Slice 4 sind der Yjs-/Local-Mirror-Sidecar, Datenbankmodelle und Migration, Export/Import V2, Live-Upload und Sessionprojektion, Q&A-only-Ziele sowie die lokale und live-sessiongebundene Host-UI umgesetzt. Quelländerungen und -löschungen, optimistische Konkurrenz, ausdrücklich leere Bestände, Quizersetzung, Reload und das Nachbereitungsfenster besitzen eigene Zustände und Tests.
+Mit #456 Slice 4 sind der Yjs-/Local-Mirror-Sidecar, Datenbankmodelle und Migration, Export/Import V2, Live-Upload und Sessionprojektion, Q&A-only-Ziele sowie die lokale und live-sessiongebundene Host-UI umgesetzt. Quelländerungen und -löschungen, optimistische Konkurrenz, ausdrücklich leere Bestände, Quizersetzung, Reload und das Nachbereitungsfenster besitzen eigene Zustände und Tests. Slice 5 ergänzt den versionierten, lösungshaltigen und ausschließlich durch eine ausdrückliche Aktion gestarteten Runtimeauftrag mit Einmal-Capability, deterministischem Byte-Batching, gemeinsamem Gesamttimeout, strengem Entwurfsresultat und auditierbarer Modell-/Quellprovenienz. Manuelle und bestätigte Ziele werden weder bei Fehlern noch bei erneuter Ableitung überschrieben.
 
-Nicht umgesetzt bleiben der lösungshaltige Runtime-Ableitungsauftrag aus Slice 5, die Übernahme der Ziele in den vollständigen gepackten Moderationskontext aus Slice 6 sowie Adapter-/Vorschauintegration und Betriebsabnahme aus Slices 7 und 8. Die in Slice 4 gespeicherte modellabgeleitete Provenienz ist Lebenszyklusvorbereitung und kein Nachweis einer vorhandenen oder fachlich abgenommenen Modellableitung.
+Noch getrennt bleiben die Übernahme der Ziele in den vollständigen gepackten Moderationskontext aus Slice 6 sowie Adapter-/Vorschauintegration und Betriebsabnahme aus Slices 7 und 8. Der Slice-5-Vertrag und seine modellfreien Tests sind kein Nachweis didaktischer Modellqualität; ein realer Lernzielauftrag und die Produktionsmessung müssen vor Aktivierung gesondert dokumentiert werden.
 
 Die Integrationsgrenzen und der vollständige Slice-Status stehen in [moderation-prompt-context.md](../../features/moderation-prompt-context.md).

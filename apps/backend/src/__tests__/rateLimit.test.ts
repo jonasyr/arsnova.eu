@@ -28,6 +28,7 @@ import {
   checkMotdListArchiveRate,
   checkMotdRecordInteractionRate,
   checkFixedWindowBudgets,
+  checkLearningObjectiveDerivationPrepareRate,
   checkQuizUploadAttemptRate,
   checkQuizUploadStorageRate,
   RATE_LIMIT_ENV,
@@ -56,6 +57,8 @@ describe('RATE_LIMIT_ENV – Umgebungsvariablen-Defaults (Story 0.5)', () => {
     expect(RATE_LIMIT_ENV.quizUploadGlobalPerHour).toBe(600);
     expect(RATE_LIMIT_ENV.quizUploadGlobalBytesPerHour).toBe(64 * 1024 * 1024);
     expect(RATE_LIMIT_ENV.quizUploadGlobalComplexityPerHour).toBe(100_000);
+    expect(RATE_LIMIT_ENV.learningObjectiveDerivationPreparePerIpPerHour).toBe(600);
+    expect(RATE_LIMIT_ENV.learningObjectiveDerivationPrepareGlobalPerHour).toBe(3_000);
     expect(RATE_LIMIT_ENV.quickFeedbackStandalonePerIpPerHour).toBe(600);
     expect(RATE_LIMIT_ENV.quickFeedbackStandaloneGlobalPerHour).toBe(3000);
     expect(RATE_LIMIT_ENV.quickFeedbackSessionPerMinute).toBe(120);
@@ -135,6 +138,25 @@ describe('atomare Public-Create-Budgets', () => {
       '1250000',
       '100000',
       '2201',
+      '3600',
+    );
+  });
+
+  it('bucht die Lernziel-Vorbereitung atomar gegen Global- und Shared-NAT-Budget', async () => {
+    await expect(checkLearningObjectiveDerivationPrepareRate('203.0.113.9')).resolves.toEqual({
+      allowed: true,
+      remaining: 10,
+    });
+
+    expect(redisMock.eval).toHaveBeenCalledWith(
+      expect.any(String),
+      2,
+      'rl:learningObjectiveDerivation:prepare:global',
+      'rl:learningObjectiveDerivation:prepare:ip:203.0.113.9',
+      '3000',
+      '1',
+      '600',
+      '1',
       '3600',
     );
   });
