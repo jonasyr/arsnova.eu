@@ -457,17 +457,27 @@ export async function requestQaSummary(
   access: HostTokenContext,
 ): Promise<QaSummaryRuntimeV2DTO> {
   const config = hooks.config();
-  const now = hooks.now();
-  pruneExpired(sessionId, now);
+  pruneExpired(sessionId, hooks.now());
   if (!config.enabled) return toRuntime(sessionId);
 
-  const existing = states.get(sessionId);
-  if (existing?.inflight) return toRuntime(sessionId);
+  if (states.get(sessionId)?.inflight) return toRuntime(sessionId);
 
   const prepared = await hooks.prepare({ sessionId, locale, access });
   if (isSessionInvalidated(sessionId)) return toRuntime(sessionId);
+
+  // Context preparation is asynchronous. Another request can have queued or even
+  // completed a job for this session while this request was waiting, so all
+  // state-dependent decisions below must use the current state.
+  const current = states.get(sessionId);
+  if (current?.inflight) return toRuntime(sessionId);
+
+  const now = hooks.now();
+  const snapshotHash = prepared.request.promptContext.snapshotHash;
   if (!hasMinimumSummaryCorpus(prepared)) {
-    if (existing?.result.status === 'ready' || existing?.result.status === 'uncertain') {
+    if (
+      current?.result.snapshotHash === snapshotHash &&
+      (current.result.status === 'ready' || current.result.status === 'uncertain')
+    ) {
       return toRuntime(sessionId);
     }
     const generation = nextGeneration++;
@@ -481,17 +491,16 @@ export async function requestQaSummary(
     return toRuntime(sessionId);
   }
 
-  const snapshotHash = prepared.request.promptContext.snapshotHash;
   if (
-    existing &&
-    existing.lastFinishedAt !== null &&
-    now - existing.lastFinishedAt < config.cooldownMs &&
-    existing.result.snapshotHash === snapshotHash &&
-    existing.result.status !== 'failed' &&
+    current &&
+    current.lastFinishedAt !== null &&
+    now - current.lastFinishedAt < config.cooldownMs &&
+    current.result.snapshotHash === snapshotHash &&
+    current.result.status !== 'failed' &&
     !(
-      (existing.result.execution.effectiveMode === 'extractive' ||
-        existing.result.execution.effectiveMode === 'rule-based') &&
-      existing.result.execution.fallback?.retry === 'manual'
+      (current.result.execution.effectiveMode === 'extractive' ||
+        current.result.execution.effectiveMode === 'rule-based') &&
+      current.result.execution.fallback?.retry === 'manual'
     )
   ) {
     queueMetrics.cacheHits += 1;
@@ -516,7 +525,7 @@ export async function requestQaSummary(
   states.set(sessionId, {
     result: createPendingQaSummaryResultV2(prepared),
     inflight: true,
-    lastFinishedAt: existing?.lastFinishedAt ?? null,
+    lastFinishedAt: current?.lastFinishedAt ?? null,
     expiresAt: now + config.ttlMs,
     generation,
   });

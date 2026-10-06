@@ -349,4 +349,87 @@ describe('qaSummaryQueue V2', () => {
     expect(runtime.result).toMatchObject({ status: 'uncertain' });
     expect(processor).not.toHaveBeenCalled();
   });
+
+  it('ersetzt ein fertiges Ergebnis wenn der berechtigte Korpus unter drei Fragen schrumpft', async () => {
+    const before = preparedReference();
+    const after = preparedMinimal();
+    let current = before;
+    resetQaSummaryQueueForTests({
+      config: () => testConfig(),
+      plan: () => fullContextPlan,
+      prepare: async () => current,
+      processor: async () => completedRun(before),
+    });
+
+    await requestQaSummary(SESSION_ID, 'de', ACCESS);
+    await waitForQaSummaryIdleForTests();
+    const oldResult = getQaSummaryRuntime(SESSION_ID).result;
+    expect(oldResult?.status).toBe('ready');
+    expect(oldResult?.sources.length).toBeGreaterThan(0);
+
+    current = after;
+    const refreshed = await requestQaSummary(SESSION_ID, 'de', ACCESS);
+
+    expect(refreshed.result).toMatchObject({
+      status: 'uncertain',
+      snapshotHash: after.request.promptContext.snapshotHash,
+      statements: [],
+      sources: [],
+    });
+    expect(refreshed.result?.snapshotHash).not.toBe(oldResult?.snapshotHash);
+  });
+
+  it('reiht bei überlappendem Kontextaufbau derselben Session nur einen Job ein', async () => {
+    const prepared = preparedReference();
+    let prepareCalls = 0;
+    let releaseSecondPrepare: (() => void) | undefined;
+    let notifySecondPrepare: (() => void) | undefined;
+    const secondPrepareStarted = new Promise<void>((resolve) => {
+      notifySecondPrepare = resolve;
+    });
+    const secondPrepareBlocked = new Promise<void>((resolve) => {
+      releaseSecondPrepare = resolve;
+    });
+    let releaseProcessor: (() => void) | undefined;
+    let notifyProcessor: (() => void) | undefined;
+    const processorStarted = new Promise<void>((resolve) => {
+      notifyProcessor = resolve;
+    });
+    const processorBlocked = new Promise<void>((resolve) => {
+      releaseProcessor = resolve;
+    });
+    const processor = vi.fn(async () => {
+      notifyProcessor?.();
+      await processorBlocked;
+      return completedRun(prepared);
+    });
+    resetQaSummaryQueueForTests({
+      config: () => testConfig(),
+      plan: () => fullContextPlan,
+      prepare: async () => {
+        prepareCalls += 1;
+        if (prepareCalls === 2) {
+          notifySecondPrepare?.();
+          await secondPrepareBlocked;
+        }
+        return prepared;
+      },
+      processor,
+    });
+
+    const firstRequest = requestQaSummary(SESSION_ID, 'de', ACCESS);
+    const secondRequest = requestQaSummary(SESSION_ID, 'de', ACCESS);
+    await secondPrepareStarted;
+    await expect(firstRequest).resolves.toMatchObject({ result: { status: 'pending' } });
+    await processorStarted;
+
+    releaseSecondPrepare?.();
+    await expect(secondRequest).resolves.toMatchObject({ result: { status: 'pending' } });
+    expect(processor).toHaveBeenCalledTimes(1);
+
+    releaseProcessor?.();
+    await waitForQaSummaryIdleForTests();
+    expect(processor).toHaveBeenCalledTimes(1);
+    expect(getQaSummaryRuntime(SESSION_ID).result?.status).toBe('ready');
+  });
 });
