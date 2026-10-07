@@ -8232,7 +8232,9 @@ const sessionCoreRouter = router({
           session.quiz.questions.map((question, order) => ({ id: question.id, order })),
           progress,
           legacyNavigationStart,
-          skipCurrentResultQuestion && session.questionProgressComplete ? 1 : 0,
+          skipCurrentResultQuestion && session.questionProgressComplete
+            ? Number.POSITIVE_INFINITY
+            : 0,
         );
         const currentQuestionId =
           currentIdx >= 0 ? (session.quiz.questions[currentIdx]?.id ?? null) : null;
@@ -8437,7 +8439,7 @@ const sessionCoreRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Session nicht gefunden.' });
       }
 
-      const targetIndex = await prisma.$transaction(async (tx) => {
+      const target = await prisma.$transaction(async (tx) => {
         await lockSessionRow(tx, identity.id);
         const session = await tx.session.findUnique({
           where: { id: identity.id },
@@ -8465,38 +8467,69 @@ const sessionCoreRouter = router({
         const index = session.quiz.questions.findIndex(
           (question) => question.id === input.questionId,
         );
-        const included = getIncludedSessionQuestionIds(
-          session.quiz.questions,
-          parseSessionQuestionProgress(session.questionProgress),
-          session.questionProgressComplete === true,
-        );
+        const progress = parseSessionQuestionProgress(session.questionProgress);
+        const progressState = progress[input.questionId]?.state;
+        const completeProgressReached =
+          session.questionProgressComplete === true &&
+          (progressState === 'OPENED' || progressState === 'COMPLETED');
         const legacyAlreadyReached =
           session.questionProgressComplete !== true &&
           index >= 0 &&
           session.currentQuestion !== null &&
-          index <= session.currentQuestion;
-        if (index < 0 || (!included.has(input.questionId) && !legacyAlreadyReached)) {
+          index <= session.currentQuestion &&
+          progressState !== 'SKIPPED';
+        if (index < 0 || (!completeProgressReached && !legacyAlreadyReached)) {
           throw new TRPCError({
             code: 'BAD_REQUEST',
             message: 'Für diese Frage liegt noch kein Ergebnis vor.',
           });
+        }
+        const latestVote = await tx.vote.findFirst({
+          where: { sessionId: identity.id, questionId: input.questionId },
+          orderBy: { round: 'desc' },
+          select: { round: true },
+        });
+        const targetRound = latestVote?.round === 2 ? 2 : 1;
+        const now = new Date();
+        let normalizedProgress = progress;
+        if (session.questionProgressComplete !== true && session.currentQuestion !== null) {
+          for (let reachedIndex = 0; reachedIndex <= session.currentQuestion; reachedIndex += 1) {
+            const reachedQuestion = session.quiz.questions[reachedIndex];
+            if (reachedQuestion) {
+              normalizedProgress = markSessionQuestionCompleted(
+                normalizedProgress,
+                reachedQuestion.id,
+                now,
+              );
+            }
+          }
         }
         await tx.session.update({
           where: { id: identity.id },
           data: {
             status: 'RESULTS',
             currentQuestion: index,
-            currentRound: 1,
-            statusChangedAt: new Date(),
+            currentRound: targetRound,
+            statusChangedAt: now,
+            ...(session.questionProgressComplete !== true
+              ? {
+                  questionProgress: serializeSessionQuestionProgress(normalizedProgress),
+                  questionProgressComplete: true,
+                }
+              : {}),
             lastSkippedQuestionId: null,
             lastQuestionSkippedAt: null,
           },
         });
-        return index;
+        return { index, round: targetRound };
       });
       invalidateSessionStatusCachesForCode(code);
       void recordSessionTransitionActivity();
-      return { status: 'RESULTS' as const, currentQuestion: targetIndex, currentRound: 1 };
+      return {
+        status: 'RESULTS' as const,
+        currentQuestion: target.index,
+        currentRound: target.round,
+      };
     }),
 
   /** Antwortoptionen freigeben – Lesephase beenden (Story 2.3). Nur bei QUESTION_OPEN. */

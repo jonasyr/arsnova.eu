@@ -25860,6 +25860,46 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
       fixture.destroy();
     });
 
+    it('zeigt bei fehlgeschlagenem Kompass-Sprung den vorhandenen Retry-Hinweis', async () => {
+      const fixture = setup();
+      fixture.detectChanges();
+      await fixture.whenStable();
+      await flushComponentAfterStable(fixture, 50);
+      const component = fixture.componentInstance;
+      component.currentQuestionForHost.set({
+        questionId: '33333333-3333-4333-8333-333333333333',
+        order: 2,
+        totalQuestions: 3,
+        text: 'Aktuelle Frage',
+        type: 'SINGLE_CHOICE',
+        difficulty: 'MEDIUM',
+        answers: [],
+      });
+      showQuestionResultMutateMock.mockRejectedValueOnce(new Error('temporarily unavailable'));
+      const source = {
+        kind: 'quiz-result' as const,
+        label: 'Viele falsche Antworten · Verlinkte Frage',
+        target: {
+          channel: 'quiz' as const,
+          questionId: '11111111-1111-4111-8111-111111111111',
+        },
+      };
+
+      await expect(component.followModerationCompassSource(source)).resolves.toBeUndefined();
+
+      expect(component.hostSteeringCallout()?.retry).toEqual(expect.any(Function));
+      expect(component.skipCurrentResultQuestionOnNext()).toBe(false);
+
+      showQuestionResultMutateMock.mockResolvedValue({
+        status: 'RESULTS',
+        currentQuestion: 0,
+        currentRound: 1,
+      });
+      component.hostSteeringCallout()?.retry();
+      await vi.waitFor(() => expect(showQuestionResultMutateMock).toHaveBeenCalledTimes(2));
+      fixture.destroy();
+    });
+
     it('wechselt von einem Blitzlicht- oder Tempo-Hinweis in den Blitzlicht-Kanal', async () => {
       getInfoQueryMock.mockResolvedValue({
         ...defaultSession,

@@ -14,6 +14,7 @@ const { prismaMock, hostAuthMocks, readingReadyMocks, platformStatisticMocks, lo
       },
       vote: {
         findMany: vi.fn(),
+        findFirst: vi.fn(),
       },
       bonusToken: {
         createMany: vi.fn(),
@@ -84,6 +85,7 @@ describe('session.nextQuestion (Story 2.3)', () => {
     hostAuthMocks.isHostSessionTokenValidMock.mockResolvedValue(true);
     prismaMock.vote.findMany.mockResolvedValue([]);
     prismaMock.$executeRaw.mockResolvedValue(1);
+    prismaMock.vote.findFirst.mockResolvedValue(null);
     prismaMock.$transaction.mockImplementation(async (fn: (tx: typeof prismaMock) => unknown) =>
       fn(prismaMock),
     );
@@ -391,10 +393,33 @@ describe('session.nextQuestion (Story 2.3)', () => {
     prismaMock.session.findUnique.mockResolvedValue({
       id: SESSION_ID,
       status: 'RESULTS',
-      currentQuestion: 1,
+      currentQuestion: 0,
+      questionProgress: {
+        '11111111-1111-4111-8111-111111111111': {
+          state: 'COMPLETED',
+          openedAt: '2026-10-07T12:00:00.000Z',
+          completedAt: '2026-10-07T12:01:00.000Z',
+        },
+        '22222222-2222-4222-8222-222222222222': {
+          state: 'COMPLETED',
+          openedAt: '2026-10-07T12:02:00.000Z',
+          completedAt: '2026-10-07T12:03:00.000Z',
+        },
+        '33333333-3333-4333-8333-333333333333': {
+          state: 'COMPLETED',
+          openedAt: '2026-10-07T12:04:00.000Z',
+          completedAt: '2026-10-07T12:05:00.000Z',
+        },
+      },
+      questionProgressComplete: true,
       quiz: {
         readingPhaseEnabled: false,
-        questions: [{ id: 'q1' }, { id: 'q2' }, { id: 'q3' }, { id: 'q4' }],
+        questions: [
+          { id: '11111111-1111-4111-8111-111111111111' },
+          { id: '22222222-2222-4222-8222-222222222222' },
+          { id: '33333333-3333-4333-8333-333333333333' },
+          { id: '44444444-4444-4444-8444-444444444444' },
+        ],
       },
     });
     prismaMock.session.update.mockResolvedValue({
@@ -1503,6 +1528,7 @@ describe('session.showQuestionResult', () => {
     hostAuthMocks.extractHostTokenFromConnectionParamsMock.mockReturnValue(null);
     hostAuthMocks.isHostSessionTokenValidMock.mockResolvedValue(true);
     prismaMock.$executeRaw.mockResolvedValue(1);
+    prismaMock.vote.findFirst.mockResolvedValue(null);
     prismaMock.$transaction.mockImplementation(async (fn: (tx: typeof prismaMock) => unknown) =>
       fn(prismaMock),
     );
@@ -1593,6 +1619,114 @@ describe('session.showQuestionResult', () => {
       expect(prismaMock.session.update).not.toHaveBeenCalled();
     },
   );
+
+  it('stellt bei Peer Instruction die zuletzt verwendete Abstimmungsrunde wieder her', async () => {
+    const questionId = '11111111-1111-4111-8111-111111111111';
+    prismaMock.session.findUnique.mockResolvedValue({
+      id: SESSION_ID,
+      status: 'RESULTS',
+      currentQuestion: 0,
+      questionProgress: {
+        [questionId]: {
+          state: 'COMPLETED',
+          openedAt: '2026-10-07T12:00:00.000Z',
+          completedAt: '2026-10-07T12:01:00.000Z',
+        },
+      },
+      questionProgressComplete: true,
+      quiz: { questions: [{ id: questionId, order: 0 }] },
+    });
+    prismaMock.vote.findFirst.mockResolvedValue({ round: 2 });
+
+    const result = await caller.showQuestionResult({ code: CODE, questionId });
+
+    expect(result).toMatchObject({ currentQuestion: 0, currentRound: 2 });
+    expect(prismaMock.session.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ currentRound: 2 }) }),
+    );
+  });
+
+  it('normalisiert beim legitimen Legacy-Sprung den erreichten Fragenfortschritt', async () => {
+    const firstId = '11111111-1111-4111-8111-111111111111';
+    const skippedId = '22222222-2222-4222-8222-222222222222';
+    const thirdId = '33333333-3333-4333-8333-333333333333';
+    prismaMock.session.findUnique.mockResolvedValue({
+      id: SESSION_ID,
+      status: 'RESULTS',
+      currentQuestion: 2,
+      questionProgress: {
+        [skippedId]: {
+          state: 'SKIPPED',
+          openedAt: '2026-10-07T12:02:00.000Z',
+          skippedAt: '2026-10-07T12:02:00.000Z',
+        },
+      },
+      questionProgressComplete: false,
+      quiz: {
+        questions: [
+          { id: firstId, order: 0 },
+          { id: skippedId, order: 1 },
+          { id: thirdId, order: 2 },
+        ],
+      },
+    });
+
+    await caller.showQuestionResult({ code: CODE, questionId: firstId });
+
+    expect(prismaMock.session.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          currentQuestion: 0,
+          questionProgressComplete: true,
+          questionProgress: expect.objectContaining({
+            [firstId]: expect.objectContaining({ state: 'COMPLETED' }),
+            [skippedId]: expect.objectContaining({ state: 'SKIPPED' }),
+            [thirdId]: expect.objectContaining({ state: 'COMPLETED' }),
+          }),
+        }),
+      }),
+    );
+  });
+
+  it.each([
+    {
+      title: 'zukünftige Legacy-Frage',
+      questionId: '33333333-3333-4333-8333-333333333333',
+      progress: {},
+    },
+    {
+      title: 'ausgelassene Legacy-Frage',
+      questionId: '22222222-2222-4222-8222-222222222222',
+      progress: {
+        '22222222-2222-4222-8222-222222222222': {
+          state: 'SKIPPED',
+          openedAt: '2026-10-07T12:02:00.000Z',
+          skippedAt: '2026-10-07T12:02:00.000Z',
+        },
+      },
+    },
+  ])('lehnt $title ohne Zustandsänderung ab', async ({ questionId, progress }) => {
+    prismaMock.session.findUnique.mockResolvedValue({
+      id: SESSION_ID,
+      status: 'RESULTS',
+      currentQuestion: 1,
+      questionProgress: progress,
+      questionProgressComplete: false,
+      quiz: {
+        questions: [
+          { id: '11111111-1111-4111-8111-111111111111', order: 0 },
+          { id: '22222222-2222-4222-8222-222222222222', order: 1 },
+          { id: '33333333-3333-4333-8333-333333333333', order: 2 },
+        ],
+      },
+    });
+
+    await expect(caller.showQuestionResult({ code: CODE, questionId })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    });
+    expect(prismaMock.vote.findFirst).not.toHaveBeenCalled();
+    expect(prismaMock.session.update).not.toHaveBeenCalled();
+  });
 });
 
 describe('session peer-instruction steering gates', () => {

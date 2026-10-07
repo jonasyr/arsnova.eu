@@ -3187,21 +3187,39 @@
           class="session-channel-card session-channel-card--quick-feedback app-live-channel-shell"
           tabindex="-1"
         >
-          <app-feedback-vote
-            [sessionCode]="code"
-            [participantId]="participantId()"
-            [participantName]="playerNickname()"
-            [participantAvatar]="playerKindergartenEmoji()"
-            [participantAvatarSequence]="playerKindergartenSequence()"
-            [participantTeamName]="playerTeamName()"
-            [sessionTitle]="liveHeading()"
-            [embeddedInSession]="true"
-            [sharedResult]="quickFeedbackResult()"
-            [showSessionCode]="false"
-            [showAskQuestionButton]="showTempoAskQuestionShortcut()"
-            (askQuestion)="openQaAskView()"
-            (activityChange)="quickFeedbackActivity.set($event)"
-          />
+          @if (quickFeedbackIdentityError(); as identityError) {
+            <p class="session-channel-card__error" role="alert">
+              <mat-icon class="session-channel-card__error-icon" aria-hidden="true"
+                >warning</mat-icon
+              >
+              <span class="session-channel-card__error-text">{{ identityError }}</span>
+            </p>
+            <button
+              matButton="tonal"
+              type="button"
+              (click)="retryQuickFeedbackParticipantIdentity()"
+            >
+              <span i18n="@@common.retry">Erneut versuchen</span>
+            </button>
+          } @else if (quickFeedbackParticipantReady()) {
+            <app-feedback-vote
+              [sessionCode]="code"
+              [participantId]="participantId()"
+              [participantName]="playerNickname()"
+              [participantAvatar]="playerKindergartenEmoji()"
+              [participantAvatarSequence]="playerKindergartenSequence()"
+              [participantTeamName]="playerTeamName()"
+              [sessionTitle]="liveHeading()"
+              [embeddedInSession]="true"
+              [sharedResult]="quickFeedbackResult()"
+              [showSessionCode]="false"
+              [showAskQuestionButton]="showTempoAskQuestionShortcut()"
+              (askQuestion)="openQaAskView()"
+              (activityChange)="quickFeedbackActivity.set($event)"
+            />
+          } @else {
+            <p class="session-channel-card__info" role="status" i18n>Wird geladen…</p>
+          }
         </section>
       }
     }

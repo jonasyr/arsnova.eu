@@ -574,6 +574,9 @@ export class SessionVoteComponent implements OnInit, OnDestroy {
     | undefined;
   readonly qaSelectedAuthorNickname = signal<string | null>(null);
   readonly quickFeedbackResult = signal<QuickFeedbackResult | null>(null);
+  readonly quickFeedbackIdentityError = signal<string | null>(null);
+  readonly quickFeedbackParticipantReady = computed(() => isParticipantUuid(this.participantId()));
+  private quickFeedbackIdentityInFlight: Promise<void> | null = null;
   readonly qaDraft = signal('');
   /** Optional Markdown/KaTeX-Editor statt einfachem Textfeld (gleiche Komponente wie Quiz-Editor). */
   readonly qaRichEditorOpen = signal(false);
@@ -5484,9 +5487,34 @@ export class SessionVoteComponent implements OnInit, OnDestroy {
       isParticipantUuid(this.participantId()) ||
       !this.code
     ) {
+      if (isParticipantUuid(this.participantId())) {
+        this.quickFeedbackIdentityError.set(null);
+      }
       return null;
     }
-    return this.resolveParticipantIdentity().then(() => undefined);
+    if (this.quickFeedbackIdentityInFlight) {
+      return this.quickFeedbackIdentityInFlight;
+    }
+    const request = this.resolveParticipantIdentity()
+      .then((identity) => {
+        this.quickFeedbackIdentityError.set(
+          identity ? null : $localize`:@@feedback.voteFailed:Abstimmung fehlgeschlagen.`,
+        );
+      })
+      .finally(() => {
+        if (this.quickFeedbackIdentityInFlight === request) {
+          this.quickFeedbackIdentityInFlight = null;
+        }
+      });
+    this.quickFeedbackIdentityInFlight = request;
+    return request;
+  }
+
+  async retryQuickFeedbackParticipantIdentity(): Promise<void> {
+    const request = this.ensureQuickFeedbackParticipantIdentity();
+    if (request) {
+      await request;
+    }
   }
 
   private async resolveParticipantIdentity(): Promise<{

@@ -6102,6 +6102,58 @@ describe('SessionVoteComponent', { timeout: 30_000 }, () => {
     fixture.destroy();
   });
 
+  it('zeigt nach fehlgeschlagener Blitzlicht-Teilnahme einen Retry und stellt die Abstimmung wieder her', async () => {
+    localStorage.removeItem('arsnova-participant-ABC123');
+    getInfoQueryMock.mockResolvedValue({
+      id: '6a8edced-5f8f-4cfa-9176-454fac9570ad',
+      serverTime: MOCK_SERVER_TIME,
+      code: 'ABC123',
+      type: 'QUIZ',
+      status: 'ACTIVE',
+      quizName: null,
+      title: null,
+      participantCount: 1,
+      anonymousMode: true,
+      allowCustomNicknames: false,
+      channels: {
+        quiz: { enabled: false },
+        qa: { enabled: false, open: false, title: null, moderationMode: false },
+        quickFeedback: { enabled: true, open: true },
+      },
+    });
+    currentQuestionQueryMock.mockResolvedValue(null);
+    joinMutateMock.mockRejectedValueOnce(new Error('temporarily unavailable'));
+
+    const fixture = TestBed.createComponent(SessionVoteComponent);
+    fixture.detectChanges();
+    await flushComponentAfterStable(fixture, 50);
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.quickFeedbackIdentityError()).toBe(
+      'Abstimmung fehlgeschlagen.',
+    );
+    expect(fixture.debugElement.query(By.directive(FeedbackVoteComponent))).toBeNull();
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('Erneut versuchen');
+
+    joinMutateMock.mockResolvedValue({
+      id: '6a8edced-5f8f-4cfa-9176-454fac9570ad',
+      participantId: '22222222-2222-4222-8222-222222222222',
+      participantNickname: 'Teilnehmende 2',
+      rejoinToken: 'participant-capability-abcdefghijklmnopqrstuvwxyz',
+      productFeedbackClaimToken: 'product-feedback-claim-abcdefghijklmnopqrstuvwxyz',
+      enableTimerAccommodation: false,
+      teamId: null,
+      teamName: null,
+    });
+    await fixture.componentInstance.retryQuickFeedbackParticipantIdentity();
+    fixture.detectChanges();
+
+    expect(joinMutateMock).toHaveBeenCalledTimes(2);
+    expect(fixture.componentInstance.quickFeedbackIdentityError()).toBeNull();
+    expect(fixture.debugElement.query(By.directive(FeedbackVoteComponent))).not.toBeNull();
+    fixture.destroy();
+  });
+
   it('zeigt im Q&A-Tab einen Geschlossen-Hinweis statt Eingabeformular', async () => {
     getInfoQueryMock.mockResolvedValue({
       id: '6a8edced-5f8f-4cfa-9176-454fac9570ad',
@@ -6538,7 +6590,10 @@ describe('SessionVoteComponent', { timeout: 30_000 }, () => {
       distribution: { SPEED_UP: 0, FOLLOWING: 0, SLOW_DOWN: 0, LOST: 0 },
       currentRound: 1,
     });
-    localStorage.setItem('arsnova-participant-ABC123', 'participant-tempo-1');
+    localStorage.setItem(
+      'arsnova-participant-ABC123',
+      '11111111-1111-4111-8111-111111111111',
+    );
 
     const fixture = TestBed.createComponent(SessionVoteComponent);
     const component = fixture.componentInstance;
@@ -6546,7 +6601,7 @@ describe('SessionVoteComponent', { timeout: 30_000 }, () => {
     await flushComponentAfterStable(fixture, 50);
 
     component.status.set('ACTIVE');
-    component.participantId.set('participant-tempo-1');
+    component.participantId.set('11111111-1111-4111-8111-111111111111');
     component.sessionSettings.set({
       id: '6a8edced-5f8f-4cfa-9176-454fac9570ad',
       code: 'ABC123',
@@ -6617,7 +6672,10 @@ describe('SessionVoteComponent', { timeout: 30_000 }, () => {
       distribution: { SPEED_UP: 0, FOLLOWING: 0, SLOW_DOWN: 0, LOST: 0 },
       currentRound: 1,
     });
-    localStorage.setItem('arsnova-participant-ABC123', 'participant-tempo-lobby');
+    localStorage.setItem(
+      'arsnova-participant-ABC123',
+      '22222222-2222-4222-8222-222222222222',
+    );
 
     const fixture = TestBed.createComponent(SessionVoteComponent);
     const component = fixture.componentInstance;
@@ -6625,7 +6683,7 @@ describe('SessionVoteComponent', { timeout: 30_000 }, () => {
     await flushComponentAfterStable(fixture, 50);
 
     component.status.set('LOBBY');
-    component.participantId.set('participant-tempo-lobby');
+    component.participantId.set('22222222-2222-4222-8222-222222222222');
     component.sessionSettings.set({
       id: '6a8edced-5f8f-4cfa-9176-454fac9570ad',
       code: 'ABC123',
@@ -6680,7 +6738,10 @@ describe('SessionVoteComponent', { timeout: 30_000 }, () => {
       distribution: { SPEED_UP: 0, FOLLOWING: 0, SLOW_DOWN: 0, LOST: 0 },
       currentRound: 1,
     });
-    localStorage.setItem('arsnova-participant-ABC123', 'participant-tempo-2');
+    localStorage.setItem(
+      'arsnova-participant-ABC123',
+      '33333333-3333-4333-8333-333333333333',
+    );
 
     const fixture = TestBed.createComponent(SessionVoteComponent);
     const component = fixture.componentInstance;
@@ -6688,7 +6749,7 @@ describe('SessionVoteComponent', { timeout: 30_000 }, () => {
     await flushComponentAfterStable(fixture, 50);
 
     component.status.set('ACTIVE');
-    component.participantId.set('participant-tempo-2');
+    component.participantId.set('33333333-3333-4333-8333-333333333333');
     component.sessionSettings.set({
       id: '6a8edced-5f8f-4cfa-9176-454fac9570ad',
       code: 'ABC123',
@@ -6751,7 +6812,10 @@ describe('SessionVoteComponent', { timeout: 30_000 }, () => {
       distribution: { SPEED_UP: 0, FOLLOWING: 0, SLOW_DOWN: 0, LOST: 0 },
       currentRound: 1,
     });
-    localStorage.setItem('arsnova-participant-ABC123', 'participant-tempo-3');
+    localStorage.setItem(
+      'arsnova-participant-ABC123',
+      '44444444-4444-4444-8444-444444444444',
+    );
 
     const fixture = TestBed.createComponent(SessionVoteComponent);
     const component = fixture.componentInstance;
@@ -6759,7 +6823,7 @@ describe('SessionVoteComponent', { timeout: 30_000 }, () => {
     await flushComponentAfterStable(fixture, 50);
 
     component.status.set('ACTIVE');
-    component.participantId.set('participant-tempo-3');
+    component.participantId.set('44444444-4444-4444-8444-444444444444');
     component.sessionSettings.set({
       id: '6a8edced-5f8f-4cfa-9176-454fac9570ad',
       code: 'ABC123',

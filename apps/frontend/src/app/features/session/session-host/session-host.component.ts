@@ -2893,6 +2893,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   async followModerationCompassSource(
     source: ModerationCompassSource,
     cardKind: ModerationCompassCardKind | undefined = this.findCompassCardKind(source),
+    returnChannel = this.activeChannel(),
   ): Promise<void> {
     const target = source.target;
     if (!target) {
@@ -2901,7 +2902,6 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     if (!this.isChannelEnabled(target.channel)) {
       return;
     }
-    const previousChannel = this.activeChannel();
     const focusHint = this.resolveCompassFocusHint(source, cardKind);
     if (target.channel === 'qa') {
       // Kompass-Karten kommen ggf. aus dem ungefilterten Chrome-Snapshot
@@ -2912,16 +2912,24 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     if (target.channel === 'quiz' && target.questionId) {
       const currentQuestionId = this.displayedCurrentQuestionForHost()?.questionId ?? null;
       if (currentQuestionId !== target.questionId) {
-        const result = await trpc.session.showQuestionResult.mutate({
-          code: this.code.toUpperCase(),
-          questionId: target.questionId,
-        });
-        this.statusUpdate.set(result);
-        this.steppedBackToPreviousResult.set(true);
-        this.skipCurrentResultQuestionOnNext.set(true);
-        await this.refreshCurrentQuestionForHost();
-        if (this.shouldPollLiveFreetext()) {
-          await this.refreshLiveFreetext();
+        try {
+          const result = await trpc.session.showQuestionResult.mutate({
+            code: this.code.toUpperCase(),
+            questionId: target.questionId,
+          });
+          this.statusUpdate.set(result);
+          this.steppedBackToPreviousResult.set(true);
+          this.skipCurrentResultQuestionOnNext.set(true);
+          await this.refreshCurrentQuestionForHost();
+          if (this.shouldPollLiveFreetext()) {
+            await this.refreshLiveFreetext();
+          }
+        } catch (error) {
+          this.openHostSteeringCalloutForSteeringFailure(
+            () => void this.followModerationCompassSource(source, cardKind, returnChannel),
+            error,
+          );
+          return;
         }
       }
     }
@@ -2946,7 +2954,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
         this.wordCloudExpanded.set(true);
         this.maximizeFreetextWordCloud();
       }
-      this.moderationCompassReturn.set({ channel: previousChannel });
+      this.moderationCompassReturn.set({ channel: returnChannel });
       return;
     }
     if (target.channel === 'qa') {
@@ -2962,7 +2970,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     } else {
       this.clearQaCompassFocus();
     }
-    this.moderationCompassReturn.set({ channel: previousChannel });
+    this.moderationCompassReturn.set({ channel: returnChannel });
   }
 
   /** Suche/Autor/Statusfilter für einen Kompass-Sprung zurücksetzen (ohne Listen-Scroll). */
