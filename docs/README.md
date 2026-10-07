@@ -4,6 +4,11 @@
 
 Zentrale **Landkarte** für alles unter `docs/`. Für Setup und erste Schritte zusätzlich [README.md](../README.md), [onboarding.md](onboarding.md) und [praktikum/EINSTIEG-TOOLS-UND-STACK.md](praktikum/EINSTIEG-TOOLS-UND-STACK.md).
 
+**Aktueller Release Candidate:**
+[arsnova.eu 1.3.0 – Moderationskompass, private CPU-Inferenz und geführte Live-Sessions](releases/1.3.0.md).
+Die Veröffentlichung erfolgt nach grünem Release-Commit auf `main`; optionale
+Inferenzfunktionen bleiben standardmäßig ausgeschaltet.
+
 ---
 
 ## Nach Rolle

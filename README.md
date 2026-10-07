@@ -15,6 +15,11 @@
 
 Die öffentliche Referenzinstanz läuft unter **https://arsnova.eu**; die getrennte Marketing- und Informationsseite unter **https://info.arsnova.eu/**. Der externe Betriebsstatus ist unter **https://arsnova.betteruptime.com/** einsehbar. Dieses Repository richtet sich an Organisationen, die arsnova.eu evaluieren, forken, anpassen oder auf eigener Infrastruktur produktiv betreiben möchten.
 
+**Release 1.3.0 wird vorbereitet:** Die vollständige Beschreibung des Release
+Candidates mit Upgrade-, Betriebs- und Rollbackhinweisen steht in den
+[Release Notes 1.3.0](./docs/releases/1.3.0.md). Der GitHub-Release bleibt bis
+zum erfolgreichen Release-Gate ein Draft.
+
 ## Für wen ist dieses Repository relevant?
 
 - **Hochschulen, Schulen, Bildungsträger und Unternehmen**, die ein selbst gehostetes Audience-Response-System einsetzen möchten.
