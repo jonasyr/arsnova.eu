@@ -22,6 +22,7 @@ import {
   HostSteeringWithTimerOverrideInputSchema,
   NextQuestionInputSchema,
   SkipQuestionInputSchema,
+  ShowQuestionResultInputSchema,
   SkipQuestionOutputSchema,
   GetLiveFreetextInputSchema,
   GetActiveQuizIdsInputSchema,
@@ -8420,6 +8421,82 @@ const sessionCoreRouter = router({
         currentQuestion: prevIdx,
         currentRound: 1,
       };
+    }),
+
+  /** Moderationskompass: gezielt zu einem bereits geöffneten Ergebnis springen. */
+  showQuestionResult: hostProcedure
+    .input(ShowQuestionResultInputSchema)
+    .output(SessionStatusUpdateSchema)
+    .mutation(async ({ input }) => {
+      const code = input.code.toUpperCase();
+      const identity = await prisma.session.findUnique({
+        where: { code },
+        select: { id: true },
+      });
+      if (!identity) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Session nicht gefunden.' });
+      }
+
+      const targetIndex = await prisma.$transaction(async (tx) => {
+        await lockSessionRow(tx, identity.id);
+        const session = await tx.session.findUnique({
+          where: { id: identity.id },
+          select: {
+            status: true,
+            currentQuestion: true,
+            questionProgress: true,
+            questionProgressComplete: true,
+            quiz: {
+              select: {
+                questions: { orderBy: { order: 'asc' }, select: { id: true, order: true } },
+              },
+            },
+          },
+        });
+        if (!session || !session.quiz) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Quiz nicht gefunden.' });
+        }
+        if (!['RESULTS', 'DISCUSSION'].includes(session.status)) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Ergebnisnavigation ist nur aus der Ergebnis- oder Diskussionsphase möglich.',
+          });
+        }
+        const index = session.quiz.questions.findIndex(
+          (question) => question.id === input.questionId,
+        );
+        const included = getIncludedSessionQuestionIds(
+          session.quiz.questions,
+          parseSessionQuestionProgress(session.questionProgress),
+          session.questionProgressComplete === true,
+        );
+        const legacyAlreadyReached =
+          session.questionProgressComplete !== true &&
+          index >= 0 &&
+          session.currentQuestion !== null &&
+          index <= session.currentQuestion;
+        if (index < 0 || (!included.has(input.questionId) && !legacyAlreadyReached)) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Für diese Frage liegt noch kein Ergebnis vor.',
+          });
+        }
+        await tx.session.update({
+          where: { id: identity.id },
+          data: {
+            status: 'RESULTS',
+            currentQuestion: index,
+            currentRound: 1,
+            statusChangedAt: new Date(),
+            lastSkippedQuestionId: null,
+            lastQuestionSkippedAt: null,
+          },
+        });
+        return index;
+      });
+      invalidateSessionStatusCachesForCode(code);
+      void recordSessionTransitionActivity();
+      return { status: 'RESULTS' as const, currentQuestion: targetIndex, currentRound: 1 };
     }),
 
   /** Antwortoptionen freigeben – Lesephase beenden (Story 2.3). Nur bei QUESTION_OPEN. */

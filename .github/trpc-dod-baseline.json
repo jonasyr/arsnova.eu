@@ -892,6 +892,11 @@
       "fingerprint": "sha256:8bb0ba8e2956a30cbedc9137427e473389a1adae146ae957cf0af14b21a729dd",
       "missing": []
     },
+    "session.showQuestionResult": {
+      "kind": "mutation",
+      "fingerprint": "sha256:3ea108e9d7eefbee1ce5b3f6120bb2bb916a6d9a0793140c0d5bf2880f6ee598",
+      "missing": []
+    },
     "session.skipQuestion": {
       "kind": "mutation",
       "fingerprint": "sha256:ab19cfe8bb4405f87f7565fa4f69427f6380a36c6b0308fc323e5bcc7204eada",

@@ -3240,6 +3240,12 @@ export const SkipQuestionInputSchema = GetSessionInfoInputSchema.extend({
 });
 export type SkipQuestionInput = z.infer<typeof SkipQuestionInputSchema>;
 
+/** Host-Aktion: Ergebnis einer bereits geöffneten Quizfrage gezielt anzeigen. */
+export const ShowQuestionResultInputSchema = GetSessionInfoInputSchema.extend({
+  questionId: z.string().uuid(),
+});
+export type ShowQuestionResultInput = z.infer<typeof ShowQuestionResultInputSchema>;
+
 /** Input: Aktuelle Frage für Teilnehmende inkl. optionalem Presence-/Ready-Kontext. */
 export const GetCurrentQuestionForStudentInputSchema = GetSessionInfoInputSchema.extend({
   participantId: z.uuid().optional(),

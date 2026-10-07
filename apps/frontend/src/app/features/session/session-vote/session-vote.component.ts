@@ -3967,6 +3967,10 @@ export class SessionVoteComponent implements OnInit, OnDestroy {
         this.applyPendingLobbyArrivalIfNeeded();
         return true;
       }
+      const quickFeedbackIdentity = this.ensureQuickFeedbackParticipantIdentity();
+      if (quickFeedbackIdentity) {
+        await quickFeedbackIdentity;
+      }
       this.ensureStatusSubscription();
       this.ensureQaSubscription();
       this.ensureQuickFeedbackSubscription();
@@ -4223,6 +4227,7 @@ export class SessionVoteComponent implements OnInit, OnDestroy {
           let channelStateChanged = false;
           if (data.channels) {
             this.patchSessionChannels(data.channels);
+            void this.ensureQuickFeedbackParticipantIdentity();
             this.ensureQaSubscription();
             this.ensureQuickFeedbackSubscription();
             void this.refreshQaQuestions();
@@ -4379,6 +4384,10 @@ export class SessionVoteComponent implements OnInit, OnDestroy {
       }
       if (nextStatus === 'ACTIVE' && prevStatus === 'QUESTION_OPEN') {
         this.pullParticipantToQuizChannel();
+      }
+      const quickFeedbackIdentity = this.ensureQuickFeedbackParticipantIdentity();
+      if (quickFeedbackIdentity) {
+        await quickFeedbackIdentity;
       }
       this.ensureStatusSubscription();
       this.ensureQaSubscription();
@@ -5462,6 +5471,22 @@ export class SessionVoteComponent implements OnInit, OnDestroy {
       localStorage.setItem(`${NICKNAME_STORAGE_KEY}-${this.code}`, nickname);
     }
     refreshTrpcWsBinding();
+  }
+
+  /**
+   * Ein direkter Einstieg in ein offenes Blitzlicht hat noch keine Quiz- oder
+   * Q&A-Aktion, die lazy eine Teilnahme anlegt. Stelle die Teilnehmeridentität
+   * deshalb her, bevor das eingebettete Voting bedienbar wird.
+   */
+  private ensureQuickFeedbackParticipantIdentity(): Promise<void> | null {
+    if (
+      !this.isQuickFeedbackChannelOpen() ||
+      isParticipantUuid(this.participantId()) ||
+      !this.code
+    ) {
+      return null;
+    }
+    return this.resolveParticipantIdentity().then(() => undefined);
   }
 
   private async resolveParticipantIdentity(): Promise<{

@@ -2714,11 +2714,11 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       })),
       qaSortMode: this.qaSortMode(),
       qaTerms: this.moderationCompassQaTerms(),
-      freetextTerms: [
+      freetextTerms: this.withCurrentFreetextQuestionTarget([
         ...(compassTermsFromAnalysisEntries(this.displayedFreetextAnalysisEntries()) ??
           this.toModerationCompassTerms(this.displayedFreetextWordCloudTerms())),
         ...this.aggregatedFreetextCompassTerms(),
-      ],
+      ]),
       extraTopicSources: [...this.moderationCompassPinnedSources()],
       nlpTopicSources: collectQaNlpCategorySources(
         this.qaChromeForumQuestions().map((question) => ({
@@ -2735,6 +2735,16 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       quizInsightKind: this.moderationCompassQuizInsightKind(),
     }),
   );
+
+  private withCurrentFreetextQuestionTarget(
+    terms: readonly ModerationCompassTerm[],
+  ): ModerationCompassTerm[] {
+    const question = this.displayedCurrentQuestionForHost();
+    if (question?.type !== 'FREETEXT') {
+      return [...terms];
+    }
+    return terms.map((term) => ({ ...term, questionId: question.questionId }));
+  }
   readonly moderationCompassHasSignals = computed(() => this.moderationCompassCards().length > 0);
   readonly moderationCompassReturn = signal<{ readonly channel: SessionChannelTab } | null>(null);
   readonly moderationCompassFocusedTerm = signal<string | null>(null);
@@ -2899,6 +2909,22 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       await this.clearQaListCriteriaForCompassJump();
     }
     await this.selectChannel(target.channel);
+    if (target.channel === 'quiz' && target.questionId) {
+      const currentQuestionId = this.displayedCurrentQuestionForHost()?.questionId ?? null;
+      if (currentQuestionId !== target.questionId) {
+        const result = await trpc.session.showQuestionResult.mutate({
+          code: this.code.toUpperCase(),
+          questionId: target.questionId,
+        });
+        this.statusUpdate.set(result);
+        this.steppedBackToPreviousResult.set(true);
+        this.skipCurrentResultQuestionOnNext.set(true);
+        await this.refreshCurrentQuestionForHost();
+        if (this.shouldPollLiveFreetext()) {
+          await this.refreshLiveFreetext();
+        }
+      }
+    }
     if (target.surface === 'word-cloud') {
       if (target.channel === 'qa') {
         if (target.sortMode && target.sortMode !== this.qaSortMode()) {
@@ -3489,7 +3515,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     const quizSource = (label: string): ModerationCompassSource => ({
       kind: 'quiz-result',
       label: this.withQuizQuestionStem(label, question),
-      target: { channel: 'quiz' },
+      target: { channel: 'quiz', questionId: question.questionId },
     });
     switch (fact.type) {
       case 'wrong-majority': {

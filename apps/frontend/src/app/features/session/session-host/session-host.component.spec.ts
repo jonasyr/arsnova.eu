@@ -137,6 +137,7 @@ const {
   qaOnQuestionsUpdatedSubscribeMock,
   nextQuestionMutateMock,
   prevQuestionMutateMock,
+  showQuestionResultMutateMock,
   skipQuestionMutateMock,
   revealAnswersMutateMock,
   revealResultsMutateMock,
@@ -203,6 +204,7 @@ const {
   qaOnQuestionsUpdatedSubscribeMock: vi.fn(() => ({ unsubscribe: unsubscribeMock })),
   nextQuestionMutateMock: vi.fn(),
   prevQuestionMutateMock: vi.fn(),
+  showQuestionResultMutateMock: vi.fn(),
   skipQuestionMutateMock: vi.fn(),
   revealAnswersMutateMock: vi.fn(),
   revealResultsMutateMock: vi.fn(),
@@ -269,6 +271,7 @@ vi.mock('../../../core/trpc.client', () => ({
       getSessionConfidenceSummary: { query: getSessionConfidenceSummaryQueryMock },
       nextQuestion: { mutate: nextQuestionMutateMock },
       prevQuestion: { mutate: prevQuestionMutateMock },
+      showQuestionResult: { mutate: showQuestionResultMutateMock },
       skipQuestion: { mutate: skipQuestionMutateMock },
       revealAnswers: { mutate: revealAnswersMutateMock },
       revealResults: { mutate: revealResultsMutateMock },
@@ -808,6 +811,11 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
       activeAt: null,
     });
     prevQuestionMutateMock.mockResolvedValue({
+      status: 'RESULTS',
+      currentQuestion: 0,
+      currentRound: 1,
+    });
+    showQuestionResultMutateMock.mockResolvedValue({
       status: 'RESULTS',
       currentQuestion: 0,
       currentRound: 1,
@@ -25796,6 +25804,85 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
           'Häufige Verwechslung: IaaS → SaaS · Was ist 2+2?',
         ]),
       );
+      expect(
+        clarification?.sources.every(
+          (source) => source.target?.questionId === 'bbbbbbbb-2222-4222-8222-222222222222',
+        ),
+      ).toBe(true);
+      fixture.destroy();
+    });
+
+    it('springt vom Kompass gezielt zum Ergebnis der verlinkten Quizfrage', async () => {
+      const fixture = setup();
+      fixture.detectChanges();
+      await fixture.whenStable();
+      await flushComponentAfterStable(fixture, 50);
+      const component = fixture.componentInstance;
+      component.session.update((session) =>
+        session ? { ...session, status: 'RESULTS', currentQuestion: 2 } : session,
+      );
+      component.currentQuestionForHost.set({
+        questionId: '33333333-3333-4333-8333-333333333333',
+        order: 2,
+        totalQuestions: 3,
+        text: 'Aktuelle Frage',
+        type: 'SINGLE_CHOICE',
+        difficulty: 'MEDIUM',
+        answers: [],
+      });
+      getCurrentQuestionForHostQueryMock.mockResolvedValue({
+        questionId: '11111111-1111-4111-8111-111111111111',
+        order: 0,
+        totalQuestions: 3,
+        text: 'Verlinkte Frage',
+        type: 'SINGLE_CHOICE',
+        difficulty: 'MEDIUM',
+        answers: [],
+      });
+
+      await component.followModerationCompassSource({
+        kind: 'quiz-result',
+        label: 'Viele falsche Antworten · Verlinkte Frage',
+        target: {
+          channel: 'quiz',
+          questionId: '11111111-1111-4111-8111-111111111111',
+        },
+      });
+
+      expect(showQuestionResultMutateMock).toHaveBeenCalledWith({
+        code: 'ABC123',
+        questionId: '11111111-1111-4111-8111-111111111111',
+      });
+      expect(component.statusUpdate()).toMatchObject({ status: 'RESULTS', currentQuestion: 0 });
+      expect(component.currentQuestionForHost()?.questionId).toBe(
+        '11111111-1111-4111-8111-111111111111',
+      );
+      fixture.destroy();
+    });
+
+    it('wechselt von einem Blitzlicht- oder Tempo-Hinweis in den Blitzlicht-Kanal', async () => {
+      getInfoQueryMock.mockResolvedValue({
+        ...defaultSession,
+        status: 'ACTIVE',
+        channels: {
+          quiz: { enabled: true },
+          qa: { enabled: true, open: true, title: 'Fragen', moderationMode: false },
+          quickFeedback: { enabled: true, open: true },
+        },
+      });
+      const fixture = setup();
+      fixture.detectChanges();
+      await fixture.whenStable();
+      await flushComponentAfterStable(fixture, 50);
+
+      await fixture.componentInstance.followModerationCompassSource({
+        kind: 'tempo',
+        label: 'Viele kommen nicht mehr mit.',
+        target: { channel: 'quickFeedback' },
+      });
+
+      expect(fixture.componentInstance.activeChannel()).toBe('quickFeedback');
+      expect(showQuestionResultMutateMock).not.toHaveBeenCalled();
       fixture.destroy();
     });
 
