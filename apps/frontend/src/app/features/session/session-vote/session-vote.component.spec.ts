@@ -6590,10 +6590,7 @@ describe('SessionVoteComponent', { timeout: 30_000 }, () => {
       distribution: { SPEED_UP: 0, FOLLOWING: 0, SLOW_DOWN: 0, LOST: 0 },
       currentRound: 1,
     });
-    localStorage.setItem(
-      'arsnova-participant-ABC123',
-      '11111111-1111-4111-8111-111111111111',
-    );
+    localStorage.setItem('arsnova-participant-ABC123', '11111111-1111-4111-8111-111111111111');
 
     const fixture = TestBed.createComponent(SessionVoteComponent);
     const component = fixture.componentInstance;
@@ -6672,10 +6669,7 @@ describe('SessionVoteComponent', { timeout: 30_000 }, () => {
       distribution: { SPEED_UP: 0, FOLLOWING: 0, SLOW_DOWN: 0, LOST: 0 },
       currentRound: 1,
     });
-    localStorage.setItem(
-      'arsnova-participant-ABC123',
-      '22222222-2222-4222-8222-222222222222',
-    );
+    localStorage.setItem('arsnova-participant-ABC123', '22222222-2222-4222-8222-222222222222');
 
     const fixture = TestBed.createComponent(SessionVoteComponent);
     const component = fixture.componentInstance;
@@ -6738,10 +6732,7 @@ describe('SessionVoteComponent', { timeout: 30_000 }, () => {
       distribution: { SPEED_UP: 0, FOLLOWING: 0, SLOW_DOWN: 0, LOST: 0 },
       currentRound: 1,
     });
-    localStorage.setItem(
-      'arsnova-participant-ABC123',
-      '33333333-3333-4333-8333-333333333333',
-    );
+    localStorage.setItem('arsnova-participant-ABC123', '33333333-3333-4333-8333-333333333333');
 
     const fixture = TestBed.createComponent(SessionVoteComponent);
     const component = fixture.componentInstance;
@@ -6812,10 +6803,7 @@ describe('SessionVoteComponent', { timeout: 30_000 }, () => {
       distribution: { SPEED_UP: 0, FOLLOWING: 0, SLOW_DOWN: 0, LOST: 0 },
       currentRound: 1,
     });
-    localStorage.setItem(
-      'arsnova-participant-ABC123',
-      '44444444-4444-4444-8444-444444444444',
-    );
+    localStorage.setItem('arsnova-participant-ABC123', '44444444-4444-4444-8444-444444444444');
 
     const fixture = TestBed.createComponent(SessionVoteComponent);
     const component = fixture.componentInstance;
