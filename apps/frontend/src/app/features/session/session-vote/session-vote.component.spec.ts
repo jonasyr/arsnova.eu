@@ -6122,6 +6122,13 @@ describe('SessionVoteComponent', { timeout: 30_000 }, () => {
       },
     });
     currentQuestionQueryMock.mockResolvedValue(null);
+    quickFeedbackResultsQueryMock.mockResolvedValue({
+      type: 'MOOD',
+      locked: false,
+      totalVotes: 0,
+      distribution: { POSITIVE: 0, NEUTRAL: 0, NEGATIVE: 0 },
+      currentRound: 1,
+    });
     joinMutateMock.mockRejectedValueOnce(new Error('temporarily unavailable'));
 
     const fixture = TestBed.createComponent(SessionVoteComponent);
@@ -6135,7 +6142,7 @@ describe('SessionVoteComponent', { timeout: 30_000 }, () => {
     expect(fixture.debugElement.query(By.directive(FeedbackVoteComponent))).toBeNull();
     expect((fixture.nativeElement as HTMLElement).textContent).toContain('Erneut versuchen');
 
-    joinMutateMock.mockResolvedValue({
+    const retryResult = {
       id: '6a8edced-5f8f-4cfa-9176-454fac9570ad',
       participantId: '22222222-2222-4222-8222-222222222222',
       participantNickname: 'Teilnehmende 2',
@@ -6144,13 +6151,37 @@ describe('SessionVoteComponent', { timeout: 30_000 }, () => {
       enableTimerAccommodation: false,
       teamId: null,
       teamName: null,
-    });
-    await fixture.componentInstance.retryQuickFeedbackParticipantIdentity();
+    };
+    let resolveRetry!: (value: typeof retryResult) => void;
+    joinMutateMock.mockReturnValue(
+      new Promise<typeof retryResult>((resolve) => {
+        resolveRetry = resolve;
+      }),
+    );
+    const retryPromise = fixture.componentInstance.retryQuickFeedbackParticipantIdentity();
+    await Promise.resolve();
+    fixture.detectChanges();
+
+    const retryButton = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+      '[data-testid="quick-feedback-identity-retry"]',
+    );
+    expect(fixture.componentInstance.quickFeedbackIdentityPending()).toBe(true);
+    expect(retryButton?.disabled).toBe(true);
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('Wird geladen…');
+
+    resolveRetry(retryResult);
+    await retryPromise;
+    fixture.detectChanges();
+    await flushComponentAfterStable(fixture, 50);
     fixture.detectChanges();
 
     expect(joinMutateMock).toHaveBeenCalledTimes(2);
+    expect(fixture.componentInstance.quickFeedbackIdentityPending()).toBe(false);
     expect(fixture.componentInstance.quickFeedbackIdentityError()).toBeNull();
     expect(fixture.debugElement.query(By.directive(FeedbackVoteComponent))).not.toBeNull();
+    expect((fixture.nativeElement as HTMLElement).querySelector('.feedback-vote__mood-btn')).toBe(
+      document.activeElement,
+    );
     fixture.destroy();
   });
 

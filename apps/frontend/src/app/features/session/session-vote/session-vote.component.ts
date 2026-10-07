@@ -100,6 +100,7 @@ import {
 import { CountdownFingersComponent } from '../../../shared/countdown-fingers/countdown-fingers.component';
 import { MarkdownImageLightboxDirective } from '../../../shared/markdown-image-lightbox/markdown-image-lightbox.directive';
 import { MarkdownKatexEditorComponent } from '../../../shared/markdown-katex-editor/markdown-katex-editor.component';
+import { focusAndScrollElement } from '../../../shared/focus-invalid-field.util';
 import { remainingCountdownSeconds } from '../session-countdown.util';
 import {
   resolveAppMainScrollRoot,
@@ -575,6 +576,7 @@ export class SessionVoteComponent implements OnInit, OnDestroy {
   readonly qaSelectedAuthorNickname = signal<string | null>(null);
   readonly quickFeedbackResult = signal<QuickFeedbackResult | null>(null);
   readonly quickFeedbackIdentityError = signal<string | null>(null);
+  readonly quickFeedbackIdentityPending = signal(false);
   readonly quickFeedbackParticipantReady = computed(() => isParticipantUuid(this.participantId()));
   private quickFeedbackIdentityInFlight: Promise<void> | null = null;
   readonly qaDraft = signal('');
@@ -5495,6 +5497,7 @@ export class SessionVoteComponent implements OnInit, OnDestroy {
     if (this.quickFeedbackIdentityInFlight) {
       return this.quickFeedbackIdentityInFlight;
     }
+    this.quickFeedbackIdentityPending.set(true);
     const request = this.resolveParticipantIdentity()
       .then((identity) => {
         this.quickFeedbackIdentityError.set(
@@ -5502,6 +5505,7 @@ export class SessionVoteComponent implements OnInit, OnDestroy {
         );
       })
       .finally(() => {
+        this.quickFeedbackIdentityPending.set(false);
         if (this.quickFeedbackIdentityInFlight === request) {
           this.quickFeedbackIdentityInFlight = null;
         }
@@ -5514,6 +5518,19 @@ export class SessionVoteComponent implements OnInit, OnDestroy {
     const request = this.ensureQuickFeedbackParticipantIdentity();
     if (request) {
       await request;
+    }
+    if (this.quickFeedbackParticipantReady()) {
+      afterNextRender(
+        () => {
+          const host = this.el.nativeElement as HTMLElement;
+          const votingControl = host.querySelector<HTMLElement>(
+            'app-feedback-vote button:not([disabled])',
+          );
+          const fallback = host.querySelector<HTMLElement>('#vote-quick-feedback-heading');
+          focusAndScrollElement(votingControl ?? fallback);
+        },
+        { injector: this.injector },
+      );
     }
   }
 

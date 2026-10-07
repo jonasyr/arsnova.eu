@@ -3197,10 +3197,24 @@
             <button
               matButton="tonal"
               type="button"
+              data-testid="quick-feedback-identity-retry"
+              [disabled]="quickFeedbackIdentityPending()"
+              [attr.aria-describedby]="
+                quickFeedbackIdentityPending() ? 'quick-feedback-identity-pending' : null
+              "
               (click)="retryQuickFeedbackParticipantIdentity()"
             >
               <span i18n="@@common.retry">Erneut versuchen</span>
             </button>
+            @if (quickFeedbackIdentityPending()) {
+              <p
+                id="quick-feedback-identity-pending"
+                class="session-channel-card__info"
+                role="status"
+              >
+                <span i18n>Wird geladen…</span>
+              </p>
+            }
           } @else if (quickFeedbackParticipantReady()) {
             <app-feedback-vote
               [sessionCode]="code"

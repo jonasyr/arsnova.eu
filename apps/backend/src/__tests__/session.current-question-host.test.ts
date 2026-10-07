@@ -956,6 +956,51 @@ describe('session.getCurrentQuestionForHost (Story 2.3)', () => {
     });
   });
 
+  it('projiziert nach einem Mehrfach-Rückblick keine bereits erledigte Frage als ungesehen', async () => {
+    const questionIds = [
+      '11111111-1111-4111-8111-111111111111',
+      '22222222-2222-4222-8222-222222222222',
+      '33333333-3333-4333-8333-333333333333',
+    ];
+    const progress = Object.fromEntries(
+      questionIds.map((id, index) => [
+        id,
+        {
+          state: 'COMPLETED',
+          openedAt: `2026-08-21T10:0${index}:00.000Z`,
+          completedAt: `2026-08-21T10:0${index}:30.000Z`,
+        },
+      ]),
+    );
+    prismaMock.session.findUnique.mockResolvedValue({
+      id: '6a8edced-5f8f-4cfa-9176-454fac9570ad',
+      status: 'RESULTS',
+      currentQuestion: 0,
+      currentRound: 1,
+      answerDisplayOrder: null,
+      questionProgress: progress,
+      questionProgressComplete: true,
+      quiz: {
+        questions: questionIds.map((id, order) => ({
+          id,
+          order,
+          text: `Frage ${order + 1}`,
+          type: 'FREETEXT',
+          difficulty: 'EASY',
+          answers: [],
+        })),
+      },
+    });
+
+    const result = await caller.getCurrentQuestionForHost({ code: CODE });
+
+    expect(result).toMatchObject({
+      questionId: questionIds[0],
+      hasNextQuestion: true,
+      hasUnopenedFollowingQuestion: false,
+    });
+  });
+
   it('blendet den Vorgänger aus, wenn das Quiz erst ab einer späteren Frage geöffnet wurde', async () => {
     const firstId = '11111111-1111-4111-8111-111111111111';
     const secondId = '22222222-2222-4222-8222-222222222222';
