@@ -764,7 +764,7 @@
     },
     "session.nextQuestion": {
       "kind": "mutation",
-      "fingerprint": "sha256:c16c4ad351058b50273a50f6186023f1af413ae7a08b535b6aba457972e3a25d",
+      "fingerprint": "sha256:4791276bf15a40bdf92a5f2044229b4309181b2cfd657d1c965f1c1d3282b4cf",
       "missing": []
     },
     "session.onCurrentQuestionForHostChanged": {
@@ -894,7 +894,7 @@
     },
     "session.showQuestionResult": {
       "kind": "mutation",
-      "fingerprint": "sha256:3ea108e9d7eefbee1ce5b3f6120bb2bb916a6d9a0793140c0d5bf2880f6ee598",
+      "fingerprint": "sha256:a527676031fa72ff5a37e242b50827f268a8b1eecd305aaf16bf1f03549004c9",
       "missing": []
     },
     "session.skipQuestion": {
