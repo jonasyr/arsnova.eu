@@ -96,15 +96,16 @@ async function seedHostBrowser(context, session) {
   await context.addInitScript(
     ({ browserCapability, card, code, hostToken, prefixes }) => {
       const marker = `arsnova-smoke-host-seeded:${code}`;
-      if (globalThis.sessionStorage.getItem(marker)) return;
       globalThis.sessionStorage.setItem(`${prefixes.token}${code}`, hostToken);
       globalThis.localStorage.setItem(`${prefixes.capability}-${code}`, browserCapability);
-      globalThis.sessionStorage.setItem(`${prefixes.card}-${code}`, JSON.stringify(card));
-      globalThis.localStorage.setItem(
-        'arsnova-host-scenario:v1',
-        JSON.stringify({ version: 1, scenario: 'CLASSROOM' }),
-      );
-      globalThis.sessionStorage.setItem(marker, '1');
+      if (!globalThis.sessionStorage.getItem(marker)) {
+        globalThis.sessionStorage.setItem(`${prefixes.card}-${code}`, JSON.stringify(card));
+        globalThis.localStorage.setItem(
+          'arsnova-host-scenario:v1',
+          JSON.stringify({ version: 1, scenario: 'CLASSROOM' }),
+        );
+        globalThis.sessionStorage.setItem(marker, '1');
+      }
     },
     {
       browserCapability: session.hostBrowserCapability,
@@ -176,6 +177,48 @@ async function dismissJoinOverlay(page, timeout = 8_000) {
   await overlay.waitFor({ state: 'hidden', timeout: 5_000 });
 }
 
+async function prepareHostSurface(page) {
+  try {
+    await page
+      .locator(
+        '[data-testid="add-channel-trigger"], [data-testid="host-recovery-card-done"], .session-channel-tabs',
+      )
+      .first()
+      .waitFor({ state: 'visible', timeout: 30_000 });
+  } catch (error) {
+    const diagnostics = await hostPageDiagnostics(page).catch(() => null);
+    throw new Error(
+      `${error instanceof Error ? error.message : String(error)}${
+        diagnostics ? `\nHost-DOM: ${JSON.stringify(diagnostics)}` : ''
+      }`,
+      { cause: error },
+    );
+  }
+  const recoveryDone = page.locator('[data-testid="host-recovery-card-done"]');
+  if (await recoveryDone.isVisible().catch(() => false)) {
+    await dismissRecoveryCard(page).catch(async () => {
+      await page
+        .locator('[data-testid="host-recovery-card-cancel"]')
+        .click({ timeout: 3_000 })
+        .catch(() => undefined);
+    });
+    await waitForRecoveryUiGone(page);
+  }
+  await dismissJoinOverlay(page, 3_000);
+  await waitForRecoveryUiGone(page);
+}
+
+async function assertPersistedLiveChannels(hostToken, code) {
+  const info = await createTrpcClient(hostToken).session.getInfo.query({ code });
+  const channels = info?.channels;
+  if (!channels?.qa?.enabled || channels.qa.open !== false || !channels.quickFeedback?.enabled) {
+    throw new Error(
+      `Unerwarteter Kanalstand nach closeQaChannel: ${JSON.stringify(channels ?? null)}`,
+    );
+  }
+  return channels;
+}
+
 async function verifySingleQaNavigation(host, code) {
   await dismissJoinOverlay(host, 2_000);
   const trigger = host.getByTestId('add-channel-trigger');
@@ -210,9 +253,22 @@ async function verifySingleQaNavigation(host, code) {
 }
 
 async function verifyClosedQaNavigation(host) {
-  await host.waitForFunction(
-    () => document.querySelectorAll('.session-channel-tabs mat-button-toggle').length === 2,
-  );
+  await prepareHostSurface(host);
+  try {
+    await host.waitForFunction(() => {
+      const tabs = [...document.querySelectorAll('.session-channel-tabs mat-button-toggle')];
+      if (tabs.length < 2) return false;
+      const label = tabs[0].querySelector('.session-channel-tabs__label')?.textContent?.trim();
+      const badge = tabs[0].querySelector('.session-channel-tabs__badge')?.textContent?.trim() ?? '';
+      return label === 'Q&A' && /^(Zu|Closed)$/i.test(badge);
+    });
+  } catch (error) {
+    const diagnostics = await hostPageDiagnostics(host);
+    throw new Error(
+      `${error instanceof Error ? error.message : String(error)}\nHost-DOM: ${JSON.stringify(diagnostics)}`,
+      { cause: error },
+    );
+  }
   const qaTab = host.locator('.session-channel-tabs mat-button-toggle').first();
   assert.equal((await qaTab.locator('.session-channel-tabs__label').innerText()).trim(), 'Q&A');
   assert.match(await qaTab.locator('.session-channel-tabs__badge').innerText(), /^(Zu|Closed)$/i);
@@ -305,8 +361,18 @@ async function main() {
       () => document.querySelectorAll('.session-channel-tabs mat-button-toggle').length === 2,
     );
     await createTrpcClient(session.hostToken).session.closeQaChannel.mutate({ code: session.code });
-    await host.reload({ waitUntil: 'domcontentloaded' });
-    await dismissJoinOverlay(host);
+    await assertPersistedLiveChannels(session.hostToken, session.code);
+    await host
+      .locator('.session-channel-tabs mat-button-toggle')
+      .first()
+      .locator('.session-channel-tabs__badge')
+      .waitFor({ state: 'visible', timeout: 15_000 })
+      .catch(() => undefined);
+    await host.goto(`${BASE_URL}/session/${session.code}/host`, {
+      waitUntil: 'domcontentloaded',
+      timeout: 30_000,
+    });
+    await waitForPathSuffix(host, `/session/${session.code}/host`);
     await verifyClosedQaNavigation(host);
     logStep(
       true,
