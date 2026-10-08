@@ -3187,21 +3187,53 @@
           class="session-channel-card session-channel-card--quick-feedback app-live-channel-shell"
           tabindex="-1"
         >
-          <app-feedback-vote
-            [sessionCode]="code"
-            [participantId]="participantId()"
-            [participantName]="playerNickname()"
-            [participantAvatar]="playerKindergartenEmoji()"
-            [participantAvatarSequence]="playerKindergartenSequence()"
-            [participantTeamName]="playerTeamName()"
-            [sessionTitle]="liveHeading()"
-            [embeddedInSession]="true"
-            [sharedResult]="quickFeedbackResult()"
-            [showSessionCode]="false"
-            [showAskQuestionButton]="showTempoAskQuestionShortcut()"
-            (askQuestion)="openQaAskView()"
-            (activityChange)="quickFeedbackActivity.set($event)"
-          />
+          @if (quickFeedbackIdentityError(); as identityError) {
+            <p class="session-channel-card__error" role="alert">
+              <mat-icon class="session-channel-card__error-icon" aria-hidden="true"
+                >warning</mat-icon
+              >
+              <span class="session-channel-card__error-text">{{ identityError }}</span>
+            </p>
+            <button
+              matButton="tonal"
+              type="button"
+              data-testid="quick-feedback-identity-retry"
+              [disabled]="quickFeedbackIdentityPending()"
+              [attr.aria-describedby]="
+                quickFeedbackIdentityPending() ? 'quick-feedback-identity-pending' : null
+              "
+              (click)="retryQuickFeedbackParticipantIdentity()"
+            >
+              <span i18n="@@common.retry">Erneut versuchen</span>
+            </button>
+            @if (quickFeedbackIdentityPending()) {
+              <p
+                id="quick-feedback-identity-pending"
+                class="session-channel-card__info"
+                role="status"
+              >
+                <span i18n>Wird geladen…</span>
+              </p>
+            }
+          } @else if (quickFeedbackParticipantReady()) {
+            <app-feedback-vote
+              [sessionCode]="code"
+              [participantId]="participantId()"
+              [participantName]="playerNickname()"
+              [participantAvatar]="playerKindergartenEmoji()"
+              [participantAvatarSequence]="playerKindergartenSequence()"
+              [participantTeamName]="playerTeamName()"
+              [sessionTitle]="liveHeading()"
+              [embeddedInSession]="true"
+              [sharedResult]="quickFeedbackResult()"
+              [showSessionCode]="false"
+              [showAskQuestionButton]="showTempoAskQuestionShortcut()"
+              (askQuestion)="openQaAskView()"
+              (activityChange)="quickFeedbackActivity.set($event)"
+            />
+          } @else {
+            <p class="session-channel-card__info" role="status" i18n>Wird geladen…</p>
+          }
         </section>
       }
     }

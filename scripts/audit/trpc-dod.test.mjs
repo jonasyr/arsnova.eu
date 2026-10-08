@@ -699,7 +699,7 @@ test('real mode accepts the Slice-2D full-coverage flag on a complete baseline',
     cwd: repoRoot,
   });
   assert.equal(run.status, 0, run.stderr || run.stdout);
-  assert.match(run.stdout, /Complete: 180/);
+  assert.match(run.stdout, /Complete: 181/);
   assert.match(run.stdout, /Incomplete: 0/);
   assert.match(run.stdout, /Untested: 0/);
 });
@@ -745,9 +745,9 @@ export const appRouter = router({
 test('real router tree inventory follows mounted and nested routers exactly', async () => {
   const { inventariseRouterTree } = await loadAudit();
   const procedures = inventariseRouterTree(join(repoRoot, 'apps/backend/src/routers/index.ts'));
-  assert.equal(procedures.length, 188);
+  assert.equal(procedures.length, 189);
   assert.equal(procedures.filter((procedure) => procedure.kind === 'query').length, 73);
-  assert.equal(procedures.filter((procedure) => procedure.kind === 'mutation').length, 107);
+  assert.equal(procedures.filter((procedure) => procedure.kind === 'mutation').length, 108);
   assert.equal(procedures.filter((procedure) => procedure.kind === 'subscription').length, 8);
   assert.ok(procedures.some((procedure) => procedure.id === 'health.usage'));
   assert.ok(procedures.some((procedure) => procedure.id === 'admin.motd.motdCreate'));
@@ -758,6 +758,7 @@ test('real router tree inventory follows mounted and nested routers exactly', as
   assert.ok(procedures.some((procedure) => procedure.id === 'qa.releasePending'));
   assert.ok(procedures.some((procedure) => procedure.id === 'qa.redactPassages'));
   assert.ok(procedures.some((procedure) => procedure.id === 'session.dismissFinishProjection'));
+  assert.ok(procedures.some((procedure) => procedure.id === 'session.showQuestionResult'));
   assert.ok(procedures.some((procedure) => procedure.id === 'session.setPresenterSurface'));
   assert.ok(procedures.some((procedure) => procedure.id === 'session.setQaWordCloudProjection'));
   assert.ok(procedures.some((procedure) => procedure.id === 'session.getQaWordCloudProjection'));
@@ -1446,8 +1447,8 @@ test('real gate report is deterministic and complete coverage has no legacy debt
     }
     assert.equal(readFileSync(outputs[0], 'utf8'), readFileSync(outputs[1], 'utf8'));
     const report = JSON.parse(readFileSync(outputs[0], 'utf8'));
-    assert.equal(report.summary.queriesMutations, 180);
-    assert.equal(report.summary.complete, 180);
+    assert.equal(report.summary.queriesMutations, 181);
+    assert.equal(report.summary.complete, 181);
     assert.equal(report.summary.untested, 0);
     assert.equal(report.summary.legacyProcedures, 0);
     assert.equal(report.summary.legacyMissingDimensions, 0);
@@ -1459,7 +1460,7 @@ test('real gate report is deterministic and complete coverage has no legacy debt
     const queriesMutations = report.procedures.filter(
       (procedure) => procedure.kind !== 'subscription',
     );
-    assert.equal(queriesMutations.length, 180);
+    assert.equal(queriesMutations.length, 181);
     assert.ok(
       queriesMutations.every(
         (procedure) =>

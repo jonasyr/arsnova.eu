@@ -182,6 +182,7 @@ describe('buildModerationCompassCards', () => {
           documentFrequency: 3,
           sourceCount: 3,
           memberTexts: ['Mehr Gruppenarbeit'],
+          questionId: '33333333-3333-4333-8333-333333333333',
         },
       ],
     });
@@ -196,6 +197,14 @@ describe('buildModerationCompassCards', () => {
       memberTexts: ['Wie berechnet man den Median?', 'Median bitte erklären'],
       questionId: 'q-median-1',
       questionIds: ['q-median-1', 'q-median-2'],
+    });
+    expect(topics?.sources[1]?.target).toEqual({
+      channel: 'quiz',
+      surface: 'word-cloud',
+      termLabel: 'Gruppenarbeit',
+      memberText: 'Mehr Gruppenarbeit',
+      memberTexts: ['Mehr Gruppenarbeit'],
+      questionId: '33333333-3333-4333-8333-333333333333',
     });
   });
 
@@ -1213,6 +1222,10 @@ describe('mergeModerationQuizSources', () => {
       'Die Schätzungen liegen weit auseinander · π',
     ]);
     expect(merged.every((source) => source.target?.channel === 'quiz')).toBe(true);
+    expect(merged.map((source) => source.target?.questionId)).toEqual([
+      'bbbbbbbb-2222-4222-8222-222222222222',
+      'aaaaaaaa-1111-4111-8111-111111111111',
+    ]);
   });
 });
 

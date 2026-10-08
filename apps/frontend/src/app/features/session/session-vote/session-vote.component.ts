@@ -100,6 +100,7 @@ import {
 import { CountdownFingersComponent } from '../../../shared/countdown-fingers/countdown-fingers.component';
 import { MarkdownImageLightboxDirective } from '../../../shared/markdown-image-lightbox/markdown-image-lightbox.directive';
 import { MarkdownKatexEditorComponent } from '../../../shared/markdown-katex-editor/markdown-katex-editor.component';
+import { focusAndScrollElement } from '../../../shared/focus-invalid-field.util';
 import { remainingCountdownSeconds } from '../session-countdown.util';
 import {
   resolveAppMainScrollRoot,
@@ -574,6 +575,10 @@ export class SessionVoteComponent implements OnInit, OnDestroy {
     | undefined;
   readonly qaSelectedAuthorNickname = signal<string | null>(null);
   readonly quickFeedbackResult = signal<QuickFeedbackResult | null>(null);
+  readonly quickFeedbackIdentityError = signal<string | null>(null);
+  readonly quickFeedbackIdentityPending = signal(false);
+  readonly quickFeedbackParticipantReady = computed(() => isParticipantUuid(this.participantId()));
+  private quickFeedbackIdentityInFlight: Promise<void> | null = null;
   readonly qaDraft = signal('');
   /** Optional Markdown/KaTeX-Editor statt einfachem Textfeld (gleiche Komponente wie Quiz-Editor). */
   readonly qaRichEditorOpen = signal(false);
@@ -3967,6 +3972,10 @@ export class SessionVoteComponent implements OnInit, OnDestroy {
         this.applyPendingLobbyArrivalIfNeeded();
         return true;
       }
+      const quickFeedbackIdentity = this.ensureQuickFeedbackParticipantIdentity();
+      if (quickFeedbackIdentity) {
+        await quickFeedbackIdentity;
+      }
       this.ensureStatusSubscription();
       this.ensureQaSubscription();
       this.ensureQuickFeedbackSubscription();
@@ -4223,6 +4232,7 @@ export class SessionVoteComponent implements OnInit, OnDestroy {
           let channelStateChanged = false;
           if (data.channels) {
             this.patchSessionChannels(data.channels);
+            void this.ensureQuickFeedbackParticipantIdentity();
             this.ensureQaSubscription();
             this.ensureQuickFeedbackSubscription();
             void this.refreshQaQuestions();
@@ -4379,6 +4389,10 @@ export class SessionVoteComponent implements OnInit, OnDestroy {
       }
       if (nextStatus === 'ACTIVE' && prevStatus === 'QUESTION_OPEN') {
         this.pullParticipantToQuizChannel();
+      }
+      const quickFeedbackIdentity = this.ensureQuickFeedbackParticipantIdentity();
+      if (quickFeedbackIdentity) {
+        await quickFeedbackIdentity;
       }
       this.ensureStatusSubscription();
       this.ensureQaSubscription();
@@ -5462,6 +5476,62 @@ export class SessionVoteComponent implements OnInit, OnDestroy {
       localStorage.setItem(`${NICKNAME_STORAGE_KEY}-${this.code}`, nickname);
     }
     refreshTrpcWsBinding();
+  }
+
+  /**
+   * Ein direkter Einstieg in ein offenes Blitzlicht hat noch keine Quiz- oder
+   * Q&A-Aktion, die lazy eine Teilnahme anlegt. Stelle die Teilnehmeridentität
+   * deshalb her, bevor das eingebettete Voting bedienbar wird.
+   */
+  private ensureQuickFeedbackParticipantIdentity(): Promise<void> | null {
+    if (
+      !this.isQuickFeedbackChannelOpen() ||
+      isParticipantUuid(this.participantId()) ||
+      !this.code
+    ) {
+      if (isParticipantUuid(this.participantId())) {
+        this.quickFeedbackIdentityError.set(null);
+      }
+      return null;
+    }
+    if (this.quickFeedbackIdentityInFlight) {
+      return this.quickFeedbackIdentityInFlight;
+    }
+    this.quickFeedbackIdentityPending.set(true);
+    const request = this.resolveParticipantIdentity()
+      .then((identity) => {
+        this.quickFeedbackIdentityError.set(
+          identity ? null : $localize`:@@feedback.voteFailed:Abstimmung fehlgeschlagen.`,
+        );
+      })
+      .finally(() => {
+        this.quickFeedbackIdentityPending.set(false);
+        if (this.quickFeedbackIdentityInFlight === request) {
+          this.quickFeedbackIdentityInFlight = null;
+        }
+      });
+    this.quickFeedbackIdentityInFlight = request;
+    return request;
+  }
+
+  async retryQuickFeedbackParticipantIdentity(): Promise<void> {
+    const request = this.ensureQuickFeedbackParticipantIdentity();
+    if (request) {
+      await request;
+    }
+    if (this.quickFeedbackParticipantReady()) {
+      afterNextRender(
+        () => {
+          const host = this.el.nativeElement as HTMLElement;
+          const votingControl = host.querySelector<HTMLElement>(
+            'app-feedback-vote button:not([disabled])',
+          );
+          const fallback = host.querySelector<HTMLElement>('#vote-quick-feedback-heading');
+          focusAndScrollElement(votingControl ?? fallback);
+        },
+        { injector: this.injector },
+      );
+    }
   }
 
   private async resolveParticipantIdentity(): Promise<{

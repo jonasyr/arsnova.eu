@@ -13,6 +13,8 @@
  */
 import { createTRPCProxyClient, httpBatchLink } from '@trpc/client';
 import assert from 'node:assert/strict';
+import { mkdir } from 'node:fs/promises';
+import { join } from 'node:path';
 import { chromium, webkit } from 'playwright';
 import { configureQaSessionIfNeeded } from '../../../scripts/load/lib/configure-qa-if-needed.mjs';
 
@@ -35,8 +37,15 @@ function createTrpcClient(hostToken) {
       httpBatchLink({
         url: TRPC_URL,
         headers: hostToken ? () => ({ 'x-host-token': hostToken }) : undefined,
+        fetch: (url, options) => fetch(url, { ...options, signal: AbortSignal.timeout(15_000) }),
       }),
     ],
+  });
+}
+
+function attachHostPageGuards(page) {
+  page.on('dialog', (dialog) => {
+    void dialog.accept().catch(() => undefined);
   });
 }
 
@@ -96,15 +105,16 @@ async function seedHostBrowser(context, session) {
   await context.addInitScript(
     ({ browserCapability, card, code, hostToken, prefixes }) => {
       const marker = `arsnova-smoke-host-seeded:${code}`;
-      if (globalThis.sessionStorage.getItem(marker)) return;
       globalThis.sessionStorage.setItem(`${prefixes.token}${code}`, hostToken);
       globalThis.localStorage.setItem(`${prefixes.capability}-${code}`, browserCapability);
-      globalThis.sessionStorage.setItem(`${prefixes.card}-${code}`, JSON.stringify(card));
-      globalThis.localStorage.setItem(
-        'arsnova-host-scenario:v1',
-        JSON.stringify({ version: 1, scenario: 'CLASSROOM' }),
-      );
-      globalThis.sessionStorage.setItem(marker, '1');
+      if (!globalThis.sessionStorage.getItem(marker)) {
+        globalThis.sessionStorage.setItem(`${prefixes.card}-${code}`, JSON.stringify(card));
+        globalThis.localStorage.setItem(
+          'arsnova-host-scenario:v1',
+          JSON.stringify({ version: 1, scenario: 'CLASSROOM' }),
+        );
+        globalThis.sessionStorage.setItem(marker, '1');
+      }
     },
     {
       browserCapability: session.hostBrowserCapability,
@@ -120,14 +130,56 @@ async function seedHostBrowser(context, session) {
   );
 }
 
+async function hostPageDiagnostics(page) {
+  return page.evaluate(() => {
+    const testIds = [...document.querySelectorAll('[data-testid]')]
+      .map((el) => el.getAttribute('data-testid'))
+      .filter(Boolean)
+      .slice(0, 40);
+    return {
+      url: globalThis.location.href,
+      title: document.title,
+      testIds,
+      body: (document.body?.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 800),
+    };
+  });
+}
+
+async function captureHostFailure(page, label) {
+  const diagnostics = await hostPageDiagnostics(page).catch(() => null);
+  const dir = process.env.SMOKE_ARTIFACT_DIR;
+  if (dir) {
+    await mkdir(dir, { recursive: true });
+    await page
+      .screenshot({ path: join(dir, `${label}.png`), fullPage: true })
+      .catch(() => undefined);
+  }
+  return diagnostics;
+}
+
+async function waitForRecoveryUiGone(page) {
+  await page
+    .locator('[data-testid="host-recovery-card-done"]')
+    .waitFor({ state: 'hidden', timeout: 10_000 })
+    .catch(() => undefined);
+  await page
+    .locator('.host-recovery-card-dialog-backdrop')
+    .waitFor({ state: 'hidden', timeout: 5_000 })
+    .catch(() => undefined);
+}
+
 async function dismissRecoveryCard(page) {
-  const heading = page.getByText('Host-Zugang sichern', { exact: true }).first();
   const done = page.locator('[data-testid="host-recovery-card-done"]');
-  await heading.waitFor({ state: 'visible', timeout: 20_000 });
+  const dialog = page.locator('app-host-recovery-card-dialog');
+  await done.waitFor({ state: 'visible', timeout: 30_000 });
   const supportVisible = await page.getByText(sessionSupportIdPattern()).first().isVisible();
-  await page.getByRole('checkbox').check();
-  await done.click();
-  await heading.waitFor({ state: 'hidden', timeout: 10_000 });
+  await dialog.getByRole('checkbox').check();
+  await page.waitForFunction(() => {
+    const button = document.querySelector('[data-testid="host-recovery-card-done"]');
+    return button instanceof HTMLButtonElement && !button.disabled;
+  });
+  await done.click({ timeout: 10_000 });
+  await waitForRecoveryUiGone(page);
   return supportVisible;
 }
 
@@ -135,10 +187,10 @@ function sessionSupportIdPattern() {
   return /ARS-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}/;
 }
 
-async function dismissJoinOverlay(page) {
+async function dismissJoinOverlay(page, timeout = 8_000) {
   const overlay = page.locator('.session-host__join-viewport-overlay').first();
   const appeared = await overlay
-    .waitFor({ state: 'visible', timeout: 8_000 })
+    .waitFor({ state: 'visible', timeout })
     .then(() => true)
     .catch(() => false);
   if (!appeared) return;
@@ -146,9 +198,82 @@ async function dismissJoinOverlay(page) {
   await overlay.waitFor({ state: 'hidden', timeout: 5_000 });
 }
 
+async function prepareHostSurface(page) {
+  try {
+    await page.locator('app-session-host').waitFor({ state: 'attached', timeout: 30_000 });
+    await page
+      .locator(
+        [
+          '[data-testid="add-channel-trigger"]',
+          '[data-testid="host-recovery-card-done"]',
+          '[data-testid="host-access-revoked"]',
+          '.session-channel-tabs',
+        ].join(', '),
+      )
+      .first()
+      .waitFor({ state: 'visible', timeout: 30_000 });
+  } catch (error) {
+    const diagnostics = await captureHostFailure(page, 'epic-405-host-surface');
+    throw new Error(
+      `${error instanceof Error ? error.message : String(error)}${
+        diagnostics ? `\nHost-DOM: ${JSON.stringify(diagnostics)}` : ''
+      }`,
+      { cause: error },
+    );
+  }
+  if (
+    await page
+      .getByTestId('host-access-revoked')
+      .isVisible()
+      .catch(() => false)
+  ) {
+    const diagnostics = await captureHostFailure(page, 'epic-405-host-revoked');
+    throw new Error(
+      `Host-Zugang nach Reload entzogen.${diagnostics ? ` DOM: ${JSON.stringify(diagnostics)}` : ''}`,
+    );
+  }
+  const recoveryDone = page.locator('[data-testid="host-recovery-card-done"]');
+  if (await recoveryDone.isVisible().catch(() => false)) {
+    await dismissRecoveryCard(page).catch(async () => {
+      await page
+        .locator('[data-testid="host-recovery-card-cancel"]')
+        .click({ timeout: 3_000 })
+        .catch(() => undefined);
+    });
+    await waitForRecoveryUiGone(page);
+  }
+  await dismissJoinOverlay(page, 3_000);
+  await waitForRecoveryUiGone(page);
+}
+
+function assertClosedLiveChannels(channels) {
+  if (!channels?.qa?.enabled || channels.qa.open !== false || !channels.quickFeedback?.enabled) {
+    throw new Error(
+      `Unerwarteter Kanalstand nach closeQaChannel: ${JSON.stringify(channels ?? null)}`,
+    );
+  }
+}
+
+async function reloadHostSession(page, code) {
+  await page.evaluate(() => {
+    globalThis.onbeforeunload = null;
+  });
+  await page.reload({ waitUntil: 'domcontentloaded', timeout: 30_000 });
+  await waitForPathSuffix(page, `/session/${code}/host`);
+}
+
 async function verifySingleQaNavigation(host, code) {
+  await dismissJoinOverlay(host, 2_000);
   const trigger = host.getByTestId('add-channel-trigger');
-  await trigger.waitFor({ state: 'visible' });
+  try {
+    await trigger.waitFor({ state: 'visible', timeout: 15_000 });
+  } catch (error) {
+    const diagnostics = await hostPageDiagnostics(host);
+    throw new Error(
+      `${error instanceof Error ? error.message : String(error)}\nHost-DOM: ${JSON.stringify(diagnostics)}`,
+      { cause: error },
+    );
+  }
   assert.equal(await host.locator('.session-channel-tabs').count(), 0);
   assert.equal(
     await host.evaluate(
@@ -171,9 +296,23 @@ async function verifySingleQaNavigation(host, code) {
 }
 
 async function verifyClosedQaNavigation(host) {
-  await host.waitForFunction(
-    () => document.querySelectorAll('.session-channel-tabs mat-button-toggle').length === 2,
-  );
+  await prepareHostSurface(host);
+  try {
+    await host.waitForFunction(() => {
+      const tabs = [...document.querySelectorAll('.session-channel-tabs mat-button-toggle')];
+      if (tabs.length < 2) return false;
+      const label = tabs[0].querySelector('.session-channel-tabs__label')?.textContent?.trim();
+      const badge =
+        tabs[0].querySelector('.session-channel-tabs__badge')?.textContent?.trim() ?? '';
+      return label === 'Q&A' && /^(Zu|Closed)$/i.test(badge);
+    });
+  } catch (error) {
+    const diagnostics = await hostPageDiagnostics(host);
+    throw new Error(
+      `${error instanceof Error ? error.message : String(error)}\nHost-DOM: ${JSON.stringify(diagnostics)}`,
+      { cause: error },
+    );
+  }
   const qaTab = host.locator('.session-channel-tabs mat-button-toggle').first();
   assert.equal((await qaTab.locator('.session-channel-tabs__label').innerText()).trim(), 'Q&A');
   assert.match(await qaTab.locator('.session-channel-tabs__badge').innerText(), /^(Zu|Closed)$/i);
@@ -201,24 +340,41 @@ async function main() {
     const hostContext = await browser.newContext({ viewport: DESKTOP });
     await seedHostBrowser(hostContext, session);
     const host = await hostContext.newPage();
+    attachHostPageGuards(host);
     await host.goto(`${BASE_URL}/session/${session.code}/host`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });
     await waitForPathSuffix(host, `/session/${session.code}/host`);
+    await host
+      .locator('.session-host, [data-testid="host-recovery-card-done"]')
+      .first()
+      .waitFor({ state: 'visible', timeout: 30_000 });
 
-    const cardOk = await dismissRecoveryCard(host).catch((error) => {
-      failures.push(`Host-Zugangskarte: ${error instanceof Error ? error.message : String(error)}`);
+    const cardOk = await dismissRecoveryCard(host).catch(async (error) => {
+      const diagnostics = await hostPageDiagnostics(host).catch(() => null);
+      failures.push(
+        `Host-Zugangskarte: ${error instanceof Error ? error.message : String(error)}${
+          diagnostics ? ` DOM: ${JSON.stringify(diagnostics)}` : ''
+        }`,
+      );
       return false;
     });
     logStep(cardOk, 'Host sichert die Zugangskarte nach Q&A-Start');
-    if (!cardOk && failures.length === 0) {
-      failures.push('Zugangskarte zeigte keine Session-Kennung.');
+    if (!cardOk) {
+      if (failures.length === 0) {
+        failures.push('Zugangskarte zeigte keine Session-Kennung.');
+      }
+      await host
+        .locator('[data-testid="host-recovery-card-cancel"]')
+        .click({ timeout: 3_000 })
+        .catch(() => undefined);
     }
 
     await dismissJoinOverlay(host).catch((error) => {
       failures.push(`Beitritts-Overlay: ${error instanceof Error ? error.message : String(error)}`);
     });
+    await waitForRecoveryUiGone(host);
     await verifySingleQaNavigation(host, session.code);
 
     const qaSettings = host.getByRole('button', { name: /Q&A-Einstellungen/i });
@@ -243,14 +399,23 @@ async function main() {
       }
     }
 
+    await waitForRecoveryUiGone(host);
     await host.getByTestId('add-channel-trigger').click();
     await host.getByTestId('add-channel-quickFeedback').click();
     await host.waitForFunction(
       () => document.querySelectorAll('.session-channel-tabs mat-button-toggle').length === 2,
     );
-    await createTrpcClient(session.hostToken).session.closeQaChannel.mutate({ code: session.code });
-    await host.reload({ waitUntil: 'domcontentloaded' });
-    await dismissJoinOverlay(host);
+    const closedChannels = await createTrpcClient(session.hostToken).session.closeQaChannel.mutate({
+      code: session.code,
+    });
+    assertClosedLiveChannels(closedChannels);
+    await host
+      .locator('.session-channel-tabs mat-button-toggle')
+      .first()
+      .locator('.session-channel-tabs__badge')
+      .waitFor({ state: 'visible', timeout: 10_000 })
+      .catch(() => undefined);
+    await reloadHostSession(host, session.code);
     await verifyClosedQaNavigation(host);
     logStep(
       true,
@@ -261,6 +426,7 @@ async function main() {
 
     const recoveryContext = await browser.newContext({ viewport: DESKTOP });
     const recovery = await recoveryContext.newPage();
+    attachHostPageGuards(recovery);
     await recovery.goto(`${BASE_URL}/host-recovery`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,

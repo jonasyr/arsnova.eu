@@ -2714,11 +2714,11 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       })),
       qaSortMode: this.qaSortMode(),
       qaTerms: this.moderationCompassQaTerms(),
-      freetextTerms: [
+      freetextTerms: this.withCurrentFreetextQuestionTarget([
         ...(compassTermsFromAnalysisEntries(this.displayedFreetextAnalysisEntries()) ??
           this.toModerationCompassTerms(this.displayedFreetextWordCloudTerms())),
         ...this.aggregatedFreetextCompassTerms(),
-      ],
+      ]),
       extraTopicSources: [...this.moderationCompassPinnedSources()],
       nlpTopicSources: collectQaNlpCategorySources(
         this.qaChromeForumQuestions().map((question) => ({
@@ -2735,6 +2735,16 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       quizInsightKind: this.moderationCompassQuizInsightKind(),
     }),
   );
+
+  private withCurrentFreetextQuestionTarget(
+    terms: readonly ModerationCompassTerm[],
+  ): ModerationCompassTerm[] {
+    const question = this.displayedCurrentQuestionForHost();
+    if (question?.type !== 'FREETEXT') {
+      return [...terms];
+    }
+    return terms.map((term) => ({ ...term, questionId: question.questionId }));
+  }
   readonly moderationCompassHasSignals = computed(() => this.moderationCompassCards().length > 0);
   readonly moderationCompassReturn = signal<{ readonly channel: SessionChannelTab } | null>(null);
   readonly moderationCompassFocusedTerm = signal<string | null>(null);
@@ -2883,6 +2893,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   async followModerationCompassSource(
     source: ModerationCompassSource,
     cardKind: ModerationCompassCardKind | undefined = this.findCompassCardKind(source),
+    returnChannel = this.activeChannel(),
   ): Promise<void> {
     const target = source.target;
     if (!target) {
@@ -2891,7 +2902,6 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     if (!this.isChannelEnabled(target.channel)) {
       return;
     }
-    const previousChannel = this.activeChannel();
     const focusHint = this.resolveCompassFocusHint(source, cardKind);
     if (target.channel === 'qa') {
       // Kompass-Karten kommen ggf. aus dem ungefilterten Chrome-Snapshot
@@ -2899,6 +2909,30 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       await this.clearQaListCriteriaForCompassJump();
     }
     await this.selectChannel(target.channel);
+    if (target.channel === 'quiz' && target.questionId) {
+      const currentQuestionId = this.displayedCurrentQuestionForHost()?.questionId ?? null;
+      if (currentQuestionId !== target.questionId) {
+        try {
+          const result = await trpc.session.showQuestionResult.mutate({
+            code: this.code.toUpperCase(),
+            questionId: target.questionId,
+          });
+          this.statusUpdate.set(result);
+          this.steppedBackToPreviousResult.set(true);
+          this.skipCurrentResultQuestionOnNext.set(true);
+          await this.refreshCurrentQuestionForHost();
+          if (this.shouldPollLiveFreetext()) {
+            await this.refreshLiveFreetext();
+          }
+        } catch (error) {
+          this.openHostSteeringCalloutForSteeringFailure(
+            () => void this.followModerationCompassSource(source, cardKind, returnChannel),
+            error,
+          );
+          return;
+        }
+      }
+    }
     if (target.surface === 'word-cloud') {
       if (target.channel === 'qa') {
         if (target.sortMode && target.sortMode !== this.qaSortMode()) {
@@ -2920,7 +2954,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
         this.wordCloudExpanded.set(true);
         this.maximizeFreetextWordCloud();
       }
-      this.moderationCompassReturn.set({ channel: previousChannel });
+      this.moderationCompassReturn.set({ channel: returnChannel });
       return;
     }
     if (target.channel === 'qa') {
@@ -2936,7 +2970,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     } else {
       this.clearQaCompassFocus();
     }
-    this.moderationCompassReturn.set({ channel: previousChannel });
+    this.moderationCompassReturn.set({ channel: returnChannel });
   }
 
   /** Suche/Autor/Statusfilter für einen Kompass-Sprung zurücksetzen (ohne Listen-Scroll). */
@@ -3489,7 +3523,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     const quizSource = (label: string): ModerationCompassSource => ({
       kind: 'quiz-result',
       label: this.withQuizQuestionStem(label, question),
-      target: { channel: 'quiz' },
+      target: { channel: 'quiz', questionId: question.questionId },
     });
     switch (fact.type) {
       case 'wrong-majority': {
@@ -4881,6 +4915,9 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     if (!recoveryCard) {
       return Promise.resolve(undefined);
     }
+    const previousJoinAutopenSuppressed = this.suppressJoinMenuAutopen;
+    this.suppressJoinMenuAutopen = true;
+    this.joinInfoPopoverOpen.set(false);
     this.recoveryCardDialogOpened = true;
     return firstValueFrom(
       this.dialog
@@ -4901,6 +4938,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
         .afterClosed(),
     ).then(async (confirmed) => {
       this.recoveryCardDialogOpened = false;
+      this.suppressJoinMenuAutopen = previousJoinAutopenSuppressed;
       if (confirmed === true) {
         clearStagedHostRecoveryCard(this.code);
         this.completeQaCreateSetup();
