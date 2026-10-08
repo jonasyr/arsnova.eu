@@ -153,7 +153,7 @@ export function findFollowingQuestionIndex(
   skipAlreadyOpened = false,
 ): number | null {
   const startIndex = skipAlreadyOpened && !complete ? currentIndex + 1 : currentIndex;
-  const skipOpenedCount = skipAlreadyOpened && complete ? 1 : 0;
+  const skipOpenedCount = skipAlreadyOpened && complete ? Number.POSITIVE_INFINITY : 0;
   return findNextUnskippedQuestionIndex(questions, progress, startIndex, skipOpenedCount);
 }
 
