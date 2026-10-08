@@ -52,6 +52,7 @@ const createWSClientMock = vi.fn(() => ({
   },
 }));
 const httpBatchLinkMock = vi.fn((opts) => opts);
+const httpLinkMock = vi.fn((opts) => opts);
 const splitLinkMock = vi.fn((opts) => opts);
 const wsRequestSubscribeMock = vi.fn((_observer: unknown) => ({ unsubscribe: vi.fn() }));
 const wsLinkMock = vi.fn(() => () => () => ({ subscribe: wsRequestSubscribeMock }));
@@ -85,6 +86,7 @@ async function loadClientModule(pathname: string, beforeImport?: () => void) {
     createTRPCProxyClient: createTRPCProxyClientMock,
     createWSClient: createWSClientMock,
     httpBatchLink: httpBatchLinkMock,
+    httpLink: httpLinkMock,
     splitLink: splitLinkMock,
     wsLink: wsLinkMock,
   }));
@@ -109,6 +111,27 @@ describe('trpc.client host transport', () => {
     vi.clearAllMocks();
     globalThis.window.sessionStorage.clear();
     globalThis.window.history.replaceState({}, '', '/');
+  });
+
+  it('nimmt nur die abbrechbare Lernziel-Herleitung aus dem HTTP-Batching', async () => {
+    const { shouldUseUnbatchedHttpTransport } = await loadClientModule('/de/quiz');
+    const httpSplitOptions = splitLinkMock.mock.calls[0]?.[0] as {
+      condition: (op: { path: string }) => boolean;
+      true: unknown;
+      false: unknown;
+    };
+
+    expect(shouldUseUnbatchedHttpTransport('quiz.deriveLearningObjectives')).toBe(true);
+    expect(shouldUseUnbatchedHttpTransport('quiz.prepareLearningObjectiveDerivation')).toBe(false);
+    expect(shouldUseUnbatchedHttpTransport('quiz.upload')).toBe(false);
+    expect(httpSplitOptions.condition({ path: 'quiz.deriveLearningObjectives' })).toBe(true);
+    expect(httpSplitOptions.condition({ path: 'quiz.prepareLearningObjectiveDerivation' })).toBe(
+      false,
+    );
+    expect(httpSplitOptions.true).toBe(httpLinkMock.mock.results[0]?.value);
+    expect(httpSplitOptions.false).toBe(httpBatchLinkMock.mock.results[0]?.value);
+    expect(httpLinkMock).toHaveBeenCalledTimes(1);
+    expect(httpBatchLinkMock).toHaveBeenCalledTimes(1);
   });
 
   it('haengt Host-Token auch bei doppeltem Locale-Präfix an', async () => {
@@ -215,7 +238,7 @@ describe('trpc.client host transport', () => {
         '22222222-2222-4222-8222-222222222222',
       );
     });
-    const splitOptions = splitLinkMock.mock.calls[0]?.[0] as {
+    const splitOptions = splitLinkMock.mock.calls.at(-1)?.[0] as {
       condition: (op: { type: string }) => boolean;
       true: (runtime: unknown) => (input: unknown) => {
         subscribe(observer: unknown): { unsubscribe(): void };
@@ -264,7 +287,7 @@ describe('trpc.client host transport', () => {
         '22222222-2222-4222-8222-222222222222',
       );
     });
-    const splitOptions = splitLinkMock.mock.calls[0]?.[0] as {
+    const splitOptions = splitLinkMock.mock.calls.at(-1)?.[0] as {
       condition: (op: { type: string }) => boolean;
       true: (runtime: unknown) => (input: unknown) => {
         subscribe(observer: unknown): { unsubscribe(): void };
@@ -305,7 +328,7 @@ describe('trpc.client host transport', () => {
 
   it('erhält eine aktive Subscription nach Participant-Binding-Wechsel', async () => {
     const { refreshTrpcWsBinding } = await loadClientModule('/session/abc123/vote');
-    const splitOptions = splitLinkMock.mock.calls[0]?.[0] as {
+    const splitOptions = splitLinkMock.mock.calls.at(-1)?.[0] as {
       condition: (op: { type: string }) => boolean;
       true: (runtime: unknown) => (input: unknown) => {
         subscribe(observer: unknown): { unsubscribe(): void };
@@ -351,6 +374,34 @@ describe('trpc.client host transport', () => {
     });
     expect(refreshTrpcWsBinding()).toBe(false);
     activeSubscription.unsubscribe();
+  });
+
+  it('erneuert den WebSocket nach Rotation des Host-Tokens', async () => {
+    let activeHostToken: string | null = 'host-token-old';
+    getHostTokenMock.mockImplementation(() => activeHostToken);
+    storeHostTokenMock.mockImplementation((_code: string, token: string | null) => {
+      activeHostToken = token;
+    });
+    const { refreshTrpcWsBinding, setHostToken } =
+      await loadClientModule('/de/session/abc123/host');
+    const wsOptions = createWSClientMock.mock.calls[0]?.[0] as {
+      connectionParams: () => Record<string, string> | null;
+    };
+
+    expect(wsOptions.connectionParams()).toMatchObject({
+      'x-host-token': 'host-token-old',
+    });
+
+    setHostToken('ABC123', 'host-token-new');
+
+    expect(refreshTrpcWsBinding()).toBe(true);
+    await vi.waitFor(() => expect(wsTransportCloseMock).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(mockConnectionId).toBe(2));
+    expect(wsClientCloseMock).not.toHaveBeenCalled();
+    expect(wsOptions.connectionParams()).toMatchObject({
+      'x-host-token': 'host-token-new',
+    });
+    expect(refreshTrpcWsBinding()).toBe(false);
   });
 
   it('erzwingt einen Transport-Reconnect auch bei unverändertem Binding', async () => {

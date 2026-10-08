@@ -259,30 +259,239 @@
           @if (result.sources.length > 0) {
             <details class="moderation-compass-dialog__summary-sources">
               <summary class="moderation-compass-dialog__summary-sources-summary">
-                {{ summarySourcesToggleLabel(result.sources.length) }}
+                {{ summarySourcesToggleLabel(result) }}
               </summary>
               <ul class="moderation-compass-card__sources">
                 @for (source of result.sources; track source.id) {
                   <li>
-                    <button
-                      type="button"
-                      class="moderation-compass-card__source-button"
-                      [attr.aria-label]="summarySourceJumpAria(source)"
-                      (click)="activateSummarySource(source)"
-                    >
-                      <span class="moderation-compass-card__source-dest">{{
-                        summarySourceDestinationLabel()
-                      }}</span>
-                      <span class="moderation-compass-card__source-label">{{
-                        displaySourceLabel(source.label)
-                      }}</span>
-                    </button>
+                    @if (isQaQuestionSummarySource(source)) {
+                      <button
+                        type="button"
+                        class="moderation-compass-card__source-button"
+                        [attr.aria-label]="summarySourceJumpAria(source)"
+                        (click)="activateSummarySource(source)"
+                      >
+                        <span class="moderation-compass-card__source-dest">{{
+                          summarySourceDestinationLabel(source)
+                        }}</span>
+                        <span class="moderation-compass-card__source-label">{{
+                          displaySourceLabel(source.label)
+                        }}</span>
+                      </button>
+                    } @else {
+                      <span class="moderation-compass-card__source-static">
+                        <span class="moderation-compass-card__source-dest">{{
+                          summarySourceDestinationLabel(source)
+                        }}</span>
+                        <span class="moderation-compass-card__source-label">{{
+                          displaySourceLabel(source.label)
+                        }}</span>
+                      </span>
+                    }
                   </li>
                 }
               </ul>
             </details>
           }
         }
+      }
+      @if (summaryV2Available()) {
+        <details
+          class="moderation-compass-dialog__diagnosis"
+          data-testid="moderation-summary-diagnosis"
+        >
+          <summary class="moderation-compass-dialog__diagnosis-summary">
+            <span i18n="@@sessionHost.moderationDiagnosis">Diagnose</span>
+          </summary>
+          <div class="moderation-compass-dialog__diagnosis-body">
+            <p
+              class="moderation-compass-dialog__diagnosis-intro"
+              i18n="@@sessionHost.moderationDiagnosisIntro"
+            >
+              Die Vorschau zeigt Verträge, Umfang und Kürzungen des aktuellen Kontexts. Inhalte und
+              technische Anweisungen werden nicht angezeigt.
+            </p>
+            <button
+              mat-stroked-button
+              type="button"
+              class="moderation-compass-dialog__preview-button"
+              [disabled]="summaryPreviewState().status === 'pending'"
+              [attr.aria-busy]="summaryPreviewState().status === 'pending'"
+              (click)="requestSummaryContextPreview()"
+            >
+              @if (summaryPreviewState().status === 'ready') {
+                <span i18n="@@sessionHost.moderationPreviewReload">Kontextvorschau neu laden</span>
+              } @else {
+                <span i18n="@@sessionHost.moderationPreviewLoad">Kontextvorschau laden</span>
+              }
+            </button>
+            <p class="moderation-compass-dialog__preview-status" role="status" aria-live="polite">
+              @if (summaryPreviewState().status === 'pending') {
+                <span i18n="@@sessionHost.moderationPreviewLoading">
+                  Kontextvorschau wird geladen.
+                </span>
+              } @else if (summaryPreviewState().status === 'failed') {
+                <span i18n="@@sessionHost.moderationPreviewFailed">
+                  Kontextvorschau konnte nicht geladen werden. Du kannst es erneut versuchen.
+                </span>
+              }
+            </p>
+            @if (summaryPreviewState(); as previewState) {
+              @if (previewState.status === 'ready') {
+                @let preview = previewState.preview;
+                <div
+                  class="moderation-compass-dialog__preview"
+                  data-testid="summary-context-preview"
+                >
+                  <h4 i18n="@@sessionHost.moderationPreviewContracts">Verträge und Stand</h4>
+                  <dl class="moderation-compass-dialog__preview-grid">
+                    <div>
+                      <dt i18n="@@sessionHost.moderationPreviewMode">Modus</dt>
+                      <dd>{{ previewModeLabel(preview) }}</dd>
+                    </div>
+                    <div>
+                      <dt i18n="@@sessionHost.moderationPreviewPackedAt">Stand</dt>
+                      <dd>
+                        <time [attr.datetime]="preview.promptContext.packedAt">{{
+                          preview.promptContext.packedAt
+                        }}</time>
+                      </dd>
+                    </div>
+                    <div>
+                      <dt i18n="@@sessionHost.moderationPreviewSnapshotHash">Snapshot-Hash</dt>
+                      <dd>
+                        <code>{{ preview.promptContext.snapshotHash }}</code>
+                      </dd>
+                    </div>
+                    <div>
+                      <dt i18n="@@sessionHost.moderationPreviewContract">Vorschauvertrag</dt>
+                      <dd>
+                        <code>{{ preview.contractVersion }}</code>
+                      </dd>
+                    </div>
+                    <div>
+                      <dt i18n="@@sessionHost.moderationPreviewContextContract">Kontextvertrag</dt>
+                      <dd>
+                        <code>{{ preview.promptContext.contractVersion }}</code>
+                      </dd>
+                    </div>
+                    <div>
+                      <dt i18n="@@sessionHost.moderationPreviewInstructionVersion">
+                        Anweisungsversion
+                      </dt>
+                      <dd>
+                        <code>{{ preview.instructionVersion }}</code>
+                      </dd>
+                    </div>
+                    <div>
+                      <dt i18n="@@sessionHost.moderationPreviewDefinitionVersion">
+                        Definitionsversion
+                      </dt>
+                      <dd>
+                        <code>{{ preview.definitionVersion }}</code>
+                      </dd>
+                    </div>
+                    <div>
+                      <dt i18n="@@sessionHost.moderationPreviewAdapter">Adapter</dt>
+                      <dd>
+                        <code>{{ preview.capabilities.adapterId }}</code>
+                      </dd>
+                    </div>
+                    <div>
+                      <dt i18n="@@sessionHost.moderationPreviewCache">Cache</dt>
+                      <dd>
+                        <code>{{ preview.cache }}</code>
+                      </dd>
+                    </div>
+                  </dl>
+
+                  <h4 i18n="@@sessionHost.moderationPreviewScope">Datenumfang</h4>
+                  <p
+                    class="moderation-compass-dialog__preview-hint"
+                    i18n="@@sessionHost.moderationPreviewQuestionCountHint"
+                  >
+                    Bei Fragen: dargestellt / insgesamt.
+                  </p>
+                  <dl class="moderation-compass-dialog__preview-grid">
+                    @for (row of previewSectionRows(preview); track row.section) {
+                      <div>
+                        <dt>{{ previewSectionLabel(row.section) }}</dt>
+                        <dd>{{ previewStateLabel(row.state) }} · {{ row.count }}</dd>
+                      </div>
+                    }
+                  </dl>
+
+                  <h4 i18n="@@sessionHost.moderationPreviewSourceGroups">Quellengruppen</h4>
+                  @if (previewSourceGroups(preview).length > 0) {
+                    <ul class="moderation-compass-dialog__preview-list">
+                      @for (group of previewSourceGroups(preview); track group.kind) {
+                        <li>{{ previewSourceKindLabel(group.kind) }}: {{ group.count }}</li>
+                      }
+                    </ul>
+                  } @else {
+                    <p
+                      class="moderation-compass-dialog__preview-hint"
+                      i18n="@@sessionHost.moderationPreviewNoSources"
+                    >
+                      Keine Quellen im gepackten Kontext.
+                    </p>
+                  }
+
+                  <h4 i18n="@@sessionHost.moderationPreviewBudget">Kontextbudget</h4>
+                  <dl class="moderation-compass-dialog__preview-grid">
+                    <div>
+                      <dt i18n="@@sessionHost.moderationPreviewInputBudget">
+                        Gepackte Eingabe / Kontextfenster
+                      </dt>
+                      <dd>
+                        {{ preview.promptContext.budget.packedInputTokens }} /
+                        {{ preview.promptContext.budget.contextWindowTokens }}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt i18n="@@sessionHost.moderationPreviewOutputReserve">Antwortreserve</dt>
+                      <dd>{{ preview.promptContext.budget.reservedOutputTokens }}</dd>
+                    </div>
+                    <div>
+                      <dt i18n="@@sessionHost.moderationPreviewSafetyMargin">Sicherheitsmarge</dt>
+                      <dd>{{ preview.promptContext.budget.safetyMarginTokens }}</dd>
+                    </div>
+                  </dl>
+
+                  @if (preview.promptContext.context.limitations.length > 0) {
+                    <h4 i18n="@@sessionHost.moderationPreviewLimitations">Einschränkungen</h4>
+                    <ul class="moderation-compass-dialog__preview-list">
+                      @for (
+                        limitation of preview.promptContext.context.limitations;
+                        track limitation.section + limitation.code
+                      ) {
+                        <li>
+                          {{ previewSectionLabel(limitation.section) }} ·
+                          <code>{{ limitation.code }}</code>
+                        </li>
+                      }
+                    </ul>
+                  }
+                  @if (preview.promptContext.budget.truncations.length > 0) {
+                    <h4 i18n="@@sessionHost.moderationPreviewTruncations">Kürzungen</h4>
+                    <ul class="moderation-compass-dialog__preview-list">
+                      @for (
+                        truncation of preview.promptContext.budget.truncations;
+                        track truncation.section + truncation.reason
+                      ) {
+                        <li>
+                          {{ previewSectionLabel(truncation.section) }} ·
+                          {{ truncation.omittedItems }} ·
+                          <code>{{ truncation.reason }}</code>
+                        </li>
+                      }
+                    </ul>
+                  }
+                </div>
+              }
+            }
+          </div>
+        </details>
       }
     </section>
   }

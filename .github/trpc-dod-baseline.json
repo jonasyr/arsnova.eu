@@ -329,7 +329,7 @@
     },
     "qa.requestSummary": {
       "kind": "mutation",
-      "fingerprint": "sha256:0cc9e9add2f73a8725ba7c1827242d34fef0f1a85a811ecded83330235ba461f",
+      "fingerprint": "sha256:d8f066d99ba08aab95c23cf92f32adb858be6c97a5d825c3b5191838536c3fa1",
       "missing": []
     },
     "qa.setPresenterSortMode": {
@@ -342,9 +342,14 @@
       "fingerprint": "sha256:7465cb791886d2602a72f9fddf638ccc828a9bae6ca14ccb0d2840191b7100a8",
       "missing": []
     },
+    "qa.summaryContextPreview": {
+      "kind": "query",
+      "fingerprint": "sha256:06c00c54c8601111f86a3a38b689d1cb77b4a593908b6c4cc0696c325c8df044",
+      "missing": []
+    },
     "qa.summaryRuntime": {
       "kind": "query",
-      "fingerprint": "sha256:abb39c66d6b9ecd0e05a4435192dea61b73b740fda69ed5af7cd1e819d563132",
+      "fingerprint": "sha256:080b64fb14137ed554b9993b1034b67e70bc7e8700b14a2de7e512f63bafc10f",
       "missing": []
     },
     "qa.toggleModeration": {
@@ -440,6 +445,16 @@
     "quickFeedback.vote": {
       "kind": "mutation",
       "fingerprint": "sha256:f1573adba810577b182f225a046c358d225734110eafd1eea51a8e24adeb8def",
+      "missing": []
+    },
+    "quiz.deriveLearningObjectives": {
+      "kind": "mutation",
+      "fingerprint": "sha256:f105ce4d2ecd57e31bd021dad15281ad26a040172369e48bfd9cc816e2432ff3",
+      "missing": []
+    },
+    "quiz.prepareLearningObjectiveDerivation": {
+      "kind": "mutation",
+      "fingerprint": "sha256:80dddfeb23cc029d6d9ecc92b6822ed8209564fe857611419de60d807a520f59",
       "missing": []
     },
     "quiz.upload": {
@@ -749,7 +764,7 @@
     },
     "session.nextQuestion": {
       "kind": "mutation",
-      "fingerprint": "sha256:c16c4ad351058b50273a50f6186023f1af413ae7a08b535b6aba457972e3a25d",
+      "fingerprint": "sha256:4791276bf15a40bdf92a5f2044229b4309181b2cfd657d1c965f1c1d3282b4cf",
       "missing": []
     },
     "session.onCurrentQuestionForHostChanged": {
@@ -875,6 +890,11 @@
     "session.setTimerAccommodation": {
       "kind": "mutation",
       "fingerprint": "sha256:8bb0ba8e2956a30cbedc9137427e473389a1adae146ae957cf0af14b21a729dd",
+      "missing": []
+    },
+    "session.showQuestionResult": {
+      "kind": "mutation",
+      "fingerprint": "sha256:a527676031fa72ff5a37e242b50827f268a8b1eecd305aaf16bf1f03549004c9",
       "missing": []
     },
     "session.skipQuestion": {

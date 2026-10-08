@@ -26,10 +26,12 @@ export function isQaSummaryKeepableResultStatus(status: string | null | undefine
 export function shouldShowQaSummaryCard(input: {
   readonly enabled: boolean;
   readonly inferenceConfigured: boolean;
+  /** V2 can always provide the local, evidence-bound extractive fallback. */
+  readonly fallbackAvailable?: boolean;
   readonly visibleQuestionCount: number;
   readonly resultStatus?: string | null;
 }): boolean {
-  if (!input.enabled || !input.inferenceConfigured) {
+  if (!input.enabled || (!input.inferenceConfigured && input.fallbackAvailable !== true)) {
     return false;
   }
   if (isQaSummaryKeepableResultStatus(input.resultStatus)) {
@@ -41,11 +43,13 @@ export function shouldShowQaSummaryCard(input: {
 export function canRequestQaSummary(input: {
   readonly enabled: boolean;
   readonly inferenceConfigured: boolean;
+  /** V2 can always provide the local, evidence-bound extractive fallback. */
+  readonly fallbackAvailable?: boolean;
   readonly visibleQuestionCount: number;
 }): boolean {
   return (
     input.enabled &&
-    input.inferenceConfigured &&
+    (input.inferenceConfigured || input.fallbackAvailable === true) &&
     input.visibleQuestionCount >= QA_SUMMARY_MIN_VISIBLE_QUESTIONS
   );
 }

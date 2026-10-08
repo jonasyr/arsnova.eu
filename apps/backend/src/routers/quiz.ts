@@ -10,6 +10,10 @@ import {
   SHORT_TEXT_DEFAULT_EVALUATION_KIND,
   QuizUploadInputSchema,
   QuizUploadOutputSchema,
+  LearningObjectiveDerivationResultSchema,
+  PrepareLearningObjectiveDerivationInputSchema,
+  PrepareLearningObjectiveDerivationOutputSchema,
+  RunLearningObjectiveDerivationInputSchema,
   SHORT_TEXT_DEFAULT_EVALUATION_MODE,
   SHORT_TEXT_DEFAULT_TOLERANCE_LEVEL,
   createLegacyQuizHistoryAccessProof,
@@ -26,11 +30,20 @@ import {
 } from '@arsnova/shared-types';
 import { TRPCError } from '@trpc/server';
 import { Prisma } from '@prisma/client';
-import { quizUploadAttemptProcedure, resolveClientIp, router } from '../trpc';
+import { publicProcedure, quizUploadAttemptProcedure, resolveClientIp, router } from '../trpc';
 import { prisma } from '../db';
-import { checkQuizUploadStorageRate } from '../lib/rateLimit';
+import {
+  checkLearningObjectiveDerivationPrepareRate,
+  checkQuizUploadStorageRate,
+} from '../lib/rateLimit';
 import { calculateQuizUploadComplexity } from '../lib/publicCreateCapacity';
 import { buildQuizLearningObjectiveBundleCreate } from '../lib/sessionLearningObjectives';
+import {
+  finalizeLearningObjectiveDerivationCapability,
+  issueLearningObjectiveDerivationCapability,
+  reserveLearningObjectiveDerivationCapability,
+} from '../lib/learningObjectiveDerivationCapability';
+import { deriveLearningObjectiveDrafts } from '../lib/learningObjectiveDerivation';
 
 function buildQuizUploadPayloadFromStoredQuiz(quiz: {
   historyScopeId: string | null;
@@ -202,6 +215,61 @@ function buildQuizUploadPayloadFromStoredQuiz(quiz: {
 }
 
 export const quizRouter = router({
+  /**
+   * Explicit preparation action for local quiz editing. It grants no data
+   * access; it only issues a short-lived, request-bound CPU-work bearer.
+   */
+  prepareLearningObjectiveDerivation: publicProcedure
+    .input(PrepareLearningObjectiveDerivationInputSchema)
+    .output(PrepareLearningObjectiveDerivationOutputSchema)
+    .mutation(async ({ ctx, input }) => {
+      const limit = await checkLearningObjectiveDerivationPrepareRate(resolveClientIp(ctx.req).ip);
+      if (!limit.allowed) {
+        throw new TRPCError({
+          code: 'TOO_MANY_REQUESTS',
+          message: 'Zu viele vorbereitete Lernziel-Ableitungen. Bitte später erneut versuchen.',
+          cause: { retryAfterSeconds: limit.retryAfterSeconds },
+        });
+      }
+      try {
+        return await issueLearningObjectiveDerivationCapability(input);
+      } catch {
+        throw new TRPCError({
+          code: 'SERVICE_UNAVAILABLE',
+          message: 'Lernziel-Ableitung kann vorübergehend nicht vorbereitet werden.',
+        });
+      }
+    }),
+
+  /** One-shot capability reservation is the sole authorization for CPU work. */
+  deriveLearningObjectives: publicProcedure
+    .input(RunLearningObjectiveDerivationInputSchema)
+    .output(LearningObjectiveDerivationResultSchema)
+    .mutation(async ({ input, signal }) => {
+      const reserved = await reserveLearningObjectiveDerivationCapability(input).catch(() => {
+        throw new TRPCError({
+          code: 'SERVICE_UNAVAILABLE',
+          message: 'Lernziel-Ableitung kann vorübergehend nicht autorisiert werden.',
+        });
+      });
+      if (!reserved) {
+        throw new TRPCError({
+          code: 'UNAUTHORIZED',
+          message: 'Ableitungs-Capability ist ungültig oder abgelaufen.',
+        });
+      }
+
+      const { capability, ...derivationInput } = input;
+      try {
+        return await deriveLearningObjectiveDrafts(derivationInput, { signal });
+      } finally {
+        // Reserve already consumed the bearer atomically. A transient Redis
+        // cleanup failure must not replace a valid runtime result (or its
+        // original error); the tombstone reservation expires on its own.
+        await finalizeLearningObjectiveDerivationCapability(capability).catch(() => undefined);
+      }
+    }),
+
   /**
    * Quiz inkl. Fragen und Antwortoptionen in der DB anlegen (Story 2.1a).
    * Wird vom Frontend vor session.create aufgerufen; die zurückgegebene quizId wird an session.create übergeben.

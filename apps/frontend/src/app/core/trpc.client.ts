@@ -2,6 +2,7 @@ import {
   createTRPCProxyClient,
   createWSClient,
   httpBatchLink,
+  httpLink,
   splitLink,
   type TRPCLink,
   wsLink,
@@ -126,6 +127,24 @@ function createTrpcHeaders(): Record<string, string> {
   return headers;
 }
 
+export function shouldUseUnbatchedHttpTransport(path: string): boolean {
+  return path === 'quiz.deriveLearningObjectives';
+}
+
+function createHttpRequestLink(): TRPCLink<AppRouter> {
+  const options = {
+    url: resolveTrpcBatchLinkUrl(),
+    headers() {
+      return createTrpcHeaders();
+    },
+  };
+  return splitLink({
+    condition: (operation) => shouldUseUnbatchedHttpTransport(operation.path),
+    true: httpLink<AppRouter>(options),
+    false: httpBatchLink<AppRouter>(options),
+  });
+}
+
 function resolveWsParticipantBinding(): TrpcWebSocketParticipantBinding | null {
   const hostSessionCode = resolveRouteHostSessionCode();
   const sessionCode = hostSessionCode ?? resolveRouteSessionCode();
@@ -152,6 +171,14 @@ export function createWsBindingFingerprint(
   return binding
     ? `${binding.sessionCode}:${binding.participantId ?? ''}:${binding.participantCapability ?? ''}`
     : null;
+}
+
+function createWsConnectionParamsFingerprint(params: Record<string, string> | null): string | null {
+  if (!params) return null;
+  return Object.entries(params)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, value]) => `${key.length}:${key}:${value.length}:${value}`)
+    .join('|');
 }
 
 function createWsConnectionParams(): Record<string, string> | null {
@@ -232,8 +259,8 @@ export function clearPendingHostSessionCode(): void {
   pendingHostSessionCode = null;
 }
 
-let activeWsBindingFingerprint = createWsBindingFingerprint(
-  isBrowser ? resolveWsParticipantBinding() : null,
+let activeWsBindingFingerprint = createWsConnectionParamsFingerprint(
+  isBrowser ? createWsConnectionParams() : null,
 );
 let bindingRefreshPromise: Promise<void> = Promise.resolve();
 const wsClient = isBrowser
@@ -248,12 +275,12 @@ const wsClient = isBrowser
 
 /**
  * Schließt eine wiederverwendete physische Verbindung kontrolliert, sobald
- * SPA-Route oder lokal gespeicherte Participant-ID ein anderes Binding ergeben.
+ * SPA-Route, Capability oder Zugriffstoken ein anderes Binding ergeben.
  * Der nächste Subscription-Start öffnet den lazy Client mit frischen Params.
  */
 export function refreshTrpcWsBinding(): boolean {
   if (!wsClient) return false;
-  const nextFingerprint = createWsBindingFingerprint(resolveWsParticipantBinding());
+  const nextFingerprint = createWsConnectionParamsFingerprint(createWsConnectionParams());
   if (nextFingerprint === activeWsBindingFingerprint) return false;
   activeWsBindingFingerprint = nextFingerprint;
   bindingRefreshPromise = bindingRefreshPromise
@@ -412,18 +439,8 @@ export const trpc = createTRPCProxyClient<AppRouter>({
             return op.type === 'subscription';
           },
           true: bindingAwareWsLink,
-          false: httpBatchLink({
-            url: resolveTrpcBatchLinkUrl(),
-            headers() {
-              return createTrpcHeaders();
-            },
-          }),
+          false: createHttpRequestLink(),
         })
-      : httpBatchLink({
-          url: resolveTrpcBatchLinkUrl(),
-          headers() {
-            return createTrpcHeaders();
-          },
-        }),
+      : createHttpRequestLink(),
   ],
 });

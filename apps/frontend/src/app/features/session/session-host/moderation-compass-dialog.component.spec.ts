@@ -1,11 +1,104 @@
 import { TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { describe, expect, it, vi } from 'vitest';
-import { qaSummaryQuestionSourceId, type QaSummaryRuntimeDTO } from '@arsnova/shared-types';
+import {
+  qaSummaryQuestionSourceId,
+  type QaSummaryContextPreviewDTO,
+  type QaSummaryRuntimeCompatibleDTO,
+  type QaSummaryRuntimeV2DTO,
+} from '@arsnova/shared-types';
 import { ModerationCompassDialogComponent } from './moderation-compass-dialog.component';
 import type { ModerationCompassCard } from './moderation-compass';
 
 describe('ModerationCompassDialogComponent', () => {
+  function v2Runtime(
+    input: Pick<QaSummaryRuntimeV2DTO, 'inferenceConfigured' | 'result'>,
+  ): QaSummaryRuntimeV2DTO {
+    return {
+      schemaVersion: 2,
+      enabled: true,
+      inferenceConfigured: input.inferenceConfigured,
+      capabilities: {
+        contractVersion: 'qa-summary-adapter-capabilities-v1',
+        adapterId: 'arsnova-summary-adapter-v2',
+        modes: [
+          {
+            kind: 'full-context',
+            requestContract: 'qa-summary-context-v2',
+            outputContract: 'qa-summary-model-output-v2',
+            promptContextContract: 'moderation-prompt-context-v1',
+            definitionVersion: 'moderation-prompt-definitions-v1',
+          },
+          { kind: 'legacy-text' },
+        ],
+      },
+      result: input.result,
+    };
+  }
+
+  function contextPreviewFixture(): QaSummaryContextPreviewDTO {
+    return {
+      schemaVersion: 1,
+      contractVersion: 'qa-summary-context-preview-v1',
+      instructionVersion: 'qa-summary-technical-handoff-v1',
+      definitionVersion: 'moderation-prompt-definitions-v1',
+      capabilities: v2Runtime({ inferenceConfigured: false, result: null }).capabilities,
+      selectedMode: null,
+      fallback: {
+        contractVersion: 'qa-summary-fallback-v1',
+        requestedRequestContract: 'qa-summary-context-v2',
+        requestedOutputContract: 'qa-summary-model-output-v2',
+        mode: 'extractive',
+        reason: 'disabled',
+        retry: 'not-applicable',
+      },
+      cache: 'miss',
+      promptContext: {
+        schemaVersion: 1,
+        contractVersion: 'moderation-prompt-context-v1',
+        packedAt: '2026-10-05T17:00:00.000Z',
+        hashAlgorithm: 'sha-256',
+        hashMaterialVersion: 'moderation-prompt-hash-v1',
+        snapshotHash: 'a'.repeat(64),
+        context: {
+          questions: {
+            state: 'available',
+            corpus: {
+              total: 2500,
+              eligible: 2500,
+              analyzed: 2500,
+              deduplicated: 2500,
+              represented: 1,
+            },
+            items: [],
+          },
+          topics: { state: 'disabled', reason: 'hidden fixture detail' },
+          compass: { state: 'unavailable', reason: 'outside-scope' },
+          learningContext: { state: 'unavailable', reason: 'outside-scope' },
+          releasedResults: { state: 'not-released', reason: 'hidden fixture detail' },
+          feedback: { state: 'not-applicable', reason: 'hidden fixture detail' },
+          sources: [
+            { id: 'semantic-topic:hidden', kind: 'semantic-topic', label: 'GEHEIMER QUELLENTEXT' },
+          ],
+          limitations: [
+            {
+              code: 'budget-truncated',
+              section: 'topics',
+              detail: 'GEHEIMES LIMITDETAIL',
+            },
+          ],
+        },
+        budget: {
+          packedInputTokens: 3138,
+          contextWindowTokens: 4096,
+          reservedOutputTokens: 640,
+          safetyMarginTokens: 128,
+          truncations: [{ section: 'questions', omittedItems: 2499, reason: 'token-budget' }],
+        },
+      },
+    } as unknown as QaSummaryContextPreviewDTO;
+  }
+
   function setup(
     cards: readonly ModerationCompassCard[],
     onSourceActivate: (source: ModerationCompassCard['sources'][number]) => void = vi.fn(),
@@ -14,9 +107,10 @@ describe('ModerationCompassDialogComponent', () => {
     summary?: {
       enabled?: boolean;
       visibleQuestionCount?: number;
-      runtime?: QaSummaryRuntimeDTO | null;
+      runtime?: QaSummaryRuntimeCompatibleDTO | null;
       onRequestSummary?: () => void;
       onSummarySourceActivate?: (source: { id: string; label: string }) => void;
+      onRequestSummaryContextPreview?: () => Promise<QaSummaryContextPreviewDTO>;
     },
     moreSourcesContext?: {
       qaSortMode?: 'TOP' | 'BEST' | 'CONTROVERSIAL' | 'TIME';
@@ -39,6 +133,7 @@ describe('ModerationCompassDialogComponent', () => {
             summary: () => summary?.runtime ?? null,
             onRequestSummary: summary?.onRequestSummary,
             onSummarySourceActivate: summary?.onSummarySourceActivate,
+            onRequestSummaryContextPreview: summary?.onRequestSummaryContextPreview,
             qaSortMode: () => moreSourcesContext?.qaSortMode ?? 'BEST',
             wordCloudSmoothingActive: () => moreSourcesContext?.wordCloudSmoothingActive === true,
             wordCloudSingleWordsOnly: () => moreSourcesContext?.wordCloudSingleWordsOnly === true,
@@ -391,13 +486,28 @@ describe('ModerationCompassDialogComponent', () => {
     expect(fixture.nativeElement.textContent).not.toContain('Zusammenfassung');
   });
 
-  it('blendet die Zusammenfassung ohne Inferenz-Endpunkt aus', () => {
+  it('blendet die Legacy-Zusammenfassung ohne Inferenz-Endpunkt aus', () => {
     const { fixture } = setup([], vi.fn(), 'rule-based', {
       enabled: true,
       visibleQuestionCount: 5,
       runtime: { enabled: true, inferenceConfigured: false, result: null },
     });
     expect(fixture.nativeElement.querySelector('[data-testid="moderation-summary"]')).toBeNull();
+  });
+
+  it('zeigt V2 mit lokalem Fallback auch ohne Inferenz-Endpunkt', () => {
+    const onRequestSummary = vi.fn();
+    const { fixture } = setup([], vi.fn(), 'rule-based', {
+      enabled: true,
+      visibleQuestionCount: 5,
+      runtime: v2Runtime({ inferenceConfigured: false, result: null }),
+      onRequestSummary,
+    });
+
+    const card = fixture.nativeElement.querySelector('[data-testid="moderation-summary"]');
+    expect(card).not.toBeNull();
+    (card.querySelector('.moderation-compass-dialog__summary-button') as HTMLButtonElement).click();
+    expect(onRequestSummary).toHaveBeenCalledTimes(1);
   });
 
   it('blendet die Zusammenfassung bei weniger als drei sichtbaren Fragen aus', () => {
@@ -791,5 +901,115 @@ describe('ModerationCompassDialogComponent', () => {
     fixture.detectChanges();
     expect(onRequestSummary).not.toHaveBeenCalled();
     expect(fixture.nativeElement.textContent).toContain('Es gibt eine Frage zur Klausur.');
+  });
+
+  it('zeigt V2-Belege außerhalb von Q&A statisch an', () => {
+    const sourceId = 'semantic-topic:median';
+    const onSummarySourceActivate = vi.fn();
+    const { fixture } = setup([], vi.fn(), 'rule-based', {
+      enabled: true,
+      visibleQuestionCount: 3,
+      onSummarySourceActivate,
+      runtime: v2Runtime({
+        inferenceConfigured: false,
+        result: {
+          schemaVersion: 2,
+          contractVersion: 'qa-summary-result-v2',
+          status: 'ready',
+          statements: [{ text: 'Median: Berechnung und Formel.', sourceIds: [sourceId] }],
+          suggestedNextSteps: [],
+          limitations: [],
+          sources: [{ id: sourceId, kind: 'semantic-topic', label: 'Median und Formel' }],
+          snapshotHash: 'a'.repeat(64),
+          locale: 'de',
+          execution: {
+            attemptedMode: null,
+            effectiveMode: 'extractive',
+            fallback: {
+              contractVersion: 'qa-summary-fallback-v1',
+              requestedRequestContract: 'qa-summary-context-v2',
+              requestedOutputContract: 'qa-summary-model-output-v2',
+              mode: 'extractive',
+              reason: 'disabled',
+              retry: 'not-applicable',
+            },
+          },
+        },
+      }),
+    });
+
+    (
+      fixture.nativeElement.querySelector(
+        '.moderation-compass-dialog__summary-button',
+      ) as HTMLButtonElement
+    ).click();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('Belege (1)');
+    expect(
+      fixture.nativeElement.querySelector(
+        '[data-testid="moderation-summary"] .moderation-compass-card__source-static',
+      ),
+    ).not.toBeNull();
+    expect(
+      fixture.nativeElement.querySelector(
+        '[data-testid="moderation-summary"] .moderation-compass-card__source-button',
+      ),
+    ).toBeNull();
+    expect(onSummarySourceActivate).not.toHaveBeenCalled();
+  });
+
+  it('lädt die Diagnose erst auf ausdrücklichen Klick und zeigt keine Kontextinhalte', async () => {
+    const preview = contextPreviewFixture();
+    const onRequestSummaryContextPreview = vi
+      .fn<() => Promise<QaSummaryContextPreviewDTO>>()
+      .mockRejectedValueOnce(new Error('temporär'))
+      .mockResolvedValueOnce(preview);
+    const { fixture } = setup([], vi.fn(), 'rule-based', {
+      enabled: true,
+      visibleQuestionCount: 3,
+      runtime: v2Runtime({ inferenceConfigured: false, result: null }),
+      onRequestSummaryContextPreview,
+    });
+
+    const diagnosis = fixture.nativeElement.querySelector(
+      '[data-testid="moderation-summary-diagnosis"]',
+    ) as HTMLDetailsElement;
+    expect(diagnosis).not.toBeNull();
+    expect(diagnosis.open).toBe(false);
+    diagnosis.open = true;
+    fixture.detectChanges();
+    expect(onRequestSummaryContextPreview).not.toHaveBeenCalled();
+
+    const loadButton = diagnosis.querySelector(
+      '.moderation-compass-dialog__preview-button',
+    ) as HTMLButtonElement;
+    loadButton.click();
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(fixture.nativeElement.textContent).toContain(
+        'Kontextvorschau konnte nicht geladen werden.',
+      );
+    });
+    expect(loadButton.disabled).toBe(false);
+
+    loadButton.click();
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(
+        fixture.nativeElement.querySelector('[data-testid="summary-context-preview"]'),
+      ).not.toBeNull();
+    });
+
+    const text = fixture.nativeElement.textContent as string;
+    expect(onRequestSummaryContextPreview).toHaveBeenCalledTimes(2);
+    expect(text).toContain('qa-summary-context-preview-v1');
+    expect(text).toContain('moderation-prompt-context-v1');
+    expect(text).toContain('1 / 2500');
+    expect(text).toContain('budget-truncated');
+    expect(text).toContain('token-budget');
+    expect(text).not.toContain('GEHEIMER QUELLENTEXT');
+    expect(text).not.toContain('GEHEIMES LIMITDETAIL');
+    expect(text).not.toContain('hidden fixture detail');
   });
 });

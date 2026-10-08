@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client';
+import { MODERATION_PROMPT_CONTEXT_REFERENCE_FIXTURE_V1 } from '@arsnova/shared-types';
 import { TRPCError } from '@trpc/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AuthorizedModerationState } from './moderationQaContext';
@@ -368,5 +369,49 @@ describe('buildAuthorizedModerationTeachingSignals', () => {
         access: { hostToken: 'host-token' },
       }),
     ).rejects.toMatchObject({ code: 'CONFLICT' });
+  });
+
+  it('feeds the separately authorized Q&A and topic fragments into the shared compass build', async () => {
+    const qaState = state({
+      qaEnabled: true,
+      participantCount: 200,
+      activeSortMode: 'TOP',
+    });
+    loadStateMock.mockResolvedValue(qaState);
+    const reference = MODERATION_PROMPT_CONTEXT_REFERENCE_FIXTURE_V1.context;
+    const questions = {
+      ...reference.questions,
+      items:
+        reference.questions.state === 'available'
+          ? reference.questions.items.map((question) => ({
+              ...question,
+              status: 'ACTIVE' as const,
+              nlp: { state: 'pending' as const },
+            }))
+          : [],
+    } as typeof reference.questions;
+
+    const result = await buildAuthorizedModerationTeachingSignals({
+      sessionId: SESSION_ID,
+      access: { hostToken: 'host-token' },
+      qaContext: {
+        state: qaState,
+        questions,
+        topics: reference.topics,
+      },
+    });
+
+    expect(result.compass).toMatchObject({
+      state: 'available',
+      signals: expect.arrayContaining([
+        expect.objectContaining({ signal: 'high-controversy' }),
+        expect.objectContaining({
+          signal: 'topic-concentration',
+          evidence: expect.arrayContaining([
+            expect.objectContaining({ sourceId: 'semantic-topic:linear-regression-examples' }),
+          ]),
+        }),
+      ]),
+    });
   });
 });

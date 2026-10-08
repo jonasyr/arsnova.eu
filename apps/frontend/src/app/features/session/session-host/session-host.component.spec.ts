@@ -128,6 +128,7 @@ const {
   qaPresentProjectionQueryMock,
   qaNlpRuntimeQueryMock,
   qaSummaryRuntimeQueryMock,
+  qaSummaryContextPreviewQueryMock,
   qaRequestSummaryMutateMock,
   qaModerateMutateMock,
   qaPendingReleaseSnapshotQueryMock,
@@ -136,6 +137,7 @@ const {
   qaOnQuestionsUpdatedSubscribeMock,
   nextQuestionMutateMock,
   prevQuestionMutateMock,
+  showQuestionResultMutateMock,
   skipQuestionMutateMock,
   revealAnswersMutateMock,
   revealResultsMutateMock,
@@ -193,6 +195,7 @@ const {
   qaPresentProjectionQueryMock: vi.fn(),
   qaNlpRuntimeQueryMock: vi.fn(),
   qaSummaryRuntimeQueryMock: vi.fn(),
+  qaSummaryContextPreviewQueryMock: vi.fn(),
   qaRequestSummaryMutateMock: vi.fn(),
   qaModerateMutateMock: vi.fn(),
   qaPendingReleaseSnapshotQueryMock: vi.fn(),
@@ -201,6 +204,7 @@ const {
   qaOnQuestionsUpdatedSubscribeMock: vi.fn(() => ({ unsubscribe: unsubscribeMock })),
   nextQuestionMutateMock: vi.fn(),
   prevQuestionMutateMock: vi.fn(),
+  showQuestionResultMutateMock: vi.fn(),
   skipQuestionMutateMock: vi.fn(),
   revealAnswersMutateMock: vi.fn(),
   revealResultsMutateMock: vi.fn(),
@@ -267,6 +271,7 @@ vi.mock('../../../core/trpc.client', () => ({
       getSessionConfidenceSummary: { query: getSessionConfidenceSummaryQueryMock },
       nextQuestion: { mutate: nextQuestionMutateMock },
       prevQuestion: { mutate: prevQuestionMutateMock },
+      showQuestionResult: { mutate: showQuestionResultMutateMock },
       skipQuestion: { mutate: skipQuestionMutateMock },
       revealAnswers: { mutate: revealAnswersMutateMock },
       revealResults: { mutate: revealResultsMutateMock },
@@ -302,6 +307,7 @@ vi.mock('../../../core/trpc.client', () => ({
       presentProjection: { query: qaPresentProjectionQueryMock },
       nlpRuntime: { query: qaNlpRuntimeQueryMock },
       summaryRuntime: { query: qaSummaryRuntimeQueryMock },
+      summaryContextPreview: { query: qaSummaryContextPreviewQueryMock },
       requestSummary: { mutate: qaRequestSummaryMutateMock },
       moderate: { mutate: qaModerateMutateMock },
       pendingReleaseSnapshot: { query: qaPendingReleaseSnapshotQueryMock },
@@ -622,6 +628,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
       inferenceConfigured: false,
       result: null,
     });
+    qaSummaryContextPreviewQueryMock.mockRejectedValue(new Error('preview not stubbed'));
     qaRequestSummaryMutateMock.mockResolvedValue({
       enabled: false,
       inferenceConfigured: false,
@@ -804,6 +811,11 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
       activeAt: null,
     });
     prevQuestionMutateMock.mockResolvedValue({
+      status: 'RESULTS',
+      currentQuestion: 0,
+      currentRound: 1,
+    });
+    showQuestionResultMutateMock.mockResolvedValue({
       status: 'RESULTS',
       currentQuestion: 0,
       currentRound: 1,
@@ -1756,6 +1768,48 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
         },
       }),
     );
+    fixture.destroy();
+  });
+
+  it('hält in einer reinen Q&A-Lobby die Zugangskarte über dem Beitritts-Overlay und bietet Format hinzufügen an', async () => {
+    persistInitialHostRecovery({
+      code: 'ABC123',
+      recoveryCard: {
+        supportId: 'ARS-ABCD-2345',
+        recoveryCode: 'recovery-capability-abcdefghijklmnopqrstuvwxyz',
+      },
+    });
+    getInfoQueryMock.mockResolvedValue({
+      ...defaultSession,
+      type: 'Q_AND_A',
+      quizName: null,
+      preferredChannel: 'qa',
+      qaClosesAt: '2026-03-25T12:00:00.000Z',
+      channels: {
+        quiz: { enabled: false },
+        qa: {
+          enabled: true,
+          open: true,
+          title: 'Fragen',
+          moderationMode: false,
+          state: 'OPEN',
+          closesAt: '2026-03-25T12:00:00.000Z',
+        },
+        quickFeedback: { enabled: false, open: false },
+      },
+    });
+    const fixture = setup();
+    fixture.componentInstance.joinInfoPopoverOpen.set(true);
+    await fixture.componentInstance.ngOnInit();
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.joinInfoPopoverOpen()).toBe(false);
+    expect(dialogOpenMock).toHaveBeenCalledWith(HostRecoveryCardDialogComponent, expect.anything());
+    expect(fixture.componentInstance.addableChannels()).toEqual(['quiz', 'quickFeedback']);
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="add-channel-trigger"]'),
+    ).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.session-channel-tabs')).toBeNull();
     fixture.destroy();
   });
 
@@ -25532,9 +25586,21 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
         summaryEnabled: () => boolean;
         summaryVisibleQuestionCount: () => number;
         onRequestSummary: () => void;
+        onRequestSummaryContextPreview: () => Promise<{ contractVersion: string }>;
       };
       expect(data.summaryEnabled()).toBe(true);
       expect(data.summaryVisibleQuestionCount()).toBe(3);
+
+      qaSummaryContextPreviewQueryMock.mockResolvedValue({
+        contractVersion: 'qa-summary-context-preview-v1',
+      });
+      await expect(data.onRequestSummaryContextPreview()).resolves.toEqual({
+        contractVersion: 'qa-summary-context-preview-v1',
+      });
+      expect(qaSummaryContextPreviewQueryMock).toHaveBeenCalledWith({
+        sessionId: defaultSession.id,
+        locale: 'de',
+      });
 
       qaRequestSummaryMutateMock.mockResolvedValue({
         enabled: true,
@@ -25568,7 +25634,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
       fixture.destroy();
     });
 
-    it('startet keine Zusammenfassung ohne Inferenz-Endpunkt oder mit zu wenigen Fragen', async () => {
+    it('respektiert die Frageschwelle und erlaubt danach den lokalen V2-Fallback', async () => {
       getInfoQueryMock.mockResolvedValue({
         ...defaultSession,
         status: 'ACTIVE',
@@ -25614,6 +25680,45 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
       data.onRequestSummary();
       await fixture.whenStable();
       expect(qaRequestSummaryMutateMock).not.toHaveBeenCalled();
+
+      const firstQuestion = fixture.componentInstance.qaQuestions()[0]!;
+      expect(firstQuestion).toBeDefined();
+      fixture.componentInstance.qaQuestions.set([
+        firstQuestion,
+        {
+          ...firstQuestion,
+          id: '22222222-2222-4222-8222-222222222222',
+          text: 'Wie berechnet man den Median?',
+        },
+        {
+          ...firstQuestion,
+          id: '33333333-3333-4333-8333-333333333333',
+          text: 'Wie funktioniert der Fragenkanal in arsnova.eu?',
+        },
+      ]);
+      fixture.componentInstance.qaSummaryRuntime.set({
+        schemaVersion: 2,
+        enabled: true,
+        inferenceConfigured: false,
+        capabilities: {
+          contractVersion: 'qa-summary-adapter-capabilities-v1',
+          adapterId: 'arsnova-summary-adapter-v2',
+          modes: [
+            {
+              kind: 'full-context',
+              requestContract: 'qa-summary-context-v2',
+              outputContract: 'qa-summary-model-output-v2',
+              promptContextContract: 'moderation-prompt-context-v1',
+              definitionVersion: 'moderation-prompt-definitions-v1',
+            },
+            { kind: 'legacy-text' },
+          ],
+        },
+        result: null,
+      });
+      qaRequestSummaryMutateMock.mockResolvedValue(fixture.componentInstance.qaSummaryRuntime());
+      data.onRequestSummary();
+      await vi.waitFor(() => expect(qaRequestSummaryMutateMock).toHaveBeenCalledTimes(1));
       fixture.destroy();
     });
 
@@ -25741,6 +25846,125 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
           'Häufige Verwechslung: IaaS → SaaS · Was ist 2+2?',
         ]),
       );
+      expect(
+        clarification?.sources.every(
+          (source) => source.target?.questionId === 'bbbbbbbb-2222-4222-8222-222222222222',
+        ),
+      ).toBe(true);
+      fixture.destroy();
+    });
+
+    it('springt vom Kompass gezielt zum Ergebnis der verlinkten Quizfrage', async () => {
+      const fixture = setup();
+      fixture.detectChanges();
+      await fixture.whenStable();
+      await flushComponentAfterStable(fixture, 50);
+      const component = fixture.componentInstance;
+      component.session.update((session) =>
+        session ? { ...session, status: 'RESULTS', currentQuestion: 2 } : session,
+      );
+      component.currentQuestionForHost.set({
+        questionId: '33333333-3333-4333-8333-333333333333',
+        order: 2,
+        totalQuestions: 3,
+        text: 'Aktuelle Frage',
+        type: 'SINGLE_CHOICE',
+        difficulty: 'MEDIUM',
+        answers: [],
+      });
+      getCurrentQuestionForHostQueryMock.mockResolvedValue({
+        questionId: '11111111-1111-4111-8111-111111111111',
+        order: 0,
+        totalQuestions: 3,
+        text: 'Verlinkte Frage',
+        type: 'SINGLE_CHOICE',
+        difficulty: 'MEDIUM',
+        answers: [],
+      });
+
+      await component.followModerationCompassSource({
+        kind: 'quiz-result',
+        label: 'Viele falsche Antworten · Verlinkte Frage',
+        target: {
+          channel: 'quiz',
+          questionId: '11111111-1111-4111-8111-111111111111',
+        },
+      });
+
+      expect(showQuestionResultMutateMock).toHaveBeenCalledWith({
+        code: 'ABC123',
+        questionId: '11111111-1111-4111-8111-111111111111',
+      });
+      expect(component.statusUpdate()).toMatchObject({ status: 'RESULTS', currentQuestion: 0 });
+      expect(component.currentQuestionForHost()?.questionId).toBe(
+        '11111111-1111-4111-8111-111111111111',
+      );
+      fixture.destroy();
+    });
+
+    it('zeigt bei fehlgeschlagenem Kompass-Sprung den vorhandenen Retry-Hinweis', async () => {
+      const fixture = setup();
+      fixture.detectChanges();
+      await fixture.whenStable();
+      await flushComponentAfterStable(fixture, 50);
+      const component = fixture.componentInstance;
+      component.currentQuestionForHost.set({
+        questionId: '33333333-3333-4333-8333-333333333333',
+        order: 2,
+        totalQuestions: 3,
+        text: 'Aktuelle Frage',
+        type: 'SINGLE_CHOICE',
+        difficulty: 'MEDIUM',
+        answers: [],
+      });
+      showQuestionResultMutateMock.mockRejectedValueOnce(new Error('temporarily unavailable'));
+      const source = {
+        kind: 'quiz-result' as const,
+        label: 'Viele falsche Antworten · Verlinkte Frage',
+        target: {
+          channel: 'quiz' as const,
+          questionId: '11111111-1111-4111-8111-111111111111',
+        },
+      };
+
+      await expect(component.followModerationCompassSource(source)).resolves.toBeUndefined();
+
+      expect(component.hostSteeringCallout()?.retry).toEqual(expect.any(Function));
+      expect(component.skipCurrentResultQuestionOnNext()).toBe(false);
+
+      showQuestionResultMutateMock.mockResolvedValue({
+        status: 'RESULTS',
+        currentQuestion: 0,
+        currentRound: 1,
+      });
+      component.hostSteeringCallout()?.retry();
+      await vi.waitFor(() => expect(showQuestionResultMutateMock).toHaveBeenCalledTimes(2));
+      fixture.destroy();
+    });
+
+    it('wechselt von einem Blitzlicht- oder Tempo-Hinweis in den Blitzlicht-Kanal', async () => {
+      getInfoQueryMock.mockResolvedValue({
+        ...defaultSession,
+        status: 'ACTIVE',
+        channels: {
+          quiz: { enabled: true },
+          qa: { enabled: true, open: true, title: 'Fragen', moderationMode: false },
+          quickFeedback: { enabled: true, open: true },
+        },
+      });
+      const fixture = setup();
+      fixture.detectChanges();
+      await fixture.whenStable();
+      await flushComponentAfterStable(fixture, 50);
+
+      await fixture.componentInstance.followModerationCompassSource({
+        kind: 'tempo',
+        label: 'Viele kommen nicht mehr mit.',
+        target: { channel: 'quickFeedback' },
+      });
+
+      expect(fixture.componentInstance.activeChannel()).toBe('quickFeedback');
+      expect(showQuestionResultMutateMock).not.toHaveBeenCalled();
       fixture.destroy();
     });
 

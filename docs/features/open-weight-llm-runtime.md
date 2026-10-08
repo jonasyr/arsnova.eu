@@ -4,7 +4,7 @@
 
 **Stand:** 2026-10-05
 
-**Status:** Runtime, App-Verträge und Betriebswrapper implementiert; produktiv standardmäßig aus; noch kein fachlicher Consumer verdrahtet
+**Status:** Runtime, App-Verträge und Betriebswrapper implementiert; Lernzielableitung und Summary V2 als getrennte Consumer verdrahtet; produktiv standardmäßig aus; reale Consumer-/Hardwareabnahme offen
 
 **ADR:** [ADR-0035](../architecture/decisions/0035-self-hosted-llm-runtime-llama-cpp-over-ollama.md)
 
@@ -16,9 +16,11 @@ Runtime R stellt eine gemeinsame, private CPU-Runtime für drei getrennte techni
 - `qa_summary` für 8.9c Slice 4,
 - `learning_objectives` für Issue #456 Slice 5.
 
-Die versionierten Zod-Verträge liegen in `libs/shared-types/src/open-weight-llm.ts`. Der Backend-Client übersetzt ausschließlich diese Verträge nach llama.cpp Chat Completions, prüft die strukturierte Antwort erneut und verwirft unbekannte Quellen- oder Aufgabenreferenzen. Runtime R verdrahtet noch keinen Auftrag in eine Produktoberfläche. Daher entsteht durch diesen Slice allein keine neue sichtbare Funktion.
+Die versionierten Zod-Verträge liegen in `libs/shared-types/src/open-weight-llm.ts`. Der Backend-Client übersetzt ausschließlich diese Verträge nach llama.cpp Chat Completions, prüft die strukturierte Antwort erneut und verwirft unbekannte Quellen- oder Aufgabenreferenzen. #456 Slice 5 verdrahtet den bewusst ausgelösten Vorbereitungsauftrag aus [Modellgestützte Lernzielableitung](learning-objective-derivation.md); Slice 7 verdrahtet `qa_summary` V2 mit dem versionierten [Moderations-Prompt-Kontext](moderation-prompt-context.md), einem hostgeschützten Vorschaupfad und dem extraktiven Backend-Fallback. Der Labelpfad bleibt fachlich offen. Alle drei Aufträge behalten eigene Aktivierungs-, Schema-, Timeout- und Fallbackgrenzen.
 
-Jeder Auftrag ist zusätzlich auf 2.500 UTF-8-Bytes für die vollständig serialisierte User-Nachricht begrenzt. Zusammen mit der festen System-/Chat-Schablone und dem größten Ausgabebudget von 768 Tokens bleibt damit selbst der Byte-Fallback konservativ unter dem festen Kontextfenster von 4.096 Tokens. Künftige Consumer müssen größere Quellen- oder Quizmengen deterministisch in mehrere Aufträge teilen; die Runtime nimmt keinen scheinbar gültigen, aber unausführbaren Großauftrag an.
+`topic_label`, `learning_objectives` und der Legacy-Summaryauftrag sind zusätzlich auf 2.500 UTF-8-Bytes für die vollständig serialisierte User-Nachricht begrenzt. Größere Lernzielmengen werden deterministisch in sequenzielle Aufträge geteilt. Summary V2 besitzt bewusst nicht diese historische Gesamtgrenze, sondern den bereits gepackten `ModerationPromptContextV1` mit seinem eigenen Kontext-, Instruktions-, Definitions-, Antwort- und Sicherheitsbudget. Sein festes Profil reserviert bei 4.096 insgesamt 640 für die Antwort und 128 als Sicherheitsmarge.
+
+Der reichhaltige Summary-V2-Referenzkontext passt in diesem Profil nicht: Die App packt sichtbar eine Q&A-Textbaseline neu. Das verhindert einen unausführbaren Großauftrag, belegt aber nicht die vom Issue geforderte reichhaltige Vollkontexttauglichkeit. Es gibt keinen stillen Ausbau des Kontextfensters, keine GPU- und keine SaaS-Ausweicharchitektur.
 
 `OPEN_WEIGHT_LLM_ENABLED` bleibt standardmäßig `false` und ist unabhängig von `NLP_ENABLED`, `QA_NLP_ENABLED`, `WORD_CLOUD_SEMANTIC_ENABLED` und `QA_SUMMARY_ENABLED`. Es gibt keinen SaaS-Fallback.
 
@@ -53,6 +55,11 @@ node scripts/open-weight-llm/verify-model.mjs \
 Der normale `scripts/deploy.sh`-Pfad startet die Runtime absichtlich nicht.
 
 ### Zweiten privaten Host vorbereiten
+
+Das vollständige Copy-&-Paste-Betriebshandbuch für Ubuntu Server 24.04 LTS sowie
+Debian 12/13 liegt unter
+[`operations/OPEN-WEIGHT-LLM-SECOND-HOST-RUNBOOK.md`](../operations/OPEN-WEIGHT-LLM-SECOND-HOST-RUNBOOK.md).
+Die folgende Kurzfassung bleibt der technische Vertrag:
 
 1. Eigenes Runtime-Image aus `docker/open-weight-llm/Dockerfile` bauen, in die interne Registry pushen und den Registry-Digest festhalten.
 2. Das geprüfte GGUF unter einem absoluten Hostpfad ablegen.
@@ -117,7 +124,7 @@ Das Profil `llm-http` ist ausschließlich ein lokaler Laborpfad. Der Produktions
 - vor jedem Modellaufruf `GET /slots?fail_on_no_slot=1`;
 - maximal ein POST nach erfolgreicher Slot-Sonde, keine App-interne Modellqueue;
 - belegter Slot: Label und Summary liefern sofort ihren fachlichen Fallback, Lernzielableitung `{ status: "busy", retry: "manual" }`;
-- Caller-Abbruch und auftragsspezifisches Timeout begrenzen bereits die DNS-Auflösung, brechen danach den HTTP-Aufruf ab und lösen das globale Inflight in `finally`; verspätete DNS-Ergebnisse starten keinen Request;
+- Caller-Abbruch und auftragsspezifisches Timeout begrenzen bereits die DNS-Auflösung, brechen danach den HTTP-Aufruf ab und lösen das globale Inflight in `finally`; verspätete DNS-Ergebnisse starten keinen Request. Der Lernziel-Consumer verwendet zusätzlich ein einziges 120-Sekunden-Wall-Clock-Budget über alle deterministischen Batches;
 - Circuit Breaker öffnet nach drei Timeout-/Verfügbarkeits-/Antwortfehlern für 30 Sekunden;
 - URL-Hostnamen werden aufgelöst und auf ausschließlich Loopback/RFC1918/ULA geprüft; die Anfrage wird an die geprüfte IP gepinnt;
 - Telemetrie enthält nur Auftragstyp, Modellalias, Laufzeit und Tokenzahlen, keine Prompttexte.
@@ -227,7 +234,7 @@ docker exec -i arsnova-v3-open-weight-llm sh -c \
 
 Der finale isolierte Container war zusätzlich effektiv als UID/GID `65532:65532`, read-only, `network_mode: none`, 128 PIDs, `cap_drop: ALL`, `no-new-privileges` und `healthy` geprüft. Am geschützten Slot-Endpunkt lieferte das exakte Credential unter der abweichenden App-UID und gemeinsamen Socket-Gruppe HTTP 200, ein anderes formal gültiges Credential HTTP 401. Ein anschließendes `SIGTERM` wurde sauber an den Server weitergegeben; der Container beendete sich innerhalb der Grace Period mit Exitcode 0 und ohne OOM. Der `/health`-Endpunkt bleibt, wie oben beschrieben, nur eine Readiness-Sonde.
 
-Die drei Läufe belegen Schemaerzwingung und Ausführbarkeit des kurzen Labelauftrags. Sie belegen nicht Summary-Prefill auf der echten 8-vCPU-Inferenzbox, Lernzielqualität, p95 unter Last, Produktions-RSS oder fachliche Freigabe. Diese Nachweise bleiben vor Aktivierung beziehungsweise in den jeweiligen Consumer-Slices offen.
+Die drei Läufe belegen Schemaerzwingung und Ausführbarkeit des kurzen Labelauftrags. Sie belegen nicht Summary-Prefill auf der echten 8-vCPU-Inferenzbox, einen realen Lernzielauftrag, Lernzielqualität, p95 unter Last, Produktions-RSS oder fachliche Freigabe. Die Slices 5–7 ergänzen dafür modellfreie Consumer-, Prompt-, Adapter-, Quellen- und Lebenszyklustests. Für den integrierten Head stand keine reale Zielruntime für `qa_summary` V2 oder `learning_objectives` zur Verfügung; die fehlenden Läufe und der nicht passende reichhaltige 4.096-Kontext bleiben in der [Slice-8-Abnahme](../implementation/ISSUE-456-SLICE-8-ABNAHME.md) offen. Die Produktivflags bleiben aus.
 
 ## Verifikation
 

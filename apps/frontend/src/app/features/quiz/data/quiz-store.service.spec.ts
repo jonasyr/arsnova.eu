@@ -2,7 +2,10 @@ import { LOCALE_ID } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { isDemoQuizHistoryScopeId } from '@arsnova/shared-types';
+import {
+  isDemoQuizHistoryScopeId,
+  type LearningObjectiveDerivedDraft,
+} from '@arsnova/shared-types';
 import { getDemoQuizExpectedTitle, getDemoQuizSeedFingerprint } from './demo-quiz-payload';
 import {
   DEMO_QUIZ_ID,
@@ -2875,6 +2878,238 @@ describe('QuizStoreService', () => {
         { objectiveId: objective.id },
       ),
     ).toThrow(/Revisionsstand/);
+  });
+
+  it('hängt deterministische Modell-Entwürfe idempotent an und bewahrt manuelle sowie bestätigte Ziele', () => {
+    const service = TestBed.inject(QuizStoreService);
+    const quiz = service.createQuiz({ name: 'Modellvorschläge' });
+    const question = service.addQuestion(quiz.id, {
+      text: 'Was ist Polymorphie?',
+      type: 'SINGLE_CHOICE',
+      difficulty: 'MEDIUM',
+      answers: [
+        { text: 'Viele Formen', isCorrect: true },
+        { text: 'Ein Datentyp', isCorrect: false },
+      ],
+    });
+    const manual = service.saveQuizLearningObjective(quiz.id, {
+      text: 'Eigenes Ziel',
+      scope: { kind: 'quiz-wide' },
+      confirmationState: 'confirmed',
+    });
+    const initialRevision = service.getLearningObjectiveBundle(quiz.id).revision;
+    const draft: LearningObjectiveDerivedDraft = {
+      id: '10000000-0000-4000-8000-000000000001',
+      revision: 0,
+      text: '**Polymorphie** an einem Beispiel erklären',
+      scope: { kind: 'question-set', sourceQuestionIds: [question.id] },
+      origin: {
+        kind: 'model-derived',
+        modelId: 'local-model',
+        modelVersion: '1',
+        derivationVersion: 'learning-objectives-v1',
+        derivedFromSourceQuestionIds: [question.id],
+        sourceDigest: 'a'.repeat(64),
+      },
+      confirmation: { state: 'draft' },
+      createdAt: '2026-10-05T10:00:00.000Z',
+      updatedAt: '2026-10-05T10:00:00.000Z',
+    };
+    const operationId = '20000000-0000-4000-8000-000000000001';
+
+    const [applied] = service.applyDerivedLearningObjectiveDrafts(
+      quiz.id,
+      initialRevision,
+      operationId,
+      [draft],
+    );
+    expect(applied).toEqual(
+      expect.objectContaining({
+        id: draft.id,
+        revision: 1,
+        confirmation: { state: 'draft' },
+        origin: expect.objectContaining({ kind: 'model-derived' }),
+      }),
+    );
+
+    const confirmed = service.saveQuizLearningObjective(
+      quiz.id,
+      {
+        text: 'Fachlich überarbeitete Polymorphie erklären',
+        scope: draft.scope,
+        confirmationState: 'confirmed',
+      },
+      { objectiveId: draft.id, expectedRevision: 1 },
+    );
+    const revisionAfterEdit = service.getLearningObjectiveBundle(quiz.id).revision;
+
+    const retry = service.applyDerivedLearningObjectiveDrafts(
+      quiz.id,
+      initialRevision,
+      operationId,
+      [draft],
+    );
+    const afterRetry = service.getLearningObjectiveBundle(quiz.id);
+    expect(afterRetry.revision).toBe(revisionAfterEdit);
+    expect(retry[0]).toEqual(confirmed);
+    expect(afterRetry.objectives).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: manual.id, origin: { kind: 'manual' } }),
+        expect.objectContaining({
+          id: draft.id,
+          text: 'Fachlich überarbeitete Polymorphie erklären',
+          confirmation: expect.objectContaining({ state: 'confirmed' }),
+        }),
+      ]),
+    );
+  });
+
+  it('wendet Modell-Entwürfe nur gegen den erwarteten Bundle-Stand an', () => {
+    const service = TestBed.inject(QuizStoreService);
+    const quiz = service.createQuiz({ name: 'Ableitungs-CAS' });
+    const question = service.addQuestion(quiz.id, {
+      text: 'Was ist Kapselung?',
+      type: 'SINGLE_CHOICE',
+      difficulty: 'EASY',
+      answers: [
+        { text: 'Ein Entwurfsprinzip', isCorrect: true },
+        { text: 'Ein Protokoll', isCorrect: false },
+      ],
+    });
+    const staleRevision = service.getLearningObjectiveBundle(quiz.id).revision;
+    service.saveQuizLearningObjective(quiz.id, {
+      text: 'Zwischenzeitlich manuell angelegt',
+      scope: { kind: 'quiz-wide' },
+      confirmationState: 'draft',
+    });
+    const draft: LearningObjectiveDerivedDraft = {
+      id: '30000000-0000-4000-8000-000000000001',
+      revision: 0,
+      text: 'Kapselung erklären',
+      scope: { kind: 'question-set', sourceQuestionIds: [question.id] },
+      origin: {
+        kind: 'model-derived',
+        modelId: 'local-model',
+        modelVersion: '1',
+        derivationVersion: 'learning-objectives-v1',
+        derivedFromSourceQuestionIds: [question.id],
+        sourceDigest: 'b'.repeat(64),
+      },
+      confirmation: { state: 'draft' },
+      createdAt: '2026-10-05T10:00:00.000Z',
+      updatedAt: '2026-10-05T10:00:00.000Z',
+    };
+
+    expect(() =>
+      service.applyDerivedLearningObjectiveDrafts(
+        quiz.id,
+        staleRevision,
+        '40000000-0000-4000-8000-000000000001',
+        [draft],
+      ),
+    ).toThrow(/während der automatischen Herleitung geändert/);
+    expect(service.getLearningObjectiveBundle(quiz.id).objectives).toHaveLength(1);
+  });
+
+  it('behandelt eine fremde oder manuelle ID-Kollision nicht als idempotente Wiederholung', () => {
+    const service = TestBed.inject(QuizStoreService);
+    const quiz = service.createQuiz({ name: 'Ableitungs-ID-Kollision' });
+    const question = service.addQuestion(quiz.id, {
+      text: 'Welche Kollision?',
+      type: 'SINGLE_CHOICE',
+      difficulty: 'EASY',
+      answers: [
+        { text: 'Keine', isCorrect: true },
+        { text: 'Eine fremde', isCorrect: false },
+      ],
+    });
+    const manual = service.saveQuizLearningObjective(quiz.id, {
+      text: 'Manuelles Ziel bleibt maßgeblich',
+      scope: { kind: 'quiz-wide' },
+      confirmationState: 'confirmed',
+    });
+    const revision = service.getLearningObjectiveBundle(quiz.id).revision;
+    const collidingDraft: LearningObjectiveDerivedDraft = {
+      id: manual.id,
+      revision: 0,
+      text: 'Fremder Vorschlag',
+      scope: { kind: 'question-set', sourceQuestionIds: [question.id] },
+      origin: {
+        kind: 'model-derived',
+        modelId: 'local-model',
+        modelVersion: '1',
+        derivationVersion: 'learning-objectives-v1',
+        derivedFromSourceQuestionIds: [question.id],
+        sourceDigest: 'e'.repeat(64),
+      },
+      confirmation: { state: 'draft' },
+      createdAt: '2026-10-05T10:00:00.000Z',
+      updatedAt: '2026-10-05T10:00:00.000Z',
+    };
+
+    expect(() =>
+      service.applyDerivedLearningObjectiveDrafts(
+        quiz.id,
+        revision,
+        '41000000-0000-4000-8000-000000000001',
+        [collidingDraft],
+      ),
+    ).toThrow(/nicht sicher zugeordnet/);
+    expect(service.getLearningObjectiveBundle(quiz.id)).toEqual(
+      expect.objectContaining({
+        revision,
+        objectives: [expect.objectContaining({ id: manual.id, text: manual.text })],
+      }),
+    );
+  });
+
+  it('verwirft denselben Modell-Origin mit verändertem Inhalt, solange der Entwurf unberührt ist', () => {
+    const service = TestBed.inject(QuizStoreService);
+    const quiz = service.createQuiz({ name: 'Ableitungs-Payload-Kollision' });
+    const question = service.addQuestion(quiz.id, {
+      text: 'Was ist unveränderlich?',
+      type: 'SINGLE_CHOICE',
+      difficulty: 'EASY',
+      answers: [
+        { text: 'Die ursprüngliche Ausgabe', isCorrect: true },
+        { text: 'Jede spätere Ausgabe', isCorrect: false },
+      ],
+    });
+    const expectedRevision = service.getLearningObjectiveBundle(quiz.id).revision;
+    const draft: LearningObjectiveDerivedDraft = {
+      id: '42000000-0000-4000-8000-000000000001',
+      revision: 0,
+      text: 'Die ursprüngliche Ausgabe erklären',
+      scope: { kind: 'question-set', sourceQuestionIds: [question.id] },
+      origin: {
+        kind: 'model-derived',
+        modelId: 'local-model',
+        modelVersion: '1',
+        derivationVersion: 'learning-objectives-v1',
+        derivedFromSourceQuestionIds: [question.id],
+        sourceDigest: 'f'.repeat(64),
+      },
+      confirmation: { state: 'draft' },
+      createdAt: '2026-10-05T10:00:00.000Z',
+      updatedAt: '2026-10-05T10:00:00.000Z',
+    };
+    service.applyDerivedLearningObjectiveDrafts(
+      quiz.id,
+      expectedRevision,
+      '43000000-0000-4000-8000-000000000001',
+      [draft],
+    );
+    const beforeCollision = service.getLearningObjectiveBundle(quiz.id);
+
+    expect(() =>
+      service.applyDerivedLearningObjectiveDrafts(
+        quiz.id,
+        expectedRevision,
+        '43000000-0000-4000-8000-000000000001',
+        [{ ...draft, text: 'Eine abweichende Ausgabe mit derselben ID' }],
+      ),
+    ).toThrow(/nicht sicher zugeordnet/);
+    expect(service.getLearningObjectiveBundle(quiz.id)).toEqual(beforeCollision);
   });
 
   it('markiert modellabgeleitete Ziele nur bei semantischen Quellenänderungen als prüfbedürftig', () => {

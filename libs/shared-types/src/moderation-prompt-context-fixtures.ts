@@ -496,6 +496,100 @@ export const MODERATION_PROMPT_CONTEXT_REFERENCE_FIXTURE_V1 = {
 } satisfies ModerationPromptContextV1;
 
 /**
+ * Ablation fixture for “texts plus question metadata”. It deliberately keeps
+ * the same six question texts/rankings while making every higher-level module
+ * explicit and unavailable. Together with the text array and full fixture it
+ * supports a controlled text-only → metadata → full-context comparison.
+ */
+export const MODERATION_PROMPT_CONTEXT_METADATA_FIXTURE_V1 = {
+  ...MODERATION_PROMPT_CONTEXT_REFERENCE_FIXTURE_V1,
+  snapshotHash: 'cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
+  context: {
+    ...MODERATION_PROMPT_CONTEXT_REFERENCE_FIXTURE_V1.context,
+    meta: {
+      ...MODERATION_PROMPT_CONTEXT_REFERENCE_FIXTURE_V1.context.meta,
+      sourceRevision: 'metadata-fixture-r1',
+      revisions: {
+        ...MODERATION_PROMPT_CONTEXT_REFERENCE_FIXTURE_V1.context.meta.revisions,
+        topics: { state: 'not-applicable', reason: 'Themen sind in dieser Ablation ausgenommen.' },
+        learningObjectives: {
+          state: 'not-applicable',
+          reason: 'Lernziele sind in dieser Ablation ausgenommen.',
+        },
+        releasedResults: {
+          state: 'not-applicable',
+          reason: 'Quizaggregate sind in dieser Ablation ausgenommen.',
+        },
+        feedback: {
+          state: 'not-applicable',
+          reason: 'Feedback ist in dieser Ablation ausgenommen.',
+        },
+      },
+    },
+    scope: {
+      ...MODERATION_PROMPT_CONTEXT_REFERENCE_FIXTURE_V1.context.scope,
+      channels: ['qa'],
+      selectionLimits: {
+        questions: 40,
+        topics: 0,
+        compassSignals: 0,
+        learningObjectives: 0,
+        resultAggregates: 0,
+        feedbackAggregates: 0,
+      },
+    },
+    questions: {
+      ...MODERATION_PROMPT_CONTEXT_REFERENCE_FIXTURE_V1.context.questions,
+      items: MODERATION_PROMPT_CONTEXT_REFERENCE_FIXTURE_V1.context.questions.items.map(
+        (question) => ({ ...question, topicSourceIds: [] }),
+      ),
+    },
+    topics: { state: 'not-applicable', reason: 'Themen sind in dieser Ablation ausgenommen.' },
+    compass: {
+      state: 'not-applicable',
+      reason: 'Kompasssignale sind in dieser Ablation ausgenommen.',
+    },
+    learningContext: {
+      state: 'not-applicable',
+      reason: 'Lernziele sind in dieser Ablation ausgenommen.',
+    },
+    releasedResults: {
+      state: 'not-applicable',
+      reason: 'Quizaggregate sind in dieser Ablation ausgenommen.',
+    },
+    feedback: {
+      state: 'not-applicable',
+      reason: 'Feedback ist in dieser Ablation ausgenommen.',
+    },
+    sources: MODERATION_PROMPT_CONTEXT_REFERENCE_FIXTURE_V1.context.sources.filter(
+      (source) => source.kind === 'qa-question',
+    ),
+    limitations: [
+      {
+        code: 'module-unavailable',
+        section: 'topics',
+        detail: 'Ablation enthält bewusst keine Themenmetadaten.',
+      },
+      {
+        code: 'module-unavailable',
+        section: 'compass',
+        detail: 'Ablation enthält bewusst keine Kompasssignale.',
+      },
+      {
+        code: 'module-unavailable',
+        section: 'learning-context',
+        detail: 'Ablation enthält bewusst keine Lernziele.',
+      },
+    ],
+  },
+  budget: {
+    ...MODERATION_PROMPT_CONTEXT_REFERENCE_FIXTURE_V1.budget,
+    dataTokens: 1200,
+    packedInputTokens: 2300,
+  },
+} satisfies ModerationPromptContextV1;
+
+/**
  * Valid small context. A computed score of 0 remains distinct from an
  * unavailable metric, while all non-Q&A modules carry explicit states.
  */

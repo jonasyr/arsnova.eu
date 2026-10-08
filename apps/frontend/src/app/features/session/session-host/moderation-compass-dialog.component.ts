@@ -10,10 +10,16 @@ import {
 import { MatIcon } from '@angular/material/icon';
 import {
   canRequestQaSummary,
+  parseQaSummaryQuestionSourceId,
   shouldShowQaSummaryCard,
   sortQaSummaryStatementsByImportance,
+  type ModerationPromptSection,
+  type QaSummaryContextPreviewDTO,
+  type QaSummaryPresentationSourceKind,
+  type QaSummaryPresentationSourceV2,
   type QaSummaryResult,
-  type QaSummaryRuntimeDTO,
+  type QaSummaryResultV2,
+  type QaSummaryRuntimeCompatibleDTO,
   type QaSummarySource,
 } from '@arsnova/shared-types';
 import { ModerationCompassIconComponent } from './moderation-compass-icon.component';
@@ -42,15 +48,30 @@ function normalizeSummaryNotice(text: string): string {
   return text.trim().replace(/\s+/g, ' ').toLocaleLowerCase('de-DE');
 }
 
+type CompatibleQaSummaryResult = QaSummaryResult | QaSummaryResultV2;
+type CompatibleQaSummarySource = QaSummarySource | QaSummaryPresentationSourceV2;
+type SummaryPreviewState =
+  | { readonly status: 'idle' }
+  | { readonly status: 'pending' }
+  | { readonly status: 'ready'; readonly preview: QaSummaryContextPreviewDTO }
+  | { readonly status: 'failed' };
+
+type SummaryPreviewSectionRow = Readonly<{
+  section: ModerationPromptSection;
+  state: string;
+  count: string;
+}>;
+
 export type ModerationCompassDialogData = {
   cards: () => readonly ModerationCompassCard[];
   analysisMode?: ModerationCompassAnalysisMode;
   onSourceActivate?: (source: ModerationCompassSource, cardKind: ModerationCompassCardKind) => void;
   summaryEnabled?: () => boolean;
   summaryVisibleQuestionCount?: () => number;
-  summary?: () => QaSummaryRuntimeDTO | null;
+  summary?: () => QaSummaryRuntimeCompatibleDTO | null;
   onRequestSummary?: () => void;
   onSummarySourceActivate?: (source: QaSummarySource) => void;
+  onRequestSummaryContextPreview?: () => Promise<QaSummaryContextPreviewDTO>;
   /** Aktuelle Q&A-Sortierung für kontextbezogene Extra-Quellen-Labels. */
   qaSortMode?: () => ModerationCompassSortMode;
   /** True, wenn die Q&A-Wortwolken-Glättung aktiv und aktuell ist. */
@@ -93,11 +114,16 @@ export class ModerationCompassDialogComponent {
   readonly summaryRuntime = computed(() => this.data.summary?.() ?? null);
   readonly summaryResult = computed(() => this.summaryRuntime()?.result ?? null);
   readonly summaryPending = computed(() => this.summaryResult()?.status === 'pending');
+  readonly summaryV2Available = computed(() => {
+    const runtime = this.summaryRuntime();
+    return runtime !== null && 'schemaVersion' in runtime && runtime.schemaVersion === 2;
+  });
   readonly showSummaryCard = computed(() => {
     const runtime = this.summaryRuntime();
     return shouldShowQaSummaryCard({
       enabled: this.summaryEnabled(),
       inferenceConfigured: runtime?.inferenceConfigured === true,
+      fallbackAvailable: this.summaryV2Available(),
       visibleQuestionCount: this.data.summaryVisibleQuestionCount?.() ?? 0,
       resultStatus: runtime?.result?.status ?? null,
     });
@@ -107,10 +133,12 @@ export class ModerationCompassDialogComponent {
     return canRequestQaSummary({
       enabled: this.summaryEnabled(),
       inferenceConfigured: runtime?.inferenceConfigured === true,
+      fallbackAvailable: this.summaryV2Available(),
       visibleQuestionCount: this.data.summaryVisibleQuestionCount?.() ?? 0,
     });
   });
   readonly summaryRevealed = signal(false);
+  readonly summaryPreviewState = signal<SummaryPreviewState>({ status: 'idle' });
   readonly showSummaryNextSteps = computed(() => {
     const result = this.summaryResult();
     return (
@@ -144,7 +172,7 @@ export class ModerationCompassDialogComponent {
     return splitModerationSummaryLead(text, this.summaryResult()?.locale ?? 'de');
   }
 
-  summaryStatements(result: QaSummaryResult): QaSummaryResult['statements'] {
+  summaryStatements(result: CompatibleQaSummaryResult): CompatibleQaSummaryResult['statements'] {
     return sortQaSummaryStatementsByImportance(
       result.statements,
       result.sources.map((source) => source.id),
@@ -189,8 +217,23 @@ export class ModerationCompassDialogComponent {
     return replaceEmojiShortcodes(label);
   }
 
-  summarySourceDestinationLabel(): string {
-    return this.destinationLabel('qa');
+  summarySourceDestinationLabel(source: CompatibleQaSummarySource): string {
+    switch (source.kind) {
+      case 'semantic-topic':
+        return $localize`:@@sessionHost.moderationSummarySourceTopic:Thema`;
+      case 'quiz-question':
+        return this.destinationLabel('quiz');
+      case 'learning-objective':
+        return $localize`:@@sessionHost.moderationSummarySourceObjective:Lernziel`;
+      case 'quiz-result-aggregate':
+        return $localize`:@@sessionHost.moderationSummarySourceQuizResult:Quiz-Ergebnis`;
+      case 'feedback-aggregate':
+        return this.destinationLabel('quickFeedback');
+      case 'compass-signal':
+        return $localize`:@@sessionHost.moderationSummarySourceCompass:Kompass`;
+      default:
+        return this.destinationLabel('qa');
+    }
   }
 
   sourceJumpAria(source: ModerationCompassSource): string {
@@ -198,12 +241,16 @@ export class ModerationCompassDialogComponent {
     return $localize`:@@sessionHost.moderationSourceOpenAria:Öffnet ${destination}:destination:: ${this.displaySourceLabel(source.label)}:label:`;
   }
 
-  summarySourceJumpAria(source: QaSummarySource): string {
-    const destination = this.summarySourceDestinationLabel();
+  summarySourceJumpAria(source: CompatibleQaSummarySource): string {
+    const destination = this.summarySourceDestinationLabel(source);
     return $localize`:@@sessionHost.moderationSummarySourceOpenAria:Öffnet ${destination}:destination:: ${this.displaySourceLabel(source.label)}:label:`;
   }
 
-  summarySourcesToggleLabel(count: number): string {
+  summarySourcesToggleLabel(result: CompatibleQaSummaryResult): string {
+    const count = result.sources.length;
+    if ('schemaVersion' in result) {
+      return $localize`:@@sessionHost.moderationSummaryEvidenceToggle:Belege (${count}:count:)`;
+    }
     return $localize`:@@sessionHost.moderationSummarySourcesToggle:Zugehörige Fragen (${count}:count:)`;
   }
 
@@ -215,7 +262,14 @@ export class ModerationCompassDialogComponent {
     this.dialogRef.close();
   }
 
-  activateSummarySource(source: QaSummarySource): void {
+  isQaQuestionSummarySource(source: CompatibleQaSummarySource): source is QaSummarySource {
+    return source.kind === 'qa-question' && parseQaSummaryQuestionSourceId(source.id) !== null;
+  }
+
+  activateSummarySource(source: CompatibleQaSummarySource): void {
+    if (!this.isQaQuestionSummarySource(source)) {
+      return;
+    }
     this.data.onSummarySourceActivate?.(source);
     this.dialogRef.close();
   }
@@ -230,7 +284,7 @@ export class ModerationCompassDialogComponent {
     }
   }
 
-  summaryStatusText(result: QaSummaryResult | null): string | null {
+  summaryStatusText(result: CompatibleQaSummaryResult | null): string | null {
     if (!result) {
       return null;
     }
@@ -247,7 +301,7 @@ export class ModerationCompassDialogComponent {
     return specific ?? generic;
   }
 
-  summaryLimitations(result: QaSummaryResult): readonly string[] {
+  summaryLimitations(result: CompatibleQaSummaryResult): readonly string[] {
     const skip = new Set(
       [this.summaryStatusText(result), this.genericSummaryStatus(result.status)]
         .filter((item): item is string => Boolean(item))
@@ -258,7 +312,7 @@ export class ModerationCompassDialogComponent {
       .filter((item) => !skip.has(normalizeSummaryNotice(item)));
   }
 
-  private genericSummaryStatus(status: QaSummaryResult['status']): string | null {
+  private genericSummaryStatus(status: CompatibleQaSummaryResult['status']): string | null {
     switch (status) {
       case 'pending':
         return $localize`:@@sessionHost.moderationSummaryPending:Die Zusammenfassung wird erstellt.`;
@@ -269,6 +323,131 @@ export class ModerationCompassDialogComponent {
       default:
         return null;
     }
+  }
+
+  async requestSummaryContextPreview(): Promise<void> {
+    if (this.summaryPreviewState().status === 'pending') {
+      return;
+    }
+    const request = this.data.onRequestSummaryContextPreview;
+    if (!request) {
+      this.summaryPreviewState.set({ status: 'failed' });
+      return;
+    }
+    this.summaryPreviewState.set({ status: 'pending' });
+    try {
+      const preview = await request();
+      this.summaryPreviewState.set({ status: 'ready', preview });
+    } catch {
+      this.summaryPreviewState.set({ status: 'failed' });
+    }
+  }
+
+  previewSectionRows(preview: QaSummaryContextPreviewDTO): readonly SummaryPreviewSectionRow[] {
+    const context = preview.promptContext.context;
+    const questionCount =
+      context.questions.state === 'available'
+        ? `${context.questions.corpus.represented} / ${context.questions.corpus.total}`
+        : '—';
+    return [
+      {
+        section: 'questions',
+        state: context.questions.state,
+        count: questionCount,
+      },
+      {
+        section: 'topics',
+        state: context.topics.state,
+        count: context.topics.state === 'available' ? String(context.topics.items.length) : '—',
+      },
+      {
+        section: 'compass',
+        state: context.compass.state,
+        count: context.compass.state === 'available' ? String(context.compass.signals.length) : '—',
+      },
+      {
+        section: 'learning-context',
+        state: context.learningContext.state,
+        count:
+          context.learningContext.state === 'available'
+            ? String(context.learningContext.objectives.length)
+            : '—',
+      },
+      {
+        section: 'released-results',
+        state: context.releasedResults.state,
+        count:
+          context.releasedResults.state === 'available'
+            ? String(context.releasedResults.aggregates.length)
+            : '—',
+      },
+      {
+        section: 'feedback',
+        state: context.feedback.state,
+        count:
+          context.feedback.state === 'available' ? String(context.feedback.aggregates.length) : '—',
+      },
+    ];
+  }
+
+  previewSourceGroups(
+    preview: QaSummaryContextPreviewDTO,
+  ): readonly { kind: QaSummaryPresentationSourceKind; count: number }[] {
+    const counts = new Map<QaSummaryPresentationSourceKind, number>();
+    for (const source of preview.promptContext.context.sources) {
+      counts.set(source.kind, (counts.get(source.kind) ?? 0) + 1);
+    }
+    return [...counts.entries()].map(([kind, count]) => ({ kind, count }));
+  }
+
+  previewSourceKindLabel(kind: QaSummaryPresentationSourceKind): string {
+    return this.summarySourceDestinationLabel({ id: kind, kind, label: kind });
+  }
+
+  previewSectionLabel(section: ModerationPromptSection): string {
+    switch (section) {
+      case 'questions':
+        return $localize`:@@sessionHost.moderationPreviewSectionQuestions:Fragen`;
+      case 'topics':
+        return $localize`:@@sessionHost.moderationPreviewSectionTopics:Themen`;
+      case 'compass':
+        return $localize`:@@sessionHost.moderationPreviewSectionCompass:Kompasssignale`;
+      case 'learning-context':
+        return $localize`:@@sessionHost.moderationPreviewSectionLearning:Lernkontext`;
+      case 'released-results':
+        return $localize`:@@sessionHost.moderationPreviewSectionResults:Freigegebene Ergebnisse`;
+      case 'feedback':
+        return $localize`:@@sessionHost.moderationPreviewSectionFeedback:Blitzlicht`;
+    }
+  }
+
+  previewStateLabel(state: string): string {
+    switch (state) {
+      case 'available':
+        return $localize`:@@sessionHost.moderationPreviewStateAvailable:verfügbar`;
+      case 'disabled':
+        return $localize`:@@sessionHost.moderationPreviewStateDisabled:deaktiviert`;
+      case 'pending':
+        return $localize`:@@sessionHost.moderationPreviewStatePending:ausstehend`;
+      case 'failed':
+        return $localize`:@@sessionHost.moderationPreviewStateFailed:fehlgeschlagen`;
+      case 'not-released':
+        return $localize`:@@sessionHost.moderationPreviewStateNotReleased:nicht freigegeben`;
+      case 'not-applicable':
+        return $localize`:@@sessionHost.moderationPreviewStateNotApplicable:nicht zutreffend`;
+      default:
+        return $localize`:@@sessionHost.moderationPreviewStateUnavailable:nicht verfügbar`;
+    }
+  }
+
+  previewModeLabel(preview: QaSummaryContextPreviewDTO): string {
+    if (preview.selectedMode === 'full-context') {
+      return $localize`:@@sessionHost.moderationPreviewModeFullContext:Vollständiger Kontext`;
+    }
+    if (preview.selectedMode === 'legacy-text') {
+      return $localize`:@@sessionHost.moderationPreviewModeLegacy:Legacy-Text`;
+    }
+    return $localize`:@@sessionHost.moderationPreviewModeExtractive:Lokaler extraktiver Fallback`;
   }
 
   cardTitle(card: ModerationCompassCard): string {
