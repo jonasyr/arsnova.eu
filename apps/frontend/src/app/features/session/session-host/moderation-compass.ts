@@ -114,6 +114,7 @@ export type ModerationCompassTerm = {
   readonly sourceCount: number;
   readonly memberTexts: readonly string[];
   readonly memberSourceIds?: readonly string[];
+  readonly questionId?: string;
   readonly sortMode?: ModerationCompassSortMode;
   readonly analysisVariant?: ModerationCompassAnalysisVariant;
 };
@@ -342,7 +343,7 @@ export function rememberModerationQuizSnapshot(
 ): readonly ModerationCompassQuizSourceCacheEntry[] {
   const nextSources = sources
     .filter((source) => source.label.trim().length > 0)
-    .map(withDefaultSourceTarget)
+    .map((source) => withQuizQuestionTarget(source, questionId))
     .slice(0, MODERATION_COMPASS_STORED_SOURCE_COUNT);
   const next =
     nextSources.length === 0
@@ -372,7 +373,10 @@ function quizSourceCacheEquals(
       entry.questionId === other.questionId &&
       entry.sources.length === other.sources.length &&
       entry.sources.every(
-        (source, sourceIndex) => source.label === other.sources[sourceIndex]?.label,
+        (source, sourceIndex) =>
+          source.label === other.sources[sourceIndex]?.label &&
+          JSON.stringify(source.target ?? null) ===
+            JSON.stringify(other.sources[sourceIndex]?.target ?? null),
       )
     );
   });
@@ -399,15 +403,31 @@ export function mergeModerationQuizSources(
   };
 
   for (const source of current) {
-    push(source);
+    push(currentQuestionId ? withQuizQuestionTarget(source, currentQuestionId) : source);
   }
   for (const entry of cached) {
     if (entry.questionId === currentQuestionId) {
       continue;
     }
-    push(entry.sources[0]);
+    const firstSource = entry.sources[0];
+    if (firstSource) {
+      push(withQuizQuestionTarget(firstSource, entry.questionId));
+    }
   }
   return merged;
+}
+
+function withQuizQuestionTarget(
+  source: ModerationCompassSource,
+  questionId: string,
+): ModerationCompassSource {
+  if (source.kind !== 'quiz-result') {
+    return withDefaultSourceTarget(source);
+  }
+  return {
+    ...source,
+    target: { ...(source.target ?? { channel: 'quiz' }), channel: 'quiz', questionId },
+  };
 }
 
 function withDefaultSourceTarget(source: ModerationCompassSource): ModerationCompassSource {
@@ -462,6 +482,7 @@ function termSource(
       ...(memberTexts.length > 0 ? { memberTexts } : {}),
       ...(memberIds[0] ? { questionId: memberIds[0] } : {}),
       ...(memberIds.length > 0 ? { questionIds: memberIds } : {}),
+      ...(kind === 'freetext-term' && term.questionId ? { questionId: term.questionId } : {}),
       ...(term.sortMode ? { sortMode: term.sortMode } : {}),
       ...(term.analysisVariant ? { analysisVariant: term.analysisVariant } : {}),
     },

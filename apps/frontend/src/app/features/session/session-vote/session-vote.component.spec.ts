@@ -6038,6 +6038,153 @@ describe('SessionVoteComponent', { timeout: 30_000 }, () => {
     fixture.destroy();
   });
 
+  it('legt beim direkten Einstieg ins offene Blitzlicht vor der ersten Stimme eine Teilnahme an', async () => {
+    localStorage.removeItem('arsnova-participant-ABC123');
+    getInfoQueryMock.mockResolvedValue({
+      id: '6a8edced-5f8f-4cfa-9176-454fac9570ad',
+      serverTime: MOCK_SERVER_TIME,
+      code: 'ABC123',
+      type: 'QUIZ',
+      status: 'ACTIVE',
+      quizName: null,
+      title: null,
+      participantCount: 1,
+      anonymousMode: true,
+      allowCustomNicknames: false,
+      channels: {
+        quiz: { enabled: false },
+        qa: { enabled: false, open: false, title: null, moderationMode: false },
+        quickFeedback: { enabled: true, open: true },
+      },
+    });
+    joinMutateMock.mockResolvedValue({
+      id: '6a8edced-5f8f-4cfa-9176-454fac9570ad',
+      participantId: '22222222-2222-4222-8222-222222222222',
+      participantNickname: 'Teilnehmende 2',
+      rejoinToken: 'participant-capability-abcdefghijklmnopqrstuvwxyz',
+      productFeedbackClaimToken: 'product-feedback-claim-abcdefghijklmnopqrstuvwxyz',
+      enableTimerAccommodation: false,
+      teamId: null,
+      teamName: null,
+    });
+    currentQuestionQueryMock.mockResolvedValue(null);
+    quickFeedbackResultsQueryMock.mockResolvedValue({
+      type: 'MOOD',
+      locked: false,
+      totalVotes: 0,
+      distribution: { POSITIVE: 0, NEUTRAL: 0, NEGATIVE: 0 },
+      currentRound: 1,
+    });
+
+    const fixture = TestBed.createComponent(SessionVoteComponent);
+    fixture.detectChanges();
+    await flushComponentAfterStable(fixture, 50);
+    fixture.detectChanges();
+
+    expect(joinMutateMock).toHaveBeenCalledTimes(1);
+    expect(fixture.componentInstance.participantId()).toBe('22222222-2222-4222-8222-222222222222');
+    expect(localStorage.getItem('arsnova-participant-ABC123')).toBe(
+      '22222222-2222-4222-8222-222222222222',
+    );
+    expect(localStorage.getItem('arsnova-participant-capability-ABC123')).toBe(
+      'participant-capability-abcdefghijklmnopqrstuvwxyz',
+    );
+
+    const feedbackVote = fixture.debugElement.query(By.directive(FeedbackVoteComponent))
+      .componentInstance as FeedbackVoteComponent;
+    await feedbackVote.vote('POSITIVE');
+
+    expect(quickFeedbackVoteMutateMock).toHaveBeenCalledWith({
+      sessionCode: 'ABC123',
+      voterId: '22222222-2222-4222-8222-222222222222',
+      value: 'POSITIVE',
+    });
+    fixture.destroy();
+  });
+
+  it('zeigt nach fehlgeschlagener Blitzlicht-Teilnahme einen Retry und stellt die Abstimmung wieder her', async () => {
+    localStorage.removeItem('arsnova-participant-ABC123');
+    getInfoQueryMock.mockResolvedValue({
+      id: '6a8edced-5f8f-4cfa-9176-454fac9570ad',
+      serverTime: MOCK_SERVER_TIME,
+      code: 'ABC123',
+      type: 'QUIZ',
+      status: 'ACTIVE',
+      quizName: null,
+      title: null,
+      participantCount: 1,
+      anonymousMode: true,
+      allowCustomNicknames: false,
+      channels: {
+        quiz: { enabled: false },
+        qa: { enabled: false, open: false, title: null, moderationMode: false },
+        quickFeedback: { enabled: true, open: true },
+      },
+    });
+    currentQuestionQueryMock.mockResolvedValue(null);
+    quickFeedbackResultsQueryMock.mockResolvedValue({
+      type: 'MOOD',
+      locked: false,
+      totalVotes: 0,
+      distribution: { POSITIVE: 0, NEUTRAL: 0, NEGATIVE: 0 },
+      currentRound: 1,
+    });
+    joinMutateMock.mockRejectedValueOnce(new Error('temporarily unavailable'));
+
+    const fixture = TestBed.createComponent(SessionVoteComponent);
+    fixture.detectChanges();
+    await flushComponentAfterStable(fixture, 50);
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.quickFeedbackIdentityError()).toBe(
+      'Abstimmung fehlgeschlagen.',
+    );
+    expect(fixture.debugElement.query(By.directive(FeedbackVoteComponent))).toBeNull();
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('Erneut versuchen');
+
+    const retryResult = {
+      id: '6a8edced-5f8f-4cfa-9176-454fac9570ad',
+      participantId: '22222222-2222-4222-8222-222222222222',
+      participantNickname: 'Teilnehmende 2',
+      rejoinToken: 'participant-capability-abcdefghijklmnopqrstuvwxyz',
+      productFeedbackClaimToken: 'product-feedback-claim-abcdefghijklmnopqrstuvwxyz',
+      enableTimerAccommodation: false,
+      teamId: null,
+      teamName: null,
+    };
+    let resolveRetry!: (value: typeof retryResult) => void;
+    joinMutateMock.mockReturnValue(
+      new Promise<typeof retryResult>((resolve) => {
+        resolveRetry = resolve;
+      }),
+    );
+    const retryPromise = fixture.componentInstance.retryQuickFeedbackParticipantIdentity();
+    await Promise.resolve();
+    fixture.detectChanges();
+
+    const retryButton = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+      '[data-testid="quick-feedback-identity-retry"]',
+    );
+    expect(fixture.componentInstance.quickFeedbackIdentityPending()).toBe(true);
+    expect(retryButton?.disabled).toBe(true);
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('Wird geladen…');
+
+    resolveRetry(retryResult);
+    await retryPromise;
+    fixture.detectChanges();
+    await flushComponentAfterStable(fixture, 50);
+    fixture.detectChanges();
+
+    expect(joinMutateMock).toHaveBeenCalledTimes(2);
+    expect(fixture.componentInstance.quickFeedbackIdentityPending()).toBe(false);
+    expect(fixture.componentInstance.quickFeedbackIdentityError()).toBeNull();
+    expect(fixture.debugElement.query(By.directive(FeedbackVoteComponent))).not.toBeNull();
+    expect((fixture.nativeElement as HTMLElement).querySelector('.feedback-vote__mood-btn')).toBe(
+      document.activeElement,
+    );
+    fixture.destroy();
+  });
+
   it('zeigt im Q&A-Tab einen Geschlossen-Hinweis statt Eingabeformular', async () => {
     getInfoQueryMock.mockResolvedValue({
       id: '6a8edced-5f8f-4cfa-9176-454fac9570ad',
@@ -6474,7 +6621,7 @@ describe('SessionVoteComponent', { timeout: 30_000 }, () => {
       distribution: { SPEED_UP: 0, FOLLOWING: 0, SLOW_DOWN: 0, LOST: 0 },
       currentRound: 1,
     });
-    localStorage.setItem('arsnova-participant-ABC123', 'participant-tempo-1');
+    localStorage.setItem('arsnova-participant-ABC123', '11111111-1111-4111-8111-111111111111');
 
     const fixture = TestBed.createComponent(SessionVoteComponent);
     const component = fixture.componentInstance;
@@ -6482,7 +6629,7 @@ describe('SessionVoteComponent', { timeout: 30_000 }, () => {
     await flushComponentAfterStable(fixture, 50);
 
     component.status.set('ACTIVE');
-    component.participantId.set('participant-tempo-1');
+    component.participantId.set('11111111-1111-4111-8111-111111111111');
     component.sessionSettings.set({
       id: '6a8edced-5f8f-4cfa-9176-454fac9570ad',
       code: 'ABC123',
@@ -6553,7 +6700,7 @@ describe('SessionVoteComponent', { timeout: 30_000 }, () => {
       distribution: { SPEED_UP: 0, FOLLOWING: 0, SLOW_DOWN: 0, LOST: 0 },
       currentRound: 1,
     });
-    localStorage.setItem('arsnova-participant-ABC123', 'participant-tempo-lobby');
+    localStorage.setItem('arsnova-participant-ABC123', '22222222-2222-4222-8222-222222222222');
 
     const fixture = TestBed.createComponent(SessionVoteComponent);
     const component = fixture.componentInstance;
@@ -6561,7 +6708,7 @@ describe('SessionVoteComponent', { timeout: 30_000 }, () => {
     await flushComponentAfterStable(fixture, 50);
 
     component.status.set('LOBBY');
-    component.participantId.set('participant-tempo-lobby');
+    component.participantId.set('22222222-2222-4222-8222-222222222222');
     component.sessionSettings.set({
       id: '6a8edced-5f8f-4cfa-9176-454fac9570ad',
       code: 'ABC123',
@@ -6616,7 +6763,7 @@ describe('SessionVoteComponent', { timeout: 30_000 }, () => {
       distribution: { SPEED_UP: 0, FOLLOWING: 0, SLOW_DOWN: 0, LOST: 0 },
       currentRound: 1,
     });
-    localStorage.setItem('arsnova-participant-ABC123', 'participant-tempo-2');
+    localStorage.setItem('arsnova-participant-ABC123', '33333333-3333-4333-8333-333333333333');
 
     const fixture = TestBed.createComponent(SessionVoteComponent);
     const component = fixture.componentInstance;
@@ -6624,7 +6771,7 @@ describe('SessionVoteComponent', { timeout: 30_000 }, () => {
     await flushComponentAfterStable(fixture, 50);
 
     component.status.set('ACTIVE');
-    component.participantId.set('participant-tempo-2');
+    component.participantId.set('33333333-3333-4333-8333-333333333333');
     component.sessionSettings.set({
       id: '6a8edced-5f8f-4cfa-9176-454fac9570ad',
       code: 'ABC123',
@@ -6687,7 +6834,7 @@ describe('SessionVoteComponent', { timeout: 30_000 }, () => {
       distribution: { SPEED_UP: 0, FOLLOWING: 0, SLOW_DOWN: 0, LOST: 0 },
       currentRound: 1,
     });
-    localStorage.setItem('arsnova-participant-ABC123', 'participant-tempo-3');
+    localStorage.setItem('arsnova-participant-ABC123', '44444444-4444-4444-8444-444444444444');
 
     const fixture = TestBed.createComponent(SessionVoteComponent);
     const component = fixture.componentInstance;
@@ -6695,7 +6842,7 @@ describe('SessionVoteComponent', { timeout: 30_000 }, () => {
     await flushComponentAfterStable(fixture, 50);
 
     component.status.set('ACTIVE');
-    component.participantId.set('participant-tempo-3');
+    component.participantId.set('44444444-4444-4444-8444-444444444444');
     component.sessionSettings.set({
       id: '6a8edced-5f8f-4cfa-9176-454fac9570ad',
       code: 'ABC123',

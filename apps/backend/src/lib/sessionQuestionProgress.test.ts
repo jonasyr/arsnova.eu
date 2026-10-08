@@ -93,13 +93,16 @@ describe('sessionQuestionProgress', () => {
     let progress = markSessionQuestionCompleted({}, questions[0].id, at);
     progress = markSessionQuestionCompleted(progress, questions[1].id, at);
     progress = markSessionQuestionCompleted(progress, questions[2].id, at);
-    progress = markSessionQuestionCompleted(progress, questions[3].id, at);
 
     expect(findFollowingQuestionIndex(questions, progress, true, 0, false)).toBe(1);
     expect(findFollowingQuestionIndex(questions, progress, true, 1, false)).toBe(2);
     expect(findFollowingQuestionIndex(questions, progress, true, 3, false)).toBeNull();
+    expect(findFollowingQuestionIndex(questions, progress, true, 0, true)).toBe(3);
     expect(findFollowingQuestionIndex(questions, progress, true, 1, true)).toBe(3);
-    expect(findFollowingQuestionIndex(questions, progress, true, 2, true)).toBeNull();
+    expect(findFollowingQuestionIndex(questions, progress, true, 2, true)).toBe(3);
     expect(findFollowingQuestionIndex(questions, progress, true, 3, true)).toBeNull();
+
+    progress = markSessionQuestionCompleted(progress, questions[3].id, at);
+    expect(findFollowingQuestionIndex(questions, progress, true, 0, true)).toBeNull();
   });
 });

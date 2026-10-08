@@ -25,7 +25,6 @@ const DESKTOP = { width: 1440, height: 1000 };
 const MOBILE = { width: 430, height: 932 };
 const HOST_TOKEN_STORAGE_PREFIX = 'arsnova-host-token:';
 const HOST_BROWSER_CAPABILITY_PREFIX = 'arsnova-host-browser-capability';
-const HOST_RECOVERY_CARD_PREFIX = 'arsnova-host-recovery-card';
 const PARTICIPANT_NAME = 'Epic405TN';
 const QUESTION_TEXT = 'Können wir die Q&A-Frist noch einmal erklären?';
 const RANKED_QUESTIONS = {
@@ -39,6 +38,27 @@ function logStep(ok, label, detail = '') {
   const prefix = ok ? 'OK ' : 'FEHLER ';
   const suffix = detail ? ` — ${detail}` : '';
   console.log(`${prefix}${label}${suffix}`);
+}
+
+function attachHostPageGuards(page) {
+  page.on('dialog', (dialog) => {
+    void dialog.accept().catch(() => undefined);
+  });
+}
+
+async function closeHostContext(page, context) {
+  await page
+    .evaluate(() => {
+      globalThis.onbeforeunload = null;
+    })
+    .catch(() => undefined);
+  await page.close({ runBeforeUnload: false }).catch(() => undefined);
+  await Promise.race([
+    context.close(),
+    new Promise((resolve) => {
+      setTimeout(resolve, 5_000);
+    }),
+  ]);
 }
 
 function createTrpcClient(hostToken, participantCapability) {
@@ -107,39 +127,98 @@ async function createConfiguredQaSession() {
 
 async function seedHostBrowser(context, session) {
   await context.addInitScript(
-    ({ browserCapability, card, code, hostToken, prefixes }) => {
+    ({ browserCapability, code, hostToken, prefixes }) => {
       globalThis.sessionStorage.setItem(`${prefixes.token}${code}`, hostToken);
       if (browserCapability) {
         globalThis.localStorage.setItem(`${prefixes.capability}-${code}`, browserCapability);
       }
-      if (card) {
-        globalThis.sessionStorage.setItem(`${prefixes.card}-${code}`, JSON.stringify(card));
-      }
     },
     {
       browserCapability: session.hostBrowserCapability,
-      card: session.hostRecoveryCard,
       code: session.code,
       hostToken: session.hostToken,
       prefixes: {
         token: HOST_TOKEN_STORAGE_PREFIX,
         capability: HOST_BROWSER_CAPABILITY_PREFIX,
-        card: HOST_RECOVERY_CARD_PREFIX,
       },
     },
   );
 }
 
+async function hostPageDiagnostics(page) {
+  return page.evaluate(() => {
+    const testIds = [...document.querySelectorAll('[data-testid]')]
+      .map((el) => el.getAttribute('data-testid'))
+      .filter(Boolean)
+      .slice(0, 40);
+    return {
+      url: globalThis.location.href,
+      title: document.title,
+      testIds,
+      participantCount:
+        document.querySelector('.session-host__live-participants-count')?.textContent?.trim() ??
+        null,
+      body: (document.body?.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 800),
+    };
+  });
+}
+
+async function waitForRecoveryUiGone(page) {
+  await page
+    .locator('[data-testid="host-recovery-card-done"]')
+    .waitFor({ state: 'hidden', timeout: 10_000 })
+    .catch(() => undefined);
+  await page
+    .locator('.host-recovery-card-dialog-backdrop')
+    .waitFor({ state: 'hidden', timeout: 5_000 })
+    .catch(() => undefined);
+}
+
 async function dismissRecoveryCardIfPresent(page) {
-  const heading = page.getByText('Host-Zugang sichern', { exact: true }).first();
-  const visible = await heading.waitFor({ state: 'visible', timeout: 8_000 }).then(
+  const done = page.locator('[data-testid="host-recovery-card-done"]');
+  const visible = await done.waitFor({ state: 'visible', timeout: 3_000 }).then(
     () => true,
     () => false,
   );
   if (!visible) return;
-  await page.getByRole('checkbox').check();
-  await page.locator('[data-testid="host-recovery-card-done"]').click();
-  await heading.waitFor({ state: 'hidden', timeout: 10_000 });
+  const dialog = page.locator('app-host-recovery-card-dialog');
+  await dialog.getByRole('checkbox').check();
+  await page.waitForFunction(() => {
+    const button = document.querySelector('[data-testid="host-recovery-card-done"]');
+    return button instanceof HTMLButtonElement && !button.disabled;
+  });
+  await done.click({ timeout: 10_000 });
+  await waitForRecoveryUiGone(page);
+}
+
+async function prepareHostSurface(page) {
+  await page
+    .locator(
+      [
+        '.session-host__live-participants-count',
+        '[data-testid="qa-tools-toggle"]',
+        '[data-testid="host-recovery-card-done"]',
+        '[data-testid="host-access-revoked"]',
+      ].join(', '),
+    )
+    .first()
+    .waitFor({ state: 'visible', timeout: 45_000 });
+  if (
+    await page
+      .getByTestId('host-access-revoked')
+      .isVisible()
+      .catch(() => false)
+  ) {
+    throw new Error(
+      `Host-Zugang entzogen. DOM: ${JSON.stringify(await hostPageDiagnostics(page))}`,
+    );
+  }
+  await dismissRecoveryCardIfPresent(page);
+  await dismissJoinOverlay(page);
+  await page.locator('.session-host__live-participants-count').first().waitFor({
+    state: 'visible',
+    timeout: 20_000,
+  });
 }
 
 async function chooseJoinIdentity(page, fallbackName, timeout = 15_000) {
@@ -184,14 +263,15 @@ async function clickJoinAction(page, timeout = 15_000) {
   return false;
 }
 
-async function dismissJoinOverlay(page) {
+async function dismissJoinOverlay(page, timeout = 3_000) {
   const overlay = page.locator('.session-host__join-viewport-overlay').first();
-  if (!(await overlay.isVisible().catch(() => false))) return;
-  await page.keyboard.press('Escape');
-  await overlay.waitFor({ state: 'hidden', timeout: 5_000 }).catch(async () => {
-    await page.locator('.session-host__join-viewport-overlay__close').click();
-    await overlay.waitFor({ state: 'hidden', timeout: 5_000 });
-  });
+  const appeared = await overlay
+    .waitFor({ state: 'visible', timeout })
+    .then(() => true)
+    .catch(() => false);
+  if (!appeared) return;
+  await page.locator('.session-host__join-viewport-overlay__close').click();
+  await overlay.waitFor({ state: 'hidden', timeout: 5_000 });
 }
 
 async function seedRankedQaBoard(hostTrpc, created) {
@@ -305,6 +385,7 @@ async function firstQaCardContains(page, snippet) {
 async function seedRankedQaBoardAndAssertHostViews(page, hostTrpc, created, failures) {
   await dismissJoinOverlay(page);
   const qaTools = page.getByTestId('qa-tools-toggle');
+  await qaTools.waitFor({ state: 'visible', timeout: 20_000 });
   if ((await qaTools.getAttribute('aria-expanded')) !== 'true') await qaTools.click();
   const seeded = await seedRankedQaBoard(hostTrpc, created);
   await revealLatestQaQuestions(page);
@@ -436,7 +517,7 @@ async function seedRankedQaBoardAndAssertHostViews(page, hostTrpc, created, fail
   await cloud.waitFor({ state: 'hidden', timeout: 10_000 }).catch(() => undefined);
 }
 
-async function waitForParticipantCount(page, expected, timeout = 15_000) {
+async function waitForParticipantCount(page, expected, timeout = 30_000) {
   const locator = page.locator('.session-host__live-participants-count').first();
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeout) {
@@ -478,6 +559,7 @@ async function main() {
     await seedHostBrowser(hostContext, created);
     const participantContext = await browser.newContext({ viewport: MOBILE });
     const host = await hostContext.newPage();
+    attachHostPageGuards(host);
     const participant = await participantContext.newPage();
 
     await host.goto(`${BASE_URL}/session/${created.code}/host`, {
@@ -485,7 +567,7 @@ async function main() {
       timeout: 30_000,
     });
     await waitForPathSuffix(host, `/session/${created.code}/host`);
-    await dismissRecoveryCardIfPresent(host);
+    await prepareHostSurface(host);
 
     await participant.goto(`${BASE_URL}/join/${created.code}`, {
       waitUntil: 'domcontentloaded',
@@ -503,7 +585,9 @@ async function main() {
     const hostSawJoin = await waitForParticipantCount(host, 1);
     logStep(hostSawJoin, 'Host sieht den ersten Beitritt');
     if (!hostSawJoin) {
-      failures.push('Host-Ansicht hat die Teilnehmerzahl nicht auf 1 aktualisiert.');
+      failures.push(
+        `Host-Ansicht hat die Teilnehmerzahl nicht auf 1 aktualisiert. DOM: ${JSON.stringify(await hostPageDiagnostics(host))}`,
+      );
     }
 
     const draft = participant.locator('#qa-draft');
@@ -536,7 +620,9 @@ async function main() {
       );
     logStep(hostSawQuestion, 'Host sieht die Teilnehmerfrage');
     if (!hostSawQuestion) {
-      failures.push('Die Frage erschien nicht in der Host-Ansicht.');
+      failures.push(
+        `Die Frage erschien nicht in der Host-Ansicht. DOM: ${JSON.stringify(await hostPageDiagnostics(host))}`,
+      );
     }
 
     const tools = participant.locator('.session-qa-tools');
@@ -587,7 +673,7 @@ async function main() {
     }
 
     await participantContext.close();
-    await hostContext.close();
+    await closeHostContext(host, hostContext);
   } finally {
     await browser.close();
   }
