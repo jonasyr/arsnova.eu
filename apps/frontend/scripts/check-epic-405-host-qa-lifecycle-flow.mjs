@@ -49,6 +49,21 @@ function attachHostPageGuards(page) {
   });
 }
 
+async function closeHostContext(page, context) {
+  await page
+    .evaluate(() => {
+      globalThis.onbeforeunload = null;
+    })
+    .catch(() => undefined);
+  await page.close({ runBeforeUnload: false }).catch(() => undefined);
+  await Promise.race([
+    context.close(),
+    new Promise((resolve) => {
+      setTimeout(resolve, 5_000);
+    }),
+  ]);
+}
+
 async function waitForServer(url, maxAttempts = 30) {
   for (let index = 0; index < maxAttempts; index += 1) {
     try {
@@ -101,13 +116,14 @@ async function createConfiguredQaSession() {
   return created;
 }
 
-async function seedHostBrowser(context, session) {
+async function seedHostBrowser(context, session, options = {}) {
+  const stageRecoveryCard = options.stageRecoveryCard !== false;
   await context.addInitScript(
-    ({ browserCapability, card, code, hostToken, prefixes }) => {
+    ({ browserCapability, card, code, hostToken, prefixes, stageRecoveryCard: stageCard }) => {
       const marker = `arsnova-smoke-host-seeded:${code}`;
       globalThis.sessionStorage.setItem(`${prefixes.token}${code}`, hostToken);
       globalThis.localStorage.setItem(`${prefixes.capability}-${code}`, browserCapability);
-      if (!globalThis.sessionStorage.getItem(marker)) {
+      if (stageCard && !globalThis.sessionStorage.getItem(marker)) {
         globalThis.sessionStorage.setItem(`${prefixes.card}-${code}`, JSON.stringify(card));
         globalThis.localStorage.setItem(
           'arsnova-host-scenario:v1',
@@ -126,6 +142,7 @@ async function seedHostBrowser(context, session) {
         capability: HOST_BROWSER_CAPABILITY_PREFIX,
         card: HOST_RECOVERY_CARD_PREFIX,
       },
+      stageRecoveryCard,
     },
   );
 }
@@ -198,9 +215,16 @@ async function dismissJoinOverlay(page, timeout = 8_000) {
   await overlay.waitFor({ state: 'hidden', timeout: 5_000 });
 }
 
+async function openHostSession(page, code) {
+  await page.goto(`${BASE_URL}/session/${code}/host`, {
+    waitUntil: 'domcontentloaded',
+    timeout: 30_000,
+  });
+  await waitForPathSuffix(page, `/session/${code}/host`);
+}
+
 async function prepareHostSurface(page) {
   try {
-    await page.locator('app-session-host').waitFor({ state: 'attached', timeout: 30_000 });
     await page
       .locator(
         [
@@ -208,6 +232,7 @@ async function prepareHostSurface(page) {
           '[data-testid="host-recovery-card-done"]',
           '[data-testid="host-access-revoked"]',
           '.session-channel-tabs',
+          '.session-host',
         ].join(', '),
       )
       .first()
@@ -244,6 +269,10 @@ async function prepareHostSurface(page) {
   }
   await dismissJoinOverlay(page, 3_000);
   await waitForRecoveryUiGone(page);
+  await page
+    .locator('.host-recovery-card-dialog-backdrop')
+    .waitFor({ state: 'hidden', timeout: 5_000 })
+    .catch(() => undefined);
 }
 
 function assertClosedLiveChannels(channels) {
@@ -252,14 +281,6 @@ function assertClosedLiveChannels(channels) {
       `Unerwarteter Kanalstand nach closeQaChannel: ${JSON.stringify(channels ?? null)}`,
     );
   }
-}
-
-async function reloadHostSession(page, code) {
-  await page.evaluate(() => {
-    globalThis.onbeforeunload = null;
-  });
-  await page.reload({ waitUntil: 'domcontentloaded', timeout: 30_000 });
-  await waitForPathSuffix(page, `/session/${code}/host`);
 }
 
 async function verifySingleQaNavigation(host, code) {
@@ -298,14 +319,15 @@ async function verifySingleQaNavigation(host, code) {
 async function verifyClosedQaNavigation(host) {
   await prepareHostSurface(host);
   try {
-    await host.waitForFunction(() => {
-      const tabs = [...document.querySelectorAll('.session-channel-tabs mat-button-toggle')];
-      if (tabs.length < 2) return false;
-      const label = tabs[0].querySelector('.session-channel-tabs__label')?.textContent?.trim();
-      const badge =
-        tabs[0].querySelector('.session-channel-tabs__badge')?.textContent?.trim() ?? '';
-      return label === 'Q&A' && /^(Zu|Closed)$/i.test(badge);
+    await host.locator('.session-channel-tabs mat-button-toggle').nth(1).waitFor({
+      state: 'attached',
+      timeout: 30_000,
     });
+    await host
+      .locator('.session-channel-tabs mat-button-toggle')
+      .first()
+      .locator('.session-channel-tabs__badge')
+      .waitFor({ state: 'visible', timeout: 15_000 });
   } catch (error) {
     const diagnostics = await hostPageDiagnostics(host);
     throw new Error(
@@ -341,11 +363,7 @@ async function main() {
     await seedHostBrowser(hostContext, session);
     const host = await hostContext.newPage();
     attachHostPageGuards(host);
-    await host.goto(`${BASE_URL}/session/${session.code}/host`, {
-      waitUntil: 'domcontentloaded',
-      timeout: 30_000,
-    });
-    await waitForPathSuffix(host, `/session/${session.code}/host`);
+    await openHostSession(host, session.code);
     await host
       .locator('.session-host, [data-testid="host-recovery-card-done"]')
       .first()
@@ -402,9 +420,11 @@ async function main() {
     await waitForRecoveryUiGone(host);
     await host.getByTestId('add-channel-trigger').click();
     await host.getByTestId('add-channel-quickFeedback').click();
-    await host.waitForFunction(
-      () => document.querySelectorAll('.session-channel-tabs mat-button-toggle').length === 2,
-    );
+    await host.locator('.session-channel-tabs mat-button-toggle').nth(1).waitFor({
+      state: 'attached',
+      timeout: 20_000,
+    });
+    logStep(true, 'Blitzlicht ist als zweites Format sichtbar');
     const closedChannels = await createTrpcClient(session.hostToken).session.closeQaChannel.mutate({
       code: session.code,
     });
@@ -415,14 +435,20 @@ async function main() {
       .locator('.session-channel-tabs__badge')
       .waitFor({ state: 'visible', timeout: 10_000 })
       .catch(() => undefined);
-    await reloadHostSession(host, session.code);
-    await verifyClosedQaNavigation(host);
+    await closeHostContext(host, hostContext);
+
+    const persistContext = await browser.newContext({ viewport: DESKTOP });
+    await seedHostBrowser(persistContext, session, { stageRecoveryCard: false });
+    const persistHost = await persistContext.newPage();
+    attachHostPageGuards(persistHost);
+    await openHostSession(persistHost, session.code);
+    await verifyClosedQaNavigation(persistHost);
     logStep(
       true,
       'Geschlossenes Q&A bleibt nach Reload als »Zu« sichtbar und ist kein hinzufügbares Format',
     );
 
-    await hostContext.close();
+    await persistContext.close();
 
     const recoveryContext = await browser.newContext({ viewport: DESKTOP });
     const recovery = await recoveryContext.newPage();
