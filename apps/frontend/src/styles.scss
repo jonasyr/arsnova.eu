@@ -974,6 +974,12 @@ html {
   max-width: min(42rem, calc(100vw - 2rem));
 }
 
+/* Über dem Host-Beitritts-Overlay (z-index 1100), sonst bleibt die Zugangskarte unbedienbar. */
+.cdk-overlay-container:has(.host-recovery-card-dialog-panel),
+.cdk-overlay-container:has(.session-lifecycle-dialog-panel) {
+  z-index: 1200;
+}
+
 .cdk-overlay-pane.host-pairing-dialog-panel {
   width: min(28rem, calc(100vw - 2rem));
   max-width: min(28rem, calc(100vw - 2rem));

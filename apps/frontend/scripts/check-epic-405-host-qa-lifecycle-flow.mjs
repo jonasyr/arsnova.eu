@@ -120,14 +120,30 @@ async function seedHostBrowser(context, session) {
   );
 }
 
+async function hostPageDiagnostics(page) {
+  return page.evaluate(() => {
+    const testIds = [...document.querySelectorAll('[data-testid]')]
+      .map((el) => el.getAttribute('data-testid'))
+      .filter(Boolean)
+      .slice(0, 40);
+    return {
+      url: globalThis.location.href,
+      title: document.title,
+      testIds,
+      body: (document.body?.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 800),
+    };
+  });
+}
+
 async function dismissRecoveryCard(page) {
+  await dismissJoinOverlay(page, 2_000);
   const heading = page.getByText('Host-Zugang sichern', { exact: true }).first();
   const done = page.locator('[data-testid="host-recovery-card-done"]');
-  await heading.waitFor({ state: 'visible', timeout: 20_000 });
+  await done.or(heading).waitFor({ state: 'visible', timeout: 20_000 });
   const supportVisible = await page.getByText(sessionSupportIdPattern()).first().isVisible();
   await page.getByRole('checkbox').check();
   await done.click();
-  await heading.waitFor({ state: 'hidden', timeout: 10_000 });
+  await done.waitFor({ state: 'hidden', timeout: 10_000 });
   return supportVisible;
 }
 
@@ -135,10 +151,10 @@ function sessionSupportIdPattern() {
   return /ARS-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}/;
 }
 
-async function dismissJoinOverlay(page) {
+async function dismissJoinOverlay(page, timeout = 8_000) {
   const overlay = page.locator('.session-host__join-viewport-overlay').first();
   const appeared = await overlay
-    .waitFor({ state: 'visible', timeout: 8_000 })
+    .waitFor({ state: 'visible', timeout })
     .then(() => true)
     .catch(() => false);
   if (!appeared) return;
@@ -147,8 +163,16 @@ async function dismissJoinOverlay(page) {
 }
 
 async function verifySingleQaNavigation(host, code) {
+  await dismissJoinOverlay(host, 2_000);
   const trigger = host.getByTestId('add-channel-trigger');
-  await trigger.waitFor({ state: 'visible' });
+  try {
+    await trigger.waitFor({ state: 'visible', timeout: 15_000 });
+  } catch (error) {
+    const diagnostics = await hostPageDiagnostics(host);
+    throw new Error(
+      `${error instanceof Error ? error.message : String(error)}\nHost-DOM: ${JSON.stringify(diagnostics)}`,
+    );
+  }
   assert.equal(await host.locator('.session-channel-tabs').count(), 0);
   assert.equal(
     await host.evaluate(
@@ -206,9 +230,15 @@ async function main() {
       timeout: 30_000,
     });
     await waitForPathSuffix(host, `/session/${session.code}/host`);
+    await host.locator('.session-host').waitFor({ state: 'visible', timeout: 20_000 });
 
-    const cardOk = await dismissRecoveryCard(host).catch((error) => {
-      failures.push(`Host-Zugangskarte: ${error instanceof Error ? error.message : String(error)}`);
+    const cardOk = await dismissRecoveryCard(host).catch(async (error) => {
+      const diagnostics = await hostPageDiagnostics(host).catch(() => null);
+      failures.push(
+        `Host-Zugangskarte: ${error instanceof Error ? error.message : String(error)}${
+          diagnostics ? ` DOM: ${JSON.stringify(diagnostics)}` : ''
+        }`,
+      );
       return false;
     });
     logStep(cardOk, 'Host sichert die Zugangskarte nach Q&A-Start');

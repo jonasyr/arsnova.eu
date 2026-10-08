@@ -1771,6 +1771,48 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     fixture.destroy();
   });
 
+  it('hält in einer reinen Q&A-Lobby die Zugangskarte über dem Beitritts-Overlay und bietet Format hinzufügen an', async () => {
+    persistInitialHostRecovery({
+      code: 'ABC123',
+      recoveryCard: {
+        supportId: 'ARS-ABCD-2345',
+        recoveryCode: 'recovery-capability-abcdefghijklmnopqrstuvwxyz',
+      },
+    });
+    getInfoQueryMock.mockResolvedValue({
+      ...defaultSession,
+      type: 'Q_AND_A',
+      quizName: null,
+      preferredChannel: 'qa',
+      qaClosesAt: '2026-03-25T12:00:00.000Z',
+      channels: {
+        quiz: { enabled: false },
+        qa: {
+          enabled: true,
+          open: true,
+          title: 'Fragen',
+          moderationMode: false,
+          state: 'OPEN',
+          closesAt: '2026-03-25T12:00:00.000Z',
+        },
+        quickFeedback: { enabled: false, open: false },
+      },
+    });
+    const fixture = setup();
+    fixture.componentInstance.joinInfoPopoverOpen.set(true);
+    await fixture.componentInstance.ngOnInit();
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.joinInfoPopoverOpen()).toBe(false);
+    expect(dialogOpenMock).toHaveBeenCalledWith(HostRecoveryCardDialogComponent, expect.anything());
+    expect(fixture.componentInstance.addableChannels()).toEqual(['quiz', 'quickFeedback']);
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="add-channel-trigger"]'),
+    ).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.session-channel-tabs')).toBeNull();
+    fixture.destroy();
+  });
+
   it('bietet die Host-Zugangskarte nach dem nachträglichen Aktivieren von Q&A an und startet die Fragerunde', async () => {
     persistInitialHostRecovery({
       code: 'ABC123',

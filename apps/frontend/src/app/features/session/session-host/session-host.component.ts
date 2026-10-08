@@ -4915,6 +4915,9 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     if (!recoveryCard) {
       return Promise.resolve(undefined);
     }
+    const previousJoinAutopenSuppressed = this.suppressJoinMenuAutopen;
+    this.suppressJoinMenuAutopen = true;
+    this.joinInfoPopoverOpen.set(false);
     this.recoveryCardDialogOpened = true;
     return firstValueFrom(
       this.dialog
@@ -4935,6 +4938,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
         .afterClosed(),
     ).then(async (confirmed) => {
       this.recoveryCardDialogOpened = false;
+      this.suppressJoinMenuAutopen = previousJoinAutopenSuppressed;
       if (confirmed === true) {
         clearStagedHostRecoveryCard(this.code);
         this.completeQaCreateSetup();
