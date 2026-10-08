@@ -209,7 +209,7 @@ Das formative Cloud-Readiness-Dossier wird zum **Agentic Cloud Engineering Dossi
 - Agentenevidenz und individuelle kritische Reflexion.
 - für den Pfad von der Begriffswolke zum Moderationskompass: Single-Host-spaCy-Nachweis, Zwei-Server-IaC, getrennte Inferenzverträge, Modell-/Lizenzmanifest, Qualitäts-/Ressourcen-/Resilienzbericht, TCO-/FinOps-Modell und Architecture Decision Record.
 
-Das Dossier ist die Arbeits- und Quellenbasis des Referats, aber kein zusätzlicher benoteter Prüfungsbestandteil. Das individuelle Referat wird aus dem [kanonischen Themenkatalog](./Modulkonzept%20Cloud%20Computing/Referatsthemen_Cloud_Computing_ARSnova.md) vergeben, übernimmt den dort ausgewiesenen offiziellen Qualifikationsbezug und muss eine überprüfbare These, technische Evidenz, eine ernsthafte Gegenalternative sowie eine wirtschaftliche, betriebliche oder verantwortungsbezogene Entscheidung vertreten. Für das Referat gelten ausschließlich die offiziellen Bestandteile und Gewichte.
+Das Dossier ist die Arbeits- und Quellenbasis des Referats, aber kein zusätzlicher benoteter Prüfungsbestandteil. Das individuelle Referat wird aus den sechs Themen in [CLOUD-COMPUTING-REFERAT-PRUEFUNG.md](./CLOUD-COMPUTING-REFERAT-PRUEFUNG.md) vergeben, übernimmt den dort ausgewiesenen Qualifikationsbezug und muss eine überprüfbare These, technische Evidenz, eine ernsthafte Gegenalternative sowie eine wirtschaftliche, betriebliche oder verantwortungsbezogene Entscheidung vertreten. Für das Referat gelten ausschließlich die offiziellen Bestandteile und Gewichte.
 
 ## 9. Zuordnung zu den zwölf Themenblöcken
 
