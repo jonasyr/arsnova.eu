@@ -135,15 +135,29 @@ async function hostPageDiagnostics(page) {
   });
 }
 
+async function waitForRecoveryUiGone(page) {
+  await page
+    .locator('[data-testid="host-recovery-card-done"]')
+    .waitFor({ state: 'hidden', timeout: 10_000 })
+    .catch(() => undefined);
+  await page
+    .locator('.host-recovery-card-dialog-backdrop')
+    .waitFor({ state: 'hidden', timeout: 5_000 })
+    .catch(() => undefined);
+}
+
 async function dismissRecoveryCard(page) {
-  await dismissJoinOverlay(page, 2_000);
-  const heading = page.getByText('Host-Zugang sichern', { exact: true }).first();
   const done = page.locator('[data-testid="host-recovery-card-done"]');
-  await done.or(heading).waitFor({ state: 'visible', timeout: 20_000 });
+  const dialog = page.locator('app-host-recovery-card-dialog');
+  await done.waitFor({ state: 'visible', timeout: 30_000 });
   const supportVisible = await page.getByText(sessionSupportIdPattern()).first().isVisible();
-  await page.getByRole('checkbox').check();
-  await done.click();
-  await done.waitFor({ state: 'hidden', timeout: 10_000 });
+  await dialog.getByRole('checkbox').check();
+  await page.waitForFunction(() => {
+    const button = document.querySelector('[data-testid="host-recovery-card-done"]');
+    return button instanceof HTMLButtonElement && !button.disabled;
+  });
+  await done.click({ timeout: 10_000 });
+  await waitForRecoveryUiGone(page);
   return supportVisible;
 }
 
@@ -171,6 +185,7 @@ async function verifySingleQaNavigation(host, code) {
     const diagnostics = await hostPageDiagnostics(host);
     throw new Error(
       `${error instanceof Error ? error.message : String(error)}\nHost-DOM: ${JSON.stringify(diagnostics)}`,
+      { cause: error },
     );
   }
   assert.equal(await host.locator('.session-channel-tabs').count(), 0);
@@ -230,7 +245,10 @@ async function main() {
       timeout: 30_000,
     });
     await waitForPathSuffix(host, `/session/${session.code}/host`);
-    await host.locator('.session-host').waitFor({ state: 'visible', timeout: 20_000 });
+    await host
+      .locator('.session-host, [data-testid="host-recovery-card-done"]')
+      .first()
+      .waitFor({ state: 'visible', timeout: 30_000 });
 
     const cardOk = await dismissRecoveryCard(host).catch(async (error) => {
       const diagnostics = await hostPageDiagnostics(host).catch(() => null);
@@ -242,13 +260,20 @@ async function main() {
       return false;
     });
     logStep(cardOk, 'Host sichert die Zugangskarte nach Q&A-Start');
-    if (!cardOk && failures.length === 0) {
-      failures.push('Zugangskarte zeigte keine Session-Kennung.');
+    if (!cardOk) {
+      if (failures.length === 0) {
+        failures.push('Zugangskarte zeigte keine Session-Kennung.');
+      }
+      await host
+        .locator('[data-testid="host-recovery-card-cancel"]')
+        .click({ timeout: 3_000 })
+        .catch(() => undefined);
     }
 
     await dismissJoinOverlay(host).catch((error) => {
       failures.push(`Beitritts-Overlay: ${error instanceof Error ? error.message : String(error)}`);
     });
+    await waitForRecoveryUiGone(host);
     await verifySingleQaNavigation(host, session.code);
 
     const qaSettings = host.getByRole('button', { name: /Q&A-Einstellungen/i });
@@ -273,6 +298,7 @@ async function main() {
       }
     }
 
+    await waitForRecoveryUiGone(host);
     await host.getByTestId('add-channel-trigger').click();
     await host.getByTestId('add-channel-quickFeedback').click();
     await host.waitForFunction(
