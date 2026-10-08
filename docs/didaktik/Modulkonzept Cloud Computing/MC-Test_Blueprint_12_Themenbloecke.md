@@ -13,7 +13,7 @@
 ## 1. Verbindlicher Auslieferungs- und Laufzeitvertrag
 
 - Die Zielgruppe besteht ausschließlich aus Bachelorstudierenden der Informatik.
-- Es gibt zwölf Themenblockdateien mit genau 30 Items je Datei, zusammen genau 360 Items.
+- Es gibt zwölf Themenblockdateien mit genau 30 Items je Datei, zusammen genau 360 Items. Sie gehören zu den acht Vorlesungswochen: V1 TB01, V2 TB02 und TB03, V3 TB04, V4 TB06, V5 TB07 und TB08, V6 TB09, V7 TB05 und TB10, V8 TB11 und TB12. In einer Doppelwoche folgen beide Tests nacheinander, jeder im eigenen UE-3-Fenster.
 - Der erste Durchlauf findet vollständig in UE 3 des jeweiligen Themenblocks statt: drei Minuten Übergang, 32 Minuten Bearbeitung und zehn Minuten aggregierte Ergebnis- und Lösungsbesprechung.
 - Laufzeitmodus ist `practice` mit Sofortfeedback nach jeder Antwort und ohne technischen Countdown.
 - `meta.test_duration_minutes=32` ist ausschließlich der organisatorische Planwert für die Bearbeitungsphase. Er ist weder Deadline noch technische Versuchsbegrenzung.
@@ -187,7 +187,7 @@ Ein späterer vollständiger Abruf verwendet den unveränderten freigegebenen Th
 - Sofortfeedback erklärt das Konzept und den wichtigsten Irrweg; es beschämt keine Person und deutet Antwortzeit nicht als Kompetenz.
 - Die Abschlussbesprechung betrachtet ausschließlich Aggregate, häufige Distraktoren und Lösungswege. Einzelverläufe werden weder angezeigt noch exportübergreifend verknüpft.
 - Fragen, Optionen, Erklärungen und Glossare sind vollständig textlich zugänglich. Farbe, Position, Animation oder Sound transportieren keine exklusive Fachinformation.
-- Der Modus ist technisch untimiert. Die 32 Minuten sind eine Gruppenplanung; institutionelle Zeitunterstützung und eine gleichwertige, ebenfalls untimierte Alternative bleiben möglich.
+- Der Modus hat technisch kein Zeitlimit. Die 32 Minuten sind eine Gruppenplanung; institutionelle Zeitunterstützung und eine gleichwertige Alternative ohne Zeitlimit bleiben möglich.
 - Tablet und Laptop eignen sich zur Bearbeitung; tiefe Repository-, Architektur- und Konfigurationsarbeit innerhalb der LE erfolgt am Laptop oder über einen gleichwertigen bereitgestellten Zugang.
 - ARSnova-, MC-Test-, Dossier- und Labordaten werden nicht personenübergreifend oder werkzeugübergreifend zu Leistungsprofilen verbunden.
 

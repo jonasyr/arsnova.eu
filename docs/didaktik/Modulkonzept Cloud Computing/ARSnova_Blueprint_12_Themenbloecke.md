@@ -12,6 +12,8 @@
 
 Die Zielgruppe dieses Moduls besteht ausschließlich aus Bachelorstudierenden der Informatik. ARSnova.eu dient gleichzeitig als Lernwerkzeug und als authentisches Studienobjekt. Die Livefragen aktivieren Vorwissen, machen plausible Fehlvorstellungen in Aggregaten sichtbar, eröffnen Peer-Instruction- und Architekturgespräche und geben unmittelbares formatives Feedback. Sie liefern keine individuelle Leistungsbewertung, keine Prüfungszulassung und keine Grundlage für Forschung oder Publikation.
 
+Die zwölf Importdateien bleiben das Stoffinventar der Inhaltsblöcke. Erteilt werden sie in den acht Vorlesungswochen des Modulkonzepts: V1 TB01, V2 TB02 und TB03, V3 TB04, V4 TB06, V5 TB07 und TB08, V6 TB09, V7 TB05 und TB10, V8 TB11 und TB12. Eine Doppelwoche nutzt beide Dateien nacheinander. Die Referatsprüfung folgt den sechs Themen in CLOUD-COMPUTING-REFERAT-PRUEFUNG.md.
+
 Das Paket umfasst genau zwölf Importdateien mit je zehn Fragen, zusammen also 120 Fragen. Jede Datei enthält jeden der zehn unterstützten Fragetypen genau einmal. Die JSON-Dateien sind die autoritative Quelle für Wortlaut, Reihenfolge, Lösung und typbezogene Struktur; dieser Blueprint ist die normative Quelle für Umfang, Qualitätsregeln und Einsatz.
 
 | Themenblock | Datei                                                                | Verbindlicher fachlicher Schwerpunkt                                     |
@@ -30,7 +32,7 @@ Das Paket umfasst genau zwölf Importdateien mit je zehn Fragen, zusammen also 1
 |        TB12 | [ARSnova_Themenblock_12.json](./ARSnova/ARSnova_Themenblock_12.json) | Kumulative Synthese und Verteidigung einer begrenzten Cloud-Entscheidung |
 |             | **12 Dateien mit 120 Fragen**                                        | **12 Themenblöcke mit insgesamt 36 UE**                                  |
 
-In jedem Themenblock bilden UE 1 und UE 2 die LE. ARSnova-Fragen werden darin gezielt als Einstieg, Diagnose, Entscheidungsimpuls, Peer-Instruction-Frage oder Abschlusscheck eingesetzt. UE 3 bleibt vollständig dem separaten MC-Test vorbehalten: drei Minuten Übergang, 32 Minuten Bearbeitung und zehn Minuten aggregierte Ergebnis- und Lösungsbesprechung. Ein Livequiz erweitert dieses Zeitbudget nicht. Das Blueprint legt keine kalendarische oder modale Zuordnung der Themenblöcke fest.
+In jedem Themenblock bilden UE 1 und UE 2 die LE. ARSnova-Fragen werden darin gezielt als Einstieg, Diagnose, Entscheidungsimpuls, Peer-Instruction-Frage oder Abschlusscheck eingesetzt. UE 3 bleibt vollständig dem separaten MC-Test vorbehalten: drei Minuten Übergang, 32 Minuten Bearbeitung und zehn Minuten aggregierte Ergebnis- und Lösungsbesprechung. Ein Livequiz erweitert dieses Zeitbudget nicht. Die kalendarische Zuordnung ist die Acht-Wochen-Folge im Modulkonzept. Präsenz oder virtuelle Durchführung ändert den Fragenvertrag nicht.
 
 ## 2. Importformat und redaktionelle Zuordnung
 
@@ -164,7 +166,7 @@ Jede einzelne Frage verwendet `timer=null`. Dadurch greift der Standardtimer von
 - Fragenstamm, Optionen, Einheiten und strukturierte Elemente sind vollständig lesbar und vorlesbar.
 - Für jede Frage existiert ein in Inhalt, Elementen, Lösung, Lernziel und Feedback identischer Weg ohne Countdown. Er darf digital oder auf Papier durchgeführt werden und erzeugt keinen Lern- oder Teilnahmenachteil.
 - Sound, Reward, Motivation und Emoji können individuell ausbleiben; die fachliche Aufgabe bleibt vollständig.
-- Die Lesephase, die technische Zeitunterstützung und die untimierte Alternative sind drei getrennte Schutzmechanismen und ersetzen einander nicht.
+- Die Lesephase, die technische Zeitunterstützung und die Alternative ohne Zeitlimit sind drei getrennte Schutzmechanismen und ersetzen einander nicht.
 
 ## 6. Lösungsschutz, Peer Instruction und Effective Vote
 
@@ -206,7 +208,7 @@ Eine Themenblockdatei ist erst freigabefähig, wenn:
 8. Referenzwerte, Toleranzen, Einheiten und strukturierte Lösungen unabhängig reproduziert wurden;
 9. paketweit weder Dubletten noch gegenseitige Lösungshinweise bestehen;
 10. Implementierung, Evidenz und Zielbild bei Aussagen zu arsnova.eu getrennt sind;
-11. Lesephase, Zeitunterstützung und inhaltlich identische untimierte Alternative praktisch geprüft wurden;
+11. Lesephase, Zeitunterstützung und inhaltlich identische Alternative ohne Zeitlimit praktisch geprüft wurden;
 12. Lösungsschutz bis zur geschlossenen Frage und die Effective-Vote-Regel im Probelauf bestätigt wurden;
 13. Tablet- und Laptopdarstellung, Tastaturbedienung, Vorlesbarkeit und nicht sensorisch exklusive Vermittlung praktisch geprüft wurden;
 14. die Lehrnutzung freiwillig-formativ bleibt und individuelle Bewertung, Forschung und Publikation ausgeschlossen sind;

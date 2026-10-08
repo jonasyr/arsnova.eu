@@ -1,6 +1,6 @@
 # Cloud Computing verstehen, prüfen und verantworten
 
-**Stand:** 14.09.2026
+**Stand:** 05.10.2026
 
 Cloud Computing ist mehr als eine Liste von Diensten großer Anbieter. In diesem Modul lernst du, eine Cloud-Architektur fachlich zu erklären, praktisch zu untersuchen und ihre technischen, sicherheitsbezogenen, ökologischen und wirtschaftlichen Folgen zu vertreten. `arsnova.eu` begleitet dich dabei als interaktives Lernwerkzeug und als reale, aber kritisch zu prüfende Fallstudie.
 
@@ -11,8 +11,11 @@ Das Modul richtet sich ausschließlich an Bachelorstudierende der Informatik.
 - **IU Internationale Hochschule (IU)** bezeichnet die Hochschule. `DSCC0127` ist der Modulcode und `DSCC012701` der Kurscode.
 - **Credit Point (CP)** bezeichnet einen Leistungspunkt.
 - Eine **Unterrichtseinheit (UE)** dauert 45 Minuten. Eine **Lerneinheit (LE)** besteht aus zwei aufeinanderfolgenden UE und dauert 90 Minuten.
-- **TB01–TB12** bezeichnet zwölf stabile Themenblöcke ohne Zuordnung zu Kalenderwochen oder einer Durchführungsform.
-- **Multiple Choice (MC)** bezeichnet Aufgaben mit vorgegebenen Antwortmöglichkeiten. **MC-Test** ist die formative Lernanwendung für den Abruf je Themenblock.
+- **TB01–TB12** sind zwölf Stoffblöcke. **V1–V8** sind die acht Vorlesungswochen, in denen dieser Stoff stattfindet.
+- **Multiple Choice (MC)** bezeichnet Aufgaben mit vorgegebenen Antworten. Der **MC-Test** ist der Übungsfragebogen am Ende eines Stoffblocks. Er wird nicht benotet.
+- **Shared Responsibility** bezeichnet die geteilte Verantwortung zwischen dir beziehungsweise deinem Team und dem Cloud-Anbieter.
+- **Deployment** bezeichnet das Ausrollen einer lauffähigen Fassung. **Recovery** bezeichnet die Wiederherstellung nach einem Ausfall.
+- **Observability** bezeichnet das Beobachten eines Systems über Protokolle, Kennzahlen und Ablaufspuren. **Degradation** bezeichnet einen kontrollierten Betrieb mit eingeschränkter Funktion.
 - **Künstliche Intelligenz (KI)** bezeichnet hier auch werkzeugnutzende Agenten. **Maschinelles Lernen (ML)** bezeichnet datenbasierte Modellverfahren.
 - **Infrastructure as Code (IaC)** bedeutet, Infrastruktur reproduzierbar als Code zu beschreiben.
 - **Google Cloud Platform (GCP)**, **Amazon Web Services (AWS)** und Microsoft Azure sind die drei verbindlich verglichenen Plattformen.
@@ -31,7 +34,7 @@ Das Bachelor-Modul umfasst 5 CP und insgesamt 150 Stunden:
 | Selbststudium  |        123 Stunden |
 | **Gesamt**     |    **150 Stunden** |
 
-Die betreute Lehre besteht aus zwölf stabilen Themenblöcken mit jeweils drei UE. Das Modulpaket legt weder Kalenderwochen noch eine unterschiedliche Struktur für virtuelle und präsente Durchführung fest.
+Die 36 UE verteilen sich auf acht Vorlesungswochen. Vier Wochen behandeln einen Stoffblock in drei UE, also 135 Minuten. Vier Wochen behandeln zwei Stoffblöcke und dauern sechs UE. Ob die Woche im Raum oder online stattfindet, ändert den Stoff nicht.
 
 ## Was du am Ende kannst
 
@@ -64,50 +67,48 @@ In den ersten 90 Minuten:
 - vergleichst du deine Begründung mit anderen;
 - sicherst du einen Zwischenstand für dein Dossier und das Selbststudium.
 
-### UE 3: formativer MC-Test
+### UE 3: MC-Test zum Üben
 
 Die letzte UE ist in jedem Themenblock gleich aufgebaut:
 
 | Phase                                              |       Zeit |
 | -------------------------------------------------- | ---------: |
 | Wechsel zum MC-Test und zugängliche Bereitstellung |  3 Minuten |
-| Bearbeitung von 30 Items                           | 32 Minuten |
+| Bearbeitung von 30 Fragen                          | 32 Minuten |
 | gemeinsame Ergebnis- und Lösungsbesprechung        | 10 Minuten |
 
 Die 32 Minuten sind nur der organisatorische Rahmen in der Veranstaltung. Es gibt keinen technischen Countdown. Laborergebnisse und Lernprodukte entstehen bereits in der 90-minütigen LE und im Selbststudium; sie werden nicht als zusätzliche vierte UE gerechnet.
 
-## Die zwölf Themenblöcke
+## Die acht Vorlesungswochen
 
-| Themenblock | Thema                                                         |
-| ----------- | ------------------------------------------------------------- |
-| **TB01**    | Grundlagen, Cloudmodelle und Shared Responsibility            |
-| **TB02**    | Virtualisierung, Container, IaC und Netzwerk                  |
-| **TB03**    | arsnova.eu-Deployment, Härtung und Zustand                    |
-| **TB04**    | Serverless Computing                                          |
-| **TB05**    | GCP, AWS und Microsoft Azure                                  |
-| **TB06**    | Datenwissenschaft und maschinelles Lernen in der Cloud        |
-| **TB07**    | Storage, Datenbanken, Backup und Recovery                     |
-| **TB08**    | Elastizität, Skalierung, Performance und verteilte Systeme    |
-| **TB09**    | IAM, Security, Observability, SRE und Resilienz               |
-| **TB10**    | FinOps, Nachhaltigkeit und 6R                                 |
-| **TB11**    | evidenzbasierte Architekturentscheidung und Referatswerkstatt |
-| **TB12**    | Synthese und Probeverteidigung                                |
+Zwölf Stoffblöcke werden in acht Wochen gelehrt. Zusammengehörige Fragen zu Architektur, Kapazität, Betrieb und Kosten teilen sich eine Woche. Grundlagen und Serverless bleiben eigene Wochen, weil sie zum Modul gehören, auch wenn sie kein eigenes Referatsthema sind.
+
+| Woche  |  UE | Thema                                                            | Bisherige Blöcke |
+| ------ | --: | ---------------------------------------------------------------- | ---------------- |
+| **V1** |   3 | Grundlagen, Cloudmodelle und Shared Responsibility               | TB01             |
+| **V2** |   6 | Container, IaC, Deployment, Härtung und Zustand                  | TB02, TB03       |
+| **V3** |   3 | Serverless Computing                                             | TB04             |
+| **V4** |   3 | Datenwissenschaft, maschinelles Lernen und Informationsqualität  | TB06             |
+| **V5** |   6 | Storage, Recovery, Skalierung und verteilte Systeme              | TB07, TB08       |
+| **V6** |   3 | IAM, Security, Observability, Degradation und Resilienz          | TB09             |
+| **V7** |   6 | Plattformen, FinOps, Nachhaltigkeit und 6R                       | TB05, TB10       |
+| **V8** |   6 | Architekturentscheidung, Referatswerkstatt und Probeverteidigung | TB11, TB12       |
 
 Im [ausführlichen Themenblockplan](./Themenblockplan_Cloud_Computing_12_Themenbloecke.md) findest du zu jedem Themenblock die Leitfrage, den Ablauf der drei UE, den verbindlichen Fachwortschatz, Quellen, Lernprodukte und Selbststudiumsaufträge.
 
 ## So verteilen sich die 123 Stunden Selbststudium
 
-| Aktivität                                     |   Stunden |
-| --------------------------------------------- | --------: |
-| Vor- und Nachbereitung der zwölf Themenblöcke |      24 h |
-| Pflichtlektüre und technische Vertiefung      |      30 h |
-| Agentic Cloud Engineering Dossier             |      30 h |
-| Plattform-, Privacy- und Wirtschaftsvergleich |      15 h |
-| Referatsrecherche, Visualisierung und Probe   |      18 h |
-| individuelle Agentenkritik und Revision       |       6 h |
-| **Gesamt**                                    | **123 h** |
+| Aktivität                                        |   Stunden |
+| ------------------------------------------------ | --------: |
+| Vor- und Nachbereitung der acht Vorlesungswochen |      24 h |
+| Pflichtlektüre und technische Vertiefung         |      30 h |
+| Agentic Cloud Engineering Dossier                |      30 h |
+| Plattform-, Privacy- und Wirtschaftsvergleich    |      15 h |
+| Referatsrecherche, Visualisierung und Probe      |      18 h |
+| individuelle Agentenkritik und Revision          |       6 h |
+| **Gesamt**                                       | **123 h** |
 
-Die Bereiche greifen ineinander. Wenn du beispielsweise einen Recovery-Nachweis für dein Dossier prüfst und später für das Referat verwendest, wird die Arbeit nicht doppelt gezählt.
+Die Bereiche greifen ineinander. Wenn du zum Beispiel einen Nachweis zur Wiederherstellung für dein Dossier prüfst und ihn später im Referat verwendest, zählt diese Arbeit nur einmal.
 
 ## arsnova.eu: Lernwerkzeug und Studienobjekt
 
@@ -117,19 +118,19 @@ Mit arsnova.eu:
 
 - rufst du Vorwissen und frühere Inhalte ab;
 - beantwortest du anspruchsvolle Verständnis-, Anwendungs- und Transferfragen;
-- vergleichst du Begründungen in Peer-Diskussionen;
+- vergleichst du Begründungen im Gespräch mit anderen Studierenden;
 - machst du typische Fehlvorstellungen sichtbar, ohne daraus eine Note abzuleiten;
 - erhältst du unmittelbar eine neue Erklärung oder ein Gegenbeispiel;
 - gibst du der Lehrperson Hinweise darauf, was noch einmal anders erklärt werden sollte.
 
 ### Als authentisches Studienobjekt
 
-Du untersuchst an arsnova.eu eine wirkliche Architektur, statt nur ein vereinfachtes Lehrdiagramm zu betrachten. Dazu gehören unter anderem ein Node.js-Backend, ein Angular-Frontend, PostgreSQL, Redis, WebSockets, Yjs, Container, ein Produktions-Compose-Pfad sowie dokumentierte Last-, Backup- und Betriebsnachweise.
+Du untersuchst an arsnova.eu eine wirkliche Architektur, statt nur ein vereinfachtes Lehrdiagramm zu betrachten. Dazu gehören unter anderem ein Node.js-Backend, ein Angular-Frontend, PostgreSQL, Redis, WebSockets, Yjs, Container, die Compose-Datei des Produktionsbetriebs sowie dokumentierte Last-, Backup- und Betriebsnachweise.
 
 Du lernst dabei vier Aussagen sauber zu trennen:
 
 - **Implementiert:** Der dokumentierte Produktionspfad ist derzeit ein Single-Host-Deployment.
-- **Lokal verifiziert:** Bestimmte Join-, Vote-, Reconnect-, Yjs- und Soak-Szenarien wurden in einer lokalen Testumgebung ausgeführt.
+- **Lokal verifiziert:** Bestimmte Beitritts-, Abstimmungs-, Wiederverbindungs-, Yjs- und Dauerlast-Szenarien wurden in einer lokalen Testumgebung ausgeführt.
 - **Produktiv beobachtet:** Ein historischer Lauf belegt 500 gleichzeitige Joins, aber nicht den vollständigen Live-Betrieb.
 - **Zielbild:** Eine verteilte oder horizontal skalierende Architektur kann entworfen und im Labor geprüft werden, ist damit aber noch keine Produktionseigenschaft oder Kapazitätszusage.
 
@@ -152,29 +153,25 @@ Pro Themenblock lernst du mit zehn Livefragen. Jeder der zehn unterstützten Typ
 
 Alle Fragen sind mittel oder schwer. Falsche Optionen sind keine Scherzantworten, sondern plausible Fehlvorstellungen. Deshalb geht es nicht nur darum, die richtige Option zu finden, sondern deine Entscheidung zu erklären.
 
-Zur Aktivierung nutzt arsnova.eu automatisch vergebene Kindergarten-Pseudonyme, eine Rangliste, die vier Obstteams `Apfel :apple:`, `Birne :pear:`, `Banane :banana:` und `Apfelsine :orange:`, Boni, Motivationstexte, Sound-, Belohnungs- und Emoji-Effekte. Ein 60-Sekunden-Standardtimer wird nach Schwierigkeit skaliert. Vorher kannst du die Frage in einer eigenen Lesephase erfassen.
+Zur Aktivierung vergibt arsnova.eu automatisch Spitznamen aus dem Kindergarten-Thema, zeigt eine Rangliste und lost dich in eines der vier Teams `Apfel`, `Birne`, `Banane` oder `Apfelsine` ein. Dazu kommen Bonuspunkte, kurze Motivationstexte sowie Ton-, Belohnungs- und Emoji-Effekte. Der übliche Timer dauert 60 Sekunden und wird bei schwereren Fragen verlängert. Vorher hast du eine eigene Lesephase.
 
 Die Spielelemente bleiben Spielsignale. Rang, Punkte, Geschwindigkeit, Teamstand und Boni fließen nicht in deine Note ein und werden nicht zu einem persönlichen Leistungsprofil verdichtet. Während eine bewertbare Livefrage geöffnet ist, siehst du keine Lösung oder Lösungsmarkierung.
 
-Deine Teilnahme an den Liveantworten ist freiwillig und formativ. Wenn du nicht unter Zeitdruck antworten kannst oder möchtest, nutzt du einen gleichwertigen untimierten Weg mit derselben Fachaufgabe. Persönlich bewilligte Zeitunterstützung hat Vorrang. Fachinformationen werden nie nur über Farbe, Bild, Animation oder Ton vermittelt.
+Deine Teilnahme an den Liveantworten ist freiwillig und zählt nicht zur Note. Wenn du nicht unter Zeitdruck antworten kannst oder möchtest, bearbeitest du dieselbe Fachaufgabe ohne Zeitlimit. Eine persönlich bewilligte Zeitverlängerung hat Vorrang. Fachinformationen werden nie nur über Farbe, Bild, Animation oder Ton vermittelt.
 
 ## MC-Test: Wissen mit Abstand wieder abrufen
 
-Der MC-Test enthält je Themenblock genau 30 Items:
+Der MC-Test enthält je Stoffblock genau 30 Fragen: keine leichte, 12 mittlere und 18 schwere.
 
-- 0 leichte,
-- 12 mittlere,
-- 18 schwere Items.
+Du arbeitest im Übungsmodus. Nach deiner Antwort erhältst du sofort eine fachliche Erklärung. Es gibt keinen technischen Countdown und keine öffentliche Bestenliste. Eine vollständige Dokument- oder Papierfassung ohne Zeitlimit enthält dieselben Fragen, Lösungen und Erklärungen und ist ein gleichwertiger Weg.
 
-Du arbeitest im Modus `practice`. Nach deiner Antwort erhältst du sofort eine fachliche Erklärung. Es gibt keinen technischen Countdown und bei `show_top5_public=false` keine öffentliche Top-Fünf-Liste. Eine vollständige untimierte Dokument- oder Papierfassung mit denselben Fragen, Lösungen und Erklärungen steht als gleichwertiger Weg bereit.
+Der erste Durchgang findet in UE 3 statt. Denselben Fragensatz kannst du später erneut vollständig bearbeiten. Wichtige Konzepte kehren in späteren Wochen in einem neuen Zusammenhang wieder. Dafür ist kein fester zeitlicher Abstand vorgegeben.
 
-Der erste Abruf findet in UE 3 statt. Derselbe Satz kann später erneut vollständig bearbeitet werden; wichtige Konzepte erscheinen zudem in späteren Themenblöcken in neuen Zusammenhängen. Das Modulpaket legt dafür keine kalendarischen Abstände fest.
+Der MC-Test ist keine Prüfung. Punkte, Bearbeitungszeiten und einzelne Antworten entscheiden weder über die Zulassung noch über die Note. Zusammengefasste Ergebnisse der Gruppe können der Lehrperson zeigen, welches Konzept noch einmal geübt werden sollte.
 
-Der MC-Test ist keine Prüfungsplattform. Punkte, Bearbeitungszeiten und Einzelantworten entscheiden weder über Zulassung noch Note. Vereinbarte Aggregate können der Lehrperson lediglich zeigen, welches Konzept die Gruppe erneut üben sollte.
+## Dein Arbeitsdossier
 
-## Das Agentic Cloud Engineering Dossier
-
-Im Dossier sammelst du während des Semesters zum Beispiel:
+Im Arbeitsdossier, intern Agentic Cloud Engineering Dossier genannt, sammelst du während des Semesters zum Beispiel:
 
 - überprüfbare Agentenaufträge mit Ziel, Grenzen, Rechten und Kostenrahmen;
 - Quellen, Architekturdiagramme und Zustandsmodelle;
@@ -192,17 +189,17 @@ Das Dossier hilft dir beim Lernen und bei der Referatsvorbereitung. Es ist kein 
 
 ### Tablet oder Laptop für Live-Lernen
 
-ARSnova.eu und MC-Test laufen im Browser. Für Livefragen, kurze Diskussionen und Wiederholungen kannst du ein Tablet oder einen Laptop verwenden.
+arsnova.eu und der MC-Test laufen im Browser. Für Livefragen, kurze Diskussionen und Wiederholungen kannst du ein Tablet oder einen Laptop verwenden.
 
 ### Laptop für tiefe technische Arbeit
 
 Für Repository-Suche, geteilte Quellansichten, Architektur- und Konfigurationsvergleiche, IaC, Laborarbeit und umfangreichere Dossierarbeit brauchst du einen Laptop oder eine gleichwertige bereitgestellte Arbeitsumgebung.
 
-Ein fehlendes Gerät, eine instabile Verbindung oder ein anderer Zugangsbedarf darf keinen fachlichen Nachteil erzeugen. Je nach Aufgabe stehen Partnerarbeit, strukturierte Repository-Auszüge, vorbereitete Messberichte, zugängliche Dokumentfassungen und untimierte Antwortwege zur Verfügung.
+Ein fehlendes Gerät, eine instabile Verbindung oder ein anderer Zugangsbedarf darf keinen fachlichen Nachteil erzeugen. Je nach Aufgabe stehen Partnerarbeit, strukturierte Repository-Auszüge, vorbereitete Messberichte, zugängliche Dokumentfassungen und Antwortwege ohne Zeitlimit zur Verfügung.
 
 ## Deine Prüfung
 
-Die Planungsbasis ist ein Referat mit insgesamt 15 Minuten mündlicher Prüfung je Prüfling. Diese Zeit umfasst Vortrag sowie Befragung und Diskussion. Nach den ausgewerteten Unterlagen setzt sich die Prüfung aus drei Teilen zusammen:
+Die Prüfung ist ein Referat von insgesamt 15 Minuten je Person. In dieser Zeit liegen Vortrag, Befragung und Diskussion. Sie besteht aus drei Teilen:
 
 | Bestandteil                                      | Gewicht |
 | ------------------------------------------------ | ------: |
@@ -212,7 +209,7 @@ Die Planungsbasis ist ein Referat mit insgesamt 15 Minuten mündlicher Prüfung 
 
 Die konkrete Prüfungsaufgabe legt fest, ob du allein oder in einer Gruppe arbeitest, ob ein Handout oder Poster verlangt wird, welches Thema gilt und welche Hilfsmittel erlaubt sind. Auch bei Gruppenarbeit bleiben Prüfungszeit, eigener Beitrag und Bewertung individuell.
 
-Der [Katalog der zehn Referatsthemen](./Referatsthemen_Cloud_Computing_ARSnova.md) enthält ausschließlich informatisch ausgerichtete Cloud-Schwerpunkte zu Architektur, Schnittstellen, Daten und Zustand, Deployment, Security, Performance und Zuverlässigkeit am Fallbeispiel arsnova.eu. Welcher konkrete Auftrag für dich verbindlich ist, ergibt sich ausschließlich aus der veröffentlichten Prüfungsaufgabe.
+Die Vorlesung folgt den acht Wochen oben. Die Prüfung folgt den sechs Referatsthemen in [CLOUD-COMPUTING-REFERAT-PRUEFUNG.md](../CLOUD-COMPUTING-REFERAT-PRUEFUNG.md), alle zum Moderationskompass von arsnova.eu. Welches Thema, welches Format und welche Hilfsmittel für dich gelten, steht in der veröffentlichten Prüfungsaufgabe.
 
 Für eine starke Leistung brauchst du keine Produktwerbung und keinen Katalog von Cloud-Diensten. Du brauchst eine klare These, belastbare Quellen, eine nachvollziehbare technische Evidenz, eine faire Gegenalternative, sichtbare Grenzen und eine eigene begründete Entscheidung.
 
@@ -228,7 +225,7 @@ Toolergebnisse werden ausschließlich für die Lehre und die interne Qualitätss
 - einem personenbezogenen Leistungsprofil,
 - einer späteren Nutzung zu einem anderen Zweck.
 
-Automatische Pseudonyme verringern unnötige Klarnamennutzung, sind aber keine Zusage vollständiger technischer Anonymität. Trage keine Secrets, Tokens, Produktionszugänge, vertraulichen Systeminformationen oder nicht erforderlichen personenbezogenen Daten in Livefragen, Agentenaufträge oder das Dossier ein.
+Automatische Pseudonyme verringern unnötige Klarnamennutzung. Sie sind keine Zusage vollständiger technischer Anonymität. Trage keine Zugangsdaten, Schlüssel, Token, Produktionszugänge, vertraulichen Systeminformationen oder unnötigen personenbezogenen Daten in Livefragen, Agentenaufträge oder das Dossier ein.
 
 ## Was du aus dem Modul mitnehmen sollst
 

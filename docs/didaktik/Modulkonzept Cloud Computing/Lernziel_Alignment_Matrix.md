@@ -6,7 +6,7 @@
 
 - **IU Internationale Hochschule (IU)** bezeichnet die Hochschule. `DSCC0127` ist der Modulcode und `DSCC012701` der Kurscode.
 - **Qualifikationsziel (QZ)** bezeichnet eines der fünf offiziellen Ziele, **Modulziel (MZ)** eines der neun operationalisierten Ziele und **Learning Indicator (LI)** einen beobachtbaren Lernindikator.
-- **TB01–TB12** bezeichnet zwölf stabile Themenblöcke ohne Kalender- oder Modalitätszuordnung. Eine **Lerneinheit (LE)** umfasst zwei **Unterrichtseinheiten (UE)** à 45 Minuten und dauert 90 Minuten.
+- **TB01–TB12** bezeichnet zwölf Inhaltsblöcke. Sie werden in acht Vorlesungswochen erteilt: V1 TB01, V2 TB02 und TB03, V3 TB04, V4 TB06, V5 TB07 und TB08, V6 TB09, V7 TB05 und TB10, V8 TB11 und TB12. Eine **Lerneinheit (LE)** umfasst zwei **Unterrichtseinheiten (UE)** à 45 Minuten und dauert 90 Minuten.
 - **Multiple Choice (MC)** bezeichnet Aufgaben mit vorgegebenen Antwortmöglichkeiten. **MC-Test** bezeichnet die formative Lernanwendung.
 - **Infrastructure as Code (IaC)** bezeichnet reproduzierbar beschriebene Infrastruktur. **Identity and Access Management (IAM)** bezeichnet Identitäts- und Berechtigungsverwaltung.
 - **Site Reliability Engineering (SRE)** bezeichnet den mess- und automatisierungsorientierten Ansatz für zuverlässigen Betrieb. **Service Level Indicator (SLI)** bezeichnet eine Messgröße, **Service Level Objective (SLO)** ihren Zielwert.
@@ -141,7 +141,7 @@ Die Spalte zur Referatsprüfung beschreibt mögliche formale Evidenz für ein pa
 
 ## 7. Bezug zur formalen Referatsprüfung
 
-Die Planungsbasis umfasst insgesamt 15 Minuten mündliche Prüfung je Prüfling. Schriftliche Einreichung, visuell unterstützter Vortrag sowie Befragung und Diskussion werden nach den offiziellen Gewichten 30 Prozent, 30 Prozent und 40 Prozent berücksichtigt. Die konkrete Prüfungsaufgabe legt Thema, Format, Hilfsmittel und Zuordnung fest.
+Die Planungsbasis umfasst insgesamt 15 Minuten mündliche Prüfung je Prüfling. Schriftliche Einreichung, visuell unterstützter Vortrag sowie Befragung und Diskussion werden nach den offiziellen Gewichten 30 Prozent, 30 Prozent und 40 Prozent berücksichtigt. Der Themenkatalog sind die sechs Referatsthemen in [CLOUD-COMPUTING-REFERAT-PRUEFUNG.md](../CLOUD-COMPUTING-REFERAT-PRUEFUNG.md). Die konkrete Prüfungsaufgabe legt Thema, Format, Hilfsmittel und Zuordnung fest.
 
 Für ein alignedes Referat gilt:
 
