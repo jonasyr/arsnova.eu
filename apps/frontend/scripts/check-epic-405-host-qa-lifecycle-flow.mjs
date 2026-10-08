@@ -13,6 +13,8 @@
  */
 import { createTRPCProxyClient, httpBatchLink } from '@trpc/client';
 import assert from 'node:assert/strict';
+import { mkdir } from 'node:fs/promises';
+import { join } from 'node:path';
 import { chromium, webkit } from 'playwright';
 import { configureQaSessionIfNeeded } from '../../../scripts/load/lib/configure-qa-if-needed.mjs';
 
@@ -35,8 +37,15 @@ function createTrpcClient(hostToken) {
       httpBatchLink({
         url: TRPC_URL,
         headers: hostToken ? () => ({ 'x-host-token': hostToken }) : undefined,
+        fetch: (url, options) => fetch(url, { ...options, signal: AbortSignal.timeout(15_000) }),
       }),
     ],
+  });
+}
+
+function attachHostPageGuards(page) {
+  page.on('dialog', (dialog) => {
+    void dialog.accept().catch(() => undefined);
   });
 }
 
@@ -136,6 +145,18 @@ async function hostPageDiagnostics(page) {
   });
 }
 
+async function captureHostFailure(page, label) {
+  const diagnostics = await hostPageDiagnostics(page).catch(() => null);
+  const dir = process.env.SMOKE_ARTIFACT_DIR;
+  if (dir) {
+    await mkdir(dir, { recursive: true });
+    await page
+      .screenshot({ path: join(dir, `${label}.png`), fullPage: true })
+      .catch(() => undefined);
+  }
+  return diagnostics;
+}
+
 async function waitForRecoveryUiGone(page) {
   await page
     .locator('[data-testid="host-recovery-card-done"]')
@@ -179,19 +200,36 @@ async function dismissJoinOverlay(page, timeout = 8_000) {
 
 async function prepareHostSurface(page) {
   try {
+    await page.locator('app-session-host').waitFor({ state: 'attached', timeout: 30_000 });
     await page
       .locator(
-        '[data-testid="add-channel-trigger"], [data-testid="host-recovery-card-done"], .session-channel-tabs',
+        [
+          '[data-testid="add-channel-trigger"]',
+          '[data-testid="host-recovery-card-done"]',
+          '[data-testid="host-access-revoked"]',
+          '.session-channel-tabs',
+        ].join(', '),
       )
       .first()
       .waitFor({ state: 'visible', timeout: 30_000 });
   } catch (error) {
-    const diagnostics = await hostPageDiagnostics(page).catch(() => null);
+    const diagnostics = await captureHostFailure(page, 'epic-405-host-surface');
     throw new Error(
       `${error instanceof Error ? error.message : String(error)}${
         diagnostics ? `\nHost-DOM: ${JSON.stringify(diagnostics)}` : ''
       }`,
       { cause: error },
+    );
+  }
+  if (
+    await page
+      .getByTestId('host-access-revoked')
+      .isVisible()
+      .catch(() => false)
+  ) {
+    const diagnostics = await captureHostFailure(page, 'epic-405-host-revoked');
+    throw new Error(
+      `Host-Zugang nach Reload entzogen.${diagnostics ? ` DOM: ${JSON.stringify(diagnostics)}` : ''}`,
     );
   }
   const recoveryDone = page.locator('[data-testid="host-recovery-card-done"]');
@@ -208,15 +246,20 @@ async function prepareHostSurface(page) {
   await waitForRecoveryUiGone(page);
 }
 
-async function assertPersistedLiveChannels(hostToken, code) {
-  const info = await createTrpcClient(hostToken).session.getInfo.query({ code });
-  const channels = info?.channels;
+function assertClosedLiveChannels(channels) {
   if (!channels?.qa?.enabled || channels.qa.open !== false || !channels.quickFeedback?.enabled) {
     throw new Error(
       `Unerwarteter Kanalstand nach closeQaChannel: ${JSON.stringify(channels ?? null)}`,
     );
   }
-  return channels;
+}
+
+async function reloadHostSession(page, code) {
+  await page.evaluate(() => {
+    globalThis.onbeforeunload = null;
+  });
+  await page.reload({ waitUntil: 'domcontentloaded', timeout: 30_000 });
+  await waitForPathSuffix(page, `/session/${code}/host`);
 }
 
 async function verifySingleQaNavigation(host, code) {
@@ -259,7 +302,8 @@ async function verifyClosedQaNavigation(host) {
       const tabs = [...document.querySelectorAll('.session-channel-tabs mat-button-toggle')];
       if (tabs.length < 2) return false;
       const label = tabs[0].querySelector('.session-channel-tabs__label')?.textContent?.trim();
-      const badge = tabs[0].querySelector('.session-channel-tabs__badge')?.textContent?.trim() ?? '';
+      const badge =
+        tabs[0].querySelector('.session-channel-tabs__badge')?.textContent?.trim() ?? '';
       return label === 'Q&A' && /^(Zu|Closed)$/i.test(badge);
     });
   } catch (error) {
@@ -296,6 +340,7 @@ async function main() {
     const hostContext = await browser.newContext({ viewport: DESKTOP });
     await seedHostBrowser(hostContext, session);
     const host = await hostContext.newPage();
+    attachHostPageGuards(host);
     await host.goto(`${BASE_URL}/session/${session.code}/host`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
@@ -360,19 +405,17 @@ async function main() {
     await host.waitForFunction(
       () => document.querySelectorAll('.session-channel-tabs mat-button-toggle').length === 2,
     );
-    await createTrpcClient(session.hostToken).session.closeQaChannel.mutate({ code: session.code });
-    await assertPersistedLiveChannels(session.hostToken, session.code);
+    const closedChannels = await createTrpcClient(session.hostToken).session.closeQaChannel.mutate({
+      code: session.code,
+    });
+    assertClosedLiveChannels(closedChannels);
     await host
       .locator('.session-channel-tabs mat-button-toggle')
       .first()
       .locator('.session-channel-tabs__badge')
-      .waitFor({ state: 'visible', timeout: 15_000 })
+      .waitFor({ state: 'visible', timeout: 10_000 })
       .catch(() => undefined);
-    await host.goto(`${BASE_URL}/session/${session.code}/host`, {
-      waitUntil: 'domcontentloaded',
-      timeout: 30_000,
-    });
-    await waitForPathSuffix(host, `/session/${session.code}/host`);
+    await reloadHostSession(host, session.code);
     await verifyClosedQaNavigation(host);
     logStep(
       true,
@@ -383,6 +426,7 @@ async function main() {
 
     const recoveryContext = await browser.newContext({ viewport: DESKTOP });
     const recovery = await recoveryContext.newPage();
+    attachHostPageGuards(recovery);
     await recovery.goto(`${BASE_URL}/host-recovery`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
