@@ -4,7 +4,7 @@
 
 **Versionierungsbasis:** Branch `main`, Checkout `beab199d62c0`
 
-**Zweck:** kuratierte Repositorynachweise für Lehre, Dossier und technische Einordnung
+**Zweck:** kuratierte Repositorynachweise für die acht Vorlesungswochen, das Dossier und die sechs Referatsthemen
 
 ## 1. Begriffe und Kürzel
 

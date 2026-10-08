@@ -28,7 +28,7 @@ Die Herkunftsklasse ändert sich durch Bearbeitung nicht: Ein anonym freigegeben
 - **Transport Layer Security (TLS):** Schutz von Netzwerkverbindungen durch Verschlüsselung und Serverauthentisierung.
 - **Time to live (TTL):** technische Ablaufzeit eines gespeicherten Zustands.
 - **T0:** dokumentiertes Ende des jeweiligen Erhebungs-, Bearbeitungs- oder Laborfensters.
-- **TB01–TB12:** zwölf stabile Themenblöcke ohne Kalender- oder Modalitätszuordnung.
+- **TB01–TB12:** zwölf Inhaltsblöcke, erteilt in den acht Vorlesungswochen V1–V8. Präsenz oder virtuelle Durchführung ändert die Datenregeln nicht.
 - **G1–G4:** die vier institutionellen Gates aus Abschnitt 3.
 - **Small-cell-Suppression:** Nichtausgabe kleiner Zellen und ergänzende Unterdrückung, damit Werte nicht zurückgerechnet werden können.
 

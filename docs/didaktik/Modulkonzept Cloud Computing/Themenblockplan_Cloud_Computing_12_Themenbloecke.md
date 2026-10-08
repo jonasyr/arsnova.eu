@@ -4,9 +4,26 @@
 
 **Stand:** 14.09.2026
 
+## 0. Acht Vorlesungswochen
+
+Die Vorlesung dauert acht Wochen und 36 Unterrichtseinheiten. V1, V3, V4 und V6 dauern je drei UE. V2, V5, V7 und V8 dauern je sechs UE, weil dort zwei Stoffblöcke nacheinander stattfinden. Jeder Block behält seine eigenen 90 Minuten und seinen eigenen MC-Test. Die Abschnitte TB01–TB12 beschreiben diesen Stoff.
+
+| Woche |  UE | Thema                                                            | Blöcke     |
+| ----- | --: | ---------------------------------------------------------------- | ---------- |
+| V1    |   3 | Grundlagen, Cloudmodelle und Shared Responsibility               | TB01       |
+| V2    |   6 | Container, IaC, Deployment, Härtung und Zustand                  | TB02, TB03 |
+| V3    |   3 | Serverless Computing                                             | TB04       |
+| V4    |   3 | Datenwissenschaft, maschinelles Lernen und Informationsqualität  | TB06       |
+| V5    |   6 | Storage, Recovery, Skalierung und verteilte Systeme              | TB07, TB08 |
+| V6    |   3 | IAM, Security, Observability, Degradation und Resilienz          | TB09       |
+| V7    |   6 | Plattformen, FinOps, Nachhaltigkeit und 6R                       | TB05, TB10 |
+| V8    |   6 | Architekturentscheidung, Referatswerkstatt und Probeverteidigung | TB11, TB12 |
+
+Grundlagen und Serverless bleiben eigene Wochen. Zusammengezogen sind die Bereiche, die auch der Referatskatalog nicht mehr einzeln prüft: Bereitstellung und Zustand, Speicher und Skalierung, Plattformvergleich und Kosten, Entscheidungsarbeit und Probe.
+
 ## 1. Zweck und Stellung im Modulpaket
 
-Dieser Lehrplan konkretisiert die zwölf Themenblöcke des [Modulkonzepts](./Modulkonzept_Cloud_Computing.md) für Bachelorstudierende der Informatik. Andere Studiengänge gehören nicht zur Zielgruppe. Der Lehrplan verbindet für jeden Themenblock:
+Dieser Lehrplan führt die zwölf Stoffblöcke des [Modulkonzepts](./Modulkonzept_Cloud_Computing.md) für Bachelorstudierende der Informatik aus. Lies jeweils den Block deiner aktuellen Vorlesungswoche. Der Lehrplan nennt für jeden Block:
 
 - die fachlichen Inhalte und die leitende Problemfrage;
 - die zugeordneten Qualifikationsziele (QZ), Modulziele (MZ) und Learning Indicators (LI);
@@ -16,7 +33,7 @@ Dieser Lehrplan konkretisiert die zwölf Themenblöcke des [Modulkonzepts](./Mod
 - Repository- und Quellenanker für das Fallbeispiel arsnova.eu;
 - den Dossierertrag und den anschließenden Selbststudiumsauftrag.
 
-Für Ziele und Alignment ist die [Lernziel- und Alignment-Matrix](./Lernziel_Alignment_Matrix.md) maßgeblich. Die [ARSnova-Themenblockdateien im Format JavaScript Object Notation (JSON)](./ARSnova_Blueprint_12_Themenbloecke.md) enthalten den autoritativen Wortlaut der Livefragen; die [MC-Test-Themenblock-JSONs](./MC-Test_Blueprint_12_Themenbloecke.md) enthalten den autoritativen Wortlaut, die Lösungen und Erklärungen der MC-Items. Das [Lehrenden-Runbook](./Lehrenden_Runbook.md) regelt Preflight, Betrieb, Datenschutz, Störungen und Nachbereitung. Dieser Lehrplan ersetzt den überholten UE-3-Ablauf des früheren Terminplans.
+Die Lernziele stehen in der [Lernziel- und Alignment-Matrix](./Lernziel_Alignment_Matrix.md). Den Wortlaut der Livefragen und der MC-Tests legen die JSON-Dateien fest, nicht dieser Plan. Ablauf, Störungen und Datenschutz für die Lehrperson stehen im [Lehrenden-Runbook](./Lehrenden_Runbook.md).
 
 ## 2. Begriffe, Zeitmodell und Kursstartbasis
 
@@ -57,7 +74,7 @@ Für Ziele und Alignment ist die [Lernziel- und Alignment-Matrix](./Lernziel_Ali
 - **p50, p95 und p99:** das 50., 95. und 99. Perzentil einer Messwertverteilung.
 - **6R:** Rehost, Replatform, Repurchase, Refactor, Retire und Retain als Migrationstaxonomie.
 
-Für TB03, TB06, TB08–TB10 und die Referatsvorbereitung gilt die Kursstartannahme aus dem [Referatsthemenkatalog](./Referatsthemen_Cloud_Computing_ARSnova.md#3-verbindliche-kursstartannahme-für-die-lokale-llm-runtime): Story 8.9d ist entsprechend [ADR-0035](../../architecture/decisions/0035-self-hosted-llm-runtime-llama-cpp-over-ollama.md) implementiert. Vor TB01 werden Kurs-Commit, Modellartefakt, privater Inferenzhost, gemeinsamer Slot, Kill-Switch, Fallbacks und Tests praktisch bestätigt. Die Runtime allein belegt weder fertige Consumer-Funktionen noch Produktivfreigabe, Skalierbarkeit oder Modellqualität.
+Für TB03, TB06, TB08–TB10 und die Referatsvorbereitung gilt die Kursstartannahme aus [ADR-0035](../../architecture/decisions/0035-self-hosted-llm-runtime-llama-cpp-over-ollama.md) und der [Referatsprüfung](../CLOUD-COMPUTING-REFERAT-PRUEFUNG.md): Story 8.9d ist implementiert. Vor TB01 werden Kurs-Commit, Modellartefakt, privater Inferenzhost, gemeinsamer Slot, Kill-Switch, Fallbacks und Tests praktisch bestätigt. Die Runtime allein belegt weder fertige Consumer-Funktionen noch Produktivfreigabe, Skalierbarkeit oder Modellqualität.
 
 Vor der Kursfreigabe erhält [Technische_Quellen_ARSnova.md](./Technische_Quellen_ARSnova.md) dafür einen aktuellen Quellenblock mit Code-, Compose-, Konfigurations-, Test- und Messankern des Kurs-Commits. Solange dort nur `SRC-LLM-LLAMA-ZIELBILD` steht, belegt die Quellenkennung ausschließlich die Architekturentscheidung und keine Implementierung.
 
@@ -81,15 +98,15 @@ Die Fachbegriffe jedes Themenblocks sind aktiver Mindestwortschatz. Studierende 
 | 79–88 | Methodenrückmeldung und nächste Lernhandlung                              | L09 und L10; keine Noteninterpretation    |
 | 88–90 | Dossierertrag, offene Annahme und Selbststudium sichern                   | keine zusätzliche Livefrage               |
 
-Der konkrete Inhalt dieser Zeitfenster steht in den Themenblockabschnitten. Jeder Themenblock verwendet jeden der zehn unterstützten Fragetypen genau einmal und ausschließlich `MEDIUM` oder `HARD`. Lesephase, persönlicher Zeitzuschlag und eine gleichwertige untimierte Alternative sind getrennte Schutzmechanismen. Der 60-Sekunden-Standardtimer wird nach Schwierigkeit skaliert. Lösungen bewertbarer Livefragen bleiben bis zum Schließen verborgen. Bei einer zweiten Peer-Instruction-Runde gilt die Effective-Vote-Regel aus dem [ARSnova-Blueprint](./ARSnova_Blueprint_12_Themenbloecke.md#6-lösungsschutz-peer-instruction-und-effective-vote): Runde 2 ersetzt für die ganze Frage Runde 1; beide Runden werden nie addiert. Punkte, Rang, Geschwindigkeit, Teamstand, Boni und Reaktionen sind ausschließlich Spielsignale.
+Der konkrete Inhalt dieser Zeitfenster steht in den Themenblockabschnitten. Jeder Themenblock verwendet jeden der zehn unterstützten Fragetypen genau einmal und ausschließlich `MEDIUM` oder `HARD`. Lesephase, persönlicher Zeitzuschlag und eine gleichwertige Alternative ohne Zeitlimit sind getrennte Schutzmechanismen. Der 60-Sekunden-Standardtimer wird nach Schwierigkeit skaliert. Lösungen bewertbarer Livefragen bleiben bis zum Schließen verborgen. Bei einer zweiten Peer-Instruction-Runde gilt die Effective-Vote-Regel aus dem [ARSnova-Blueprint](./ARSnova_Blueprint_12_Themenbloecke.md#6-lösungsschutz-peer-instruction-und-effective-vote): Runde 2 ersetzt für die ganze Frage Runde 1; beide Runden werden nie addiert. Punkte, Rang, Geschwindigkeit, Teamstand, Boni und Reaktionen sind ausschließlich Spielsignale.
 
 ### 3.2 UE 3: 45-minütiger formativer MC-Test
 
-| Zeit    | Handlung                                                                                        |
-| ------- | ----------------------------------------------------------------------------------------------- |
-| 90–93   | Wechsel, Link und gleichwertige untimierte Fassung öffnen; Freiwilligkeit und `practice` nennen |
-| 93–125  | genau 30 Themenblockitems bearbeiten; Sofortfeedback, Erklärungen und Mini-Glossare nutzen      |
-| 125–135 | aggregierte Ergebnisse und Lösungen besprechen; mindestens zwei ergiebige Items erklären        |
+| Zeit    | Handlung                                                                                            |
+| ------- | --------------------------------------------------------------------------------------------------- |
+| 90–93   | Wechsel, Link und gleichwertige Fassung ohne Zeitlimit öffnen; Freiwilligkeit und `practice` nennen |
+| 93–125  | genau 30 Themenblockitems bearbeiten; Sofortfeedback, Erklärungen und Mini-Glossare nutzen          |
+| 125–135 | aggregierte Ergebnisse und Lösungen besprechen; mindestens zwei ergiebige Items erklären            |
 
 Die 32 Minuten sind ein organisatorischer Planwert, kein technischer Countdown. `show_top5_public=false`; MC-Ergebnisse sind weder Prüfungsleistung noch Zulassungsvoraussetzung. Derselbe vollständige Satz kann später erneut bereitgestellt werden. Kernkonzepte werden in späteren Themenblöcken in neuem Kontext wieder aufgenommen; das Modulpaket legt dafür keine kalendarischen Abstände fest.
 
@@ -97,7 +114,7 @@ Jede Themenblockdatei enthält genau zwölf mittlere Items mit `weight=2` und 18
 
 ### 3.3 Gleichwertiger Zugang
 
-Die Teilnahme an ARSnova und MC-Test ist freiwillig und ohne Notennachteil. Tablets und Laptops genügen für beide Werkzeuge. Repository-, Konfigurations-, Log- und Quellenanalysen erfolgen am Laptop oder mit einem gleichwertigen vorbereiteten Auszug. Jede zeitgebundene Aktivität besitzt einen fachlich gleichwertigen untimierten Weg. Tastaturbedienung, sichtbarer Fokus, Zoom und Reflow, Kontrast, Alternativtexte, Untertitelweg und reduzierte Bewegung werden nach Runbook und QA-Protokoll geprüft. Fachinformation wird nie ausschließlich über Farbe, Ton, Animation oder räumliche Anordnung vermittelt.
+Die Teilnahme an ARSnova und MC-Test ist freiwillig und ohne Notennachteil. Tablets und Laptops genügen für beide Werkzeuge. Repository-, Konfigurations-, Log- und Quellenanalysen erfolgen am Laptop oder mit einem gleichwertigen vorbereiteten Auszug. Jede zeitgebundene Aktivität besitzt einen fachlich gleichwertigen Weg ohne Zeitlimit. Tastaturbedienung, sichtbarer Fokus, Zoom und Reflow, Kontrast, Alternativtexte, Untertitelweg und reduzierte Bewegung werden nach Runbook und QA-Protokoll geprüft. Fachinformation wird nie ausschließlich über Farbe, Ton, Animation oder räumliche Anordnung vermittelt.
 
 Automatische Pseudonyme sind keine Zusage vollständiger technischer Anonymität. Klarnamen, Secrets, Tokens, Produktionszugänge und nicht freigegebene personenbezogene Daten gehören nicht in Livefragen, MC-Test, Dossier, Agentenaufträge oder Laborartefakte. Daten und Kennungen der Werkzeuge werden nicht zu werkzeugübergreifenden Personen- oder Leistungsprofilen verbunden. LIVE-Daten dienen ausschließlich der Lehre und internen Qualitätssicherung, nicht individueller Bewertung, Forschung oder Publikation.
 
@@ -118,7 +135,7 @@ Automatische Pseudonyme sind keine Zusage vollständiger technischer Anonymität
 |        TB11 | Evidenzbasierte Architekturentscheidung und Referatsarbeit | QZ1–QZ5, MZ9, LI23–LI24           | Referatsthese, Quellenregister, Visualisierung und Gegenalternative |
 |        TB12 | Synthese und Probeverteidigung                             | QZ1–QZ5, MZ9, LI24                | Probe, persönliche Korrekturliste und begrenzte Schlussaussage      |
 
-Jeder Themenblock umfasst zwei UE für die LE und eine UE für den MC-Test. Die zwölf Themenblöcke ergeben zusammen 36 UE; eine kalender- oder modalitätsbezogene Verteilung ist nicht Teil dieses Plans.
+Jeder Themenblock umfasst zwei UE für die LE und eine UE für den MC-Test. Die zwölf Blöcke ergeben 36 UE und werden in den acht Wochen aus Abschnitt 0 erteilt. In einer Woche mit zwei Blöcken bleibt jeder Block ein eigener 90-plus-45-Minuten-Durchgang. Präsenz oder virtuelle Durchführung ändert den Stoff nicht.
 
 ## 5. TB01 – Cloud-Grundlagen, Modelle und Shared Responsibility
 
@@ -689,7 +706,7 @@ UE 3 verwendet den MC-Test TB10. Besprochen werden mindestens eine falsche Unit-
 
 **Fragensätze:** [ARSnova TB11](./ARSnova/ARSnova_Themenblock_11.json) · [MC-Test TB11](./MC-Test/MC-Test_Themenblock_11.json)
 
-**Quellenanker:** [Referatsthemenkatalog](./Referatsthemen_Cloud_Computing_ARSnova.md), [Lernziel- und Alignment-Matrix](./Lernziel_Alignment_Matrix.md), [Technische Quellen](./Technische_Quellen_ARSnova.md) und der veröffentlichte Prüfungsauftrag.
+**Quellenanker:** [Referatsprüfung](../CLOUD-COMPUTING-REFERAT-PRUEFUNG.md), [Lernziel- und Alignment-Matrix](./Lernziel_Alignment_Matrix.md), [Technische Quellen](./Technische_Quellen_ARSnova.md) und der veröffentlichte Prüfungsauftrag.
 
 ### Inhalte und erwartete Ergebnisse
 
@@ -745,7 +762,7 @@ UE 3 verwendet den MC-Test TB11. Besprochen werden mindestens ein Quellen-/Evide
 
 **Fragensätze:** [ARSnova TB12](./ARSnova/ARSnova_Themenblock_12.json) · [MC-Test TB12](./MC-Test/MC-Test_Themenblock_12.json)
 
-**Quellenanker:** vollständiges persönliches Quellenregister, [Referatsthemenkatalog](./Referatsthemen_Cloud_Computing_ARSnova.md), [Lernziel- und Alignment-Matrix](./Lernziel_Alignment_Matrix.md), [Technische Quellen](./Technische_Quellen_ARSnova.md) und der gültige Prüfungsauftrag.
+**Quellenanker:** vollständiges persönliches Quellenregister, [Referatsprüfung](../CLOUD-COMPUTING-REFERAT-PRUEFUNG.md), [Lernziel- und Alignment-Matrix](./Lernziel_Alignment_Matrix.md), [Technische Quellen](./Technische_Quellen_ARSnova.md) und der gültige Prüfungsauftrag.
 
 ### Inhalte und erwartete Ergebnisse
 
