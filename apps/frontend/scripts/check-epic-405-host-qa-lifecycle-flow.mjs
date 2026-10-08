@@ -364,10 +364,27 @@ async function main() {
     const host = await hostContext.newPage();
     attachHostPageGuards(host);
     await openHostSession(host, session.code);
-    await host
-      .locator('.session-host, [data-testid="host-recovery-card-done"]')
-      .first()
-      .waitFor({ state: 'visible', timeout: 30_000 });
+    try {
+      await host
+        .locator(
+          [
+            '[data-testid="host-recovery-card-done"]',
+            '[data-testid="add-channel-trigger"]',
+            '.session-channel-tabs',
+            '[data-testid="host-access-revoked"]',
+          ].join(', '),
+        )
+        .first()
+        .waitFor({ state: 'visible', timeout: 45_000 });
+    } catch (error) {
+      const diagnostics = await captureHostFailure(host, 'epic-405-host-first-load');
+      throw new Error(
+        `${error instanceof Error ? error.message : String(error)}${
+          diagnostics ? `\nHost-DOM: ${JSON.stringify(diagnostics)}` : ''
+        }`,
+        { cause: error },
+      );
+    }
 
     const cardOk = await dismissRecoveryCard(host).catch(async (error) => {
       const diagnostics = await hostPageDiagnostics(host).catch(() => null);
