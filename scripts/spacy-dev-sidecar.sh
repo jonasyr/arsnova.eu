@@ -36,7 +36,7 @@ Docker-Volume /run/spacy/nlp.sock bleibt für Host-Node unsichtbar.
 
 Standard-Socket: /tmp/arsnova-nlp.sock
 Venv: docker/spacy/.venv (erster Lauf lädt de/en/fr/es, oft mehrere Minuten)
-Python 3.10+ erforderlich.
+Python 3.10–3.13 erforderlich (python3.13 … python3.10 werden bevorzugt).
 
 Das Backend in npm run dev / npm run dev:de / npm run dev:en setzt dafür
 NLP_ENABLED=true und denselben Socket. Produktiv bleibt NLP_ENABLED=false.
@@ -75,20 +75,34 @@ resolve_python() {
   return 1
 }
 
+# spaCy 3.8.15 (docker/spacy/requirements.txt) hat keine Pakete für Python 3.14+.
+python_in_supported_range() {
+  "$1" -c 'import sys; raise SystemExit(0 if (3, 10) <= sys.version_info[:2] < (3, 14) else 1)' \
+    >/dev/null 2>&1
+}
+
 ensure_python() {
-  local venv_dir py
+  local venv_dir py candidate base_python=""
   if resolve_python; then
     return 0
   fi
 
-  command -v python3 >/dev/null 2>&1 || fail \
-    "python3 fehlt. Bitte Python 3.10+ installieren (z. B. brew install python@3.12)."
-  python3 -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)' \
-    || fail "Python 3.10+ erforderlich (gefunden: $(python3 --version 2>&1))."
-
   venv_dir="$ROOT/docker/spacy/.venv"
-  info "Lege spaCy-venv an unter $venv_dir (erster Lauf lädt de/en/fr/es, oft mehrere Minuten) …"
-  python3 -m venv "$venv_dir"
+  # Der erste passende Interpreter kann ohne venv-Modul installiert sein
+  # (Debian/Ubuntu: pythonX.Y-venv separat), daher den nächsten versuchen.
+  for candidate in python3.13 python3.12 python3.11 python3.10 python3; do
+    command -v "$candidate" >/dev/null 2>&1 || continue
+    python_in_supported_range "$candidate" || continue
+    info "Lege spaCy-venv mit $candidate an unter $venv_dir (erster Lauf lädt de/en/fr/es, oft mehrere Minuten) …"
+    if "$candidate" -m venv --clear "$venv_dir"; then
+      base_python="$candidate"
+      break
+    fi
+    info "venv mit $candidate fehlgeschlagen (fehlt das venv-Paket, z. B. ${candidate}-venv?); versuche den nächsten Interpreter …"
+  done
+  [[ -n "$base_python" ]] || fail \
+    "Python 3.10–3.13 mit venv-Modul erforderlich (spaCy 3.8.15 hat keine Pakete für Python 3.14+; gefunden: $(python3 --version 2>/dev/null || echo 'kein python3')). Bitte z. B. python3.13 installieren (brew install python@3.13; Debian/Ubuntu zusätzlich python3.13-venv)."
+
   py="$venv_dir/bin/python"
   "$py" -m pip install --upgrade pip
   "$py" -m pip install -r "$ROOT/docker/spacy/requirements.txt"

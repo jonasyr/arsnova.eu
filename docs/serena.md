@@ -1,8 +1,10 @@
 # Serena für Coding-Agents
 
-**Stand:** 2026-05-31
+**Stand:** 2026-10-09
 
-Serena ist für dieses Repository onboarded. Coding-Agents können damit Projekt-Memories
+Serena ist für dieses Repository onboarded. Voraussetzung ist **Serena ≥ 1.7.0**:
+`.serena/project.yml` nutzt den in 1.7.0 eingeführten Schlüssel `language_servers` (vorher
+`languages`). Coding-Agents können damit Projekt-Memories
 lesen, TypeScript-Symbole semantisch finden und Referenzen gezielter verfolgen, ohne bei jeder
 Aufgabe die gesamte Struktur neu zu rekonstruieren.
 
@@ -18,7 +20,7 @@ use serena for this repo
 Der Agent soll dann prüfen:
 
 - aktives Projekt: `arsnova.eu`
-- Projektpfad: `/Users/kqc/arsnova.eu`
+- Projektpfad: Repository-Root des lokalen Klons (kein fester Pfad)
 - aktive Tools: `find_symbol`, `find_referencing_symbols`, `get_symbols_overview`,
   `search_for_pattern`, `read_memory`
 - vorhandene Memories: mindestens `core`, `tech_stack`, `suggested_commands`, `conventions`,

@@ -106,7 +106,7 @@ Env-Referenz: [ENVIRONMENT.md](../ENVIRONMENT.md). Härtung: [SECURITY-OVERVIEW.
 
 `npm run dev`, `npm run dev:de` und `npm run dev:en` starten den Host-Sidecar (`npm run spacy:dev`). Das Backend bekommt prozesslokal `NLP_ENABLED=true`, `NLP_SOCKET_PATH=/tmp/arsnova-nlp.sock` und `NLP_TIMEOUT_MS=15000`. Die Datei `.env` bleibt `NLP_ENABLED=false` (Produktiv-Default).
 
-Erster Lauf legt `docker/spacy/.venv` an und lädt die Modelle `de`/`en`/`fr`/`es` (oft mehrere Minuten). Dafür braucht es Python 3.10+. In concurrently erscheint die Spalte `spacy`. Solange die Modelle laden, bleibt die Host-UI bei **Glättung nicht verfügbar**; nach dem Socket-Bind neu analysieren.
+Erster Lauf legt `docker/spacy/.venv` an und lädt die Modelle `de`/`en`/`fr`/`es` (oft mehrere Minuten). Dafür braucht es Python 3.10–3.13 (spaCy 3.8.15 hat keine Pakete für 3.14); das Skript nimmt `python3.13` … `python3.10` vor `python3`. In concurrently erscheint die Spalte `spacy`. Solange die Modelle laden, bleibt die Host-UI bei **Glättung nicht verfügbar**; nach dem Socket-Bind neu analysieren.
 
 `npm run docker:up:nlp` hilft Host-Node nicht: das Compose-Volume `/run/spacy/nlp.sock` ist außerhalb des App-Containers unsichtbar. Nur API ohne Wolke: `npm run dev:backend` lässt den Sidecar aus.
 
