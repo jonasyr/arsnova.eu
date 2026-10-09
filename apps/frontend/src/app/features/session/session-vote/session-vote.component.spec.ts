@@ -6126,18 +6126,20 @@ describe('SessionVoteComponent', { timeout: 30_000 }, () => {
     fixture.destroy();
   });
 
-  it('ignoriert eine verspätete HTTP-Fallback-Antwort nach Subscription-Erholung', async () => {
-    let resolveFallback!: (result: {
+  it('ignoriert eine verspätete HTTP-Antwort aus einem früheren Subscription-Ausfall', async () => {
+    type MoodResult = {
       type: 'MOOD';
       locked: boolean;
       totalVotes: number;
       distribution: { POSITIVE: number; NEUTRAL: number; NEGATIVE: number };
       currentRound: number;
-    }) => void;
-    quickFeedbackResultsQueryMock.mockReturnValueOnce(
-      new Promise<Parameters<typeof resolveFallback>[0]>((resolve) => {
-        resolveFallback = resolve;
-      }),
+    };
+    const fallbackResolvers: Array<(result: MoodResult) => void> = [];
+    quickFeedbackResultsQueryMock.mockImplementation(
+      () =>
+        new Promise<MoodResult>((resolve) => {
+          fallbackResolvers.push(resolve);
+        }),
     );
 
     const fixture = TestBed.createComponent(SessionVoteComponent);
@@ -6166,23 +6168,43 @@ describe('SessionVoteComponent', { timeout: 30_000 }, () => {
       currentRound: 2,
     });
     const internals = component as unknown as {
-      quickFeedbackFallbackActive: boolean;
-      refreshQuickFeedbackResult: (options: { fallbackOnly: boolean }) => Promise<void>;
+      activateQuickFeedbackFallback: () => void;
+      deactivateQuickFeedbackFallback: () => void;
     };
-    internals.quickFeedbackFallbackActive = true;
 
-    const fallbackRequest = internals.refreshQuickFeedbackResult({ fallbackOnly: true });
-    internals.quickFeedbackFallbackActive = false;
-    resolveFallback({
+    internals.activateQuickFeedbackFallback();
+    expect(fallbackResolvers).toHaveLength(1);
+    internals.deactivateQuickFeedbackFallback();
+    component.quickFeedbackResult.set({
+      type: 'MOOD',
+      locked: false,
+      totalVotes: 4,
+      distribution: { POSITIVE: 2, NEUTRAL: 1, NEGATIVE: 1 },
+      currentRound: 2,
+    });
+    internals.activateQuickFeedbackFallback();
+    expect(fallbackResolvers).toHaveLength(2);
+
+    fallbackResolvers[1]?.({
+      type: 'MOOD',
+      locked: false,
+      totalVotes: 5,
+      distribution: { POSITIVE: 2, NEUTRAL: 2, NEGATIVE: 1 },
+      currentRound: 2,
+    });
+    await Promise.resolve();
+    expect(component.quickFeedbackResult()?.totalVotes).toBe(5);
+
+    fallbackResolvers[0]?.({
       type: 'MOOD',
       locked: false,
       totalVotes: 3,
       distribution: { POSITIVE: 1, NEUTRAL: 1, NEGATIVE: 1 },
       currentRound: 1,
     });
-    await fallbackRequest;
+    await Promise.resolve();
 
-    expect(component.quickFeedbackResult()?.totalVotes).toBe(4);
+    expect(component.quickFeedbackResult()?.totalVotes).toBe(5);
     expect(component.quickFeedbackResult()?.currentRound).toBe(2);
     fixture.destroy();
   });
