@@ -296,19 +296,32 @@ resolve_python() {
   return 1
 }
 
+# spaCy 3.8.15 (docker/spacy/requirements.txt) hat keine Pakete für Python 3.14+.
+select_base_python() {
+  local candidate
+  for candidate in python3.13 python3.12 python3.11 python3.10 python3; do
+    if command -v "$candidate" >/dev/null 2>&1 \
+      && "$candidate" -c 'import sys; raise SystemExit(0 if (3, 10) <= sys.version_info[:2] < (3, 14) else 1)' \
+        >/dev/null 2>&1; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
 ensure_python() {
-  local venv_dir py
+  local venv_dir py base_python
   if resolve_python; then
     return 0
   fi
 
-  command -v python3 >/dev/null 2>&1 || fail "python3 fehlt. Bitte Python 3.10+ installieren (z. B. brew install python@3.12)."
-  python3 -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)' \
-    || fail "Python 3.10+ erforderlich (gefunden: $(python3 --version 2>&1))."
+  base_python="$(select_base_python)" || fail \
+    "Python 3.10–3.13 erforderlich (spaCy 3.8.15 hat keine Pakete für Python 3.14+; gefunden: $(python3 --version 2>/dev/null || echo 'kein python3')). Bitte z. B. python3.13 installieren (brew install python@3.13)."
 
   venv_dir="$ROOT/docker/spacy/.venv"
-  info "Lege spaCy-venv an unter $venv_dir (erster Lauf lädt de/en/fr/es, oft mehrere Minuten) …"
-  python3 -m venv "$venv_dir"
+  info "Lege spaCy-venv mit $base_python an unter $venv_dir (erster Lauf lädt de/en/fr/es, oft mehrere Minuten) …"
+  "$base_python" -m venv --clear "$venv_dir"
   py="$venv_dir/bin/python"
   "$py" -m pip install --upgrade pip >/dev/null
   "$py" -m pip install -r "$ROOT/docker/spacy/requirements.txt"
