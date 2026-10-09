@@ -498,6 +498,12 @@ export class SessionVoteComponent implements OnInit, OnDestroy {
   private qaSub: Unsubscribable | null = null;
   private qaSubscriptionKey: string | null = null;
   private quickFeedbackSub: Unsubscribable | null = null;
+  private quickFeedbackSubscriptionEpoch = 0;
+  private quickFeedbackReleasedEpoch = 0;
+  private quickFeedbackFallbackActive = false;
+  private quickFeedbackFallbackGeneration = 0;
+  private quickFeedbackFallbackRequest: { generation: number; requestEpoch: number } | null = null;
+  private quickFeedbackResultEpoch = 0;
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private pollStartTimeout: ReturnType<typeof setTimeout> | null = null;
   private presenceHeartbeatTimer: ReturnType<typeof setInterval> | null = null;
@@ -683,6 +689,7 @@ export class SessionVoteComponent implements OnInit, OnDestroy {
       return;
     }
     this.ensureStatusSubscription();
+    this.ensureQuickFeedbackSubscription();
     this.lastSessionInfoRetryAt = 0;
     void this.refreshSessionInfoFallback();
     void this.refreshQuestion();
@@ -1605,7 +1612,15 @@ export class SessionVoteComponent implements OnInit, OnDestroy {
     this.participantLiveChannelOverride = channel;
   }
 
-  private applyQuickFeedbackResult(result: QuickFeedbackResult | null): void {
+  private applyQuickFeedbackResult(
+    result: QuickFeedbackResult | null,
+    requestEpoch?: number,
+  ): void {
+    if (requestEpoch === undefined) {
+      this.quickFeedbackResultEpoch += 1;
+    } else if (requestEpoch !== this.quickFeedbackResultEpoch) {
+      return;
+    }
     const previous = this.quickFeedbackResult();
     const phase = this.quickFeedbackPhaseKey(result);
     const changed = this.quickFeedbackPhaseKey(previous) !== phase;
@@ -3612,8 +3627,8 @@ export class SessionVoteComponent implements OnInit, OnDestroy {
     this.qaSub?.unsubscribe();
     this.qaSub = null;
     this.qaSubscriptionKey = null;
-    this.quickFeedbackSub?.unsubscribe();
-    this.quickFeedbackSub = null;
+    this.releaseQuickFeedbackSubscription();
+    this.deactivateQuickFeedbackFallback();
     this.clearParticipantQaState();
     this.applyQuickFeedbackResult(null);
     this.showSessionEndGate.set(true);
@@ -3719,8 +3734,8 @@ export class SessionVoteComponent implements OnInit, OnDestroy {
     this.qaSub?.unsubscribe();
     this.qaSub = null;
     this.qaSubscriptionKey = null;
-    this.quickFeedbackSub?.unsubscribe();
-    this.quickFeedbackSub = null;
+    this.releaseQuickFeedbackSubscription();
+    this.deactivateQuickFeedbackFallback();
     this.clearParticipantQaState();
     this.applyQuickFeedbackResult(null);
     this.showSessionEndGate.set(true);
@@ -4108,8 +4123,8 @@ export class SessionVoteComponent implements OnInit, OnDestroy {
       !this.isQuickFeedbackChannelOpen() ||
       !this.code
     ) {
-      this.quickFeedbackSub?.unsubscribe();
-      this.quickFeedbackSub = null;
+      this.releaseQuickFeedbackSubscription();
+      this.deactivateQuickFeedbackFallback();
       this.applyQuickFeedbackResult(null);
       return;
     }
@@ -4118,10 +4133,19 @@ export class SessionVoteComponent implements OnInit, OnDestroy {
       return;
     }
 
+    const epoch = ++this.quickFeedbackSubscriptionEpoch;
     this.quickFeedbackSub = trpc.quickFeedback.onResults.subscribe(
       { sessionCode: this.code },
       {
         onData: (data) => {
+          if (
+            this.quickFeedbackSubscriptionEpoch !== epoch ||
+            this.quickFeedbackReleasedEpoch === epoch ||
+            this.destroyRef.destroyed
+          ) {
+            return;
+          }
+          this.deactivateQuickFeedbackFallback();
           if (this.isFinished() || this.sessionDeadline.isExpired()) {
             this.applyQuickFeedbackResult(null);
             return;
@@ -4130,12 +4154,67 @@ export class SessionVoteComponent implements OnInit, OnDestroy {
           this.ensureActiveChannel();
         },
         onError: () => {
-          this.quickFeedbackSub?.unsubscribe();
+          if (
+            this.quickFeedbackSubscriptionEpoch !== epoch ||
+            this.quickFeedbackReleasedEpoch === epoch ||
+            this.destroyRef.destroyed
+          ) {
+            return;
+          }
+          this.releaseQuickFeedbackSubscription();
+          this.activateQuickFeedbackFallback();
+        },
+        onComplete: () => {
+          if (this.quickFeedbackSubscriptionEpoch !== epoch) {
+            return;
+          }
+          const closedByClient = this.quickFeedbackReleasedEpoch === epoch;
           this.quickFeedbackSub = null;
-          void this.refreshQuickFeedbackResult();
+          if (
+            closedByClient ||
+            this.destroyRef.destroyed ||
+            this.isFinished() ||
+            !this.channels().quickFeedback ||
+            !this.isQuickFeedbackChannelOpen()
+          ) {
+            return;
+          }
+          this.activateQuickFeedbackFallback();
         },
       },
     );
+  }
+
+  private releaseQuickFeedbackSubscription(): void {
+    const subscription = this.quickFeedbackSub;
+    this.quickFeedbackSub = null;
+    if (!subscription) {
+      return;
+    }
+    this.quickFeedbackReleasedEpoch = this.quickFeedbackSubscriptionEpoch;
+    subscription.unsubscribe();
+  }
+
+  private activateQuickFeedbackFallback(): void {
+    if (
+      this.isFinished() ||
+      !this.channels().quickFeedback ||
+      !this.isQuickFeedbackChannelOpen() ||
+      !this.code
+    ) {
+      this.deactivateQuickFeedbackFallback();
+      return;
+    }
+    this.quickFeedbackFallbackActive = true;
+    const fallbackGeneration = ++this.quickFeedbackFallbackGeneration;
+    void this.refreshQuickFeedbackResult({ fallbackGeneration });
+    this.startFallbackPolling(true);
+  }
+
+  private deactivateQuickFeedbackFallback(): void {
+    this.quickFeedbackFallbackActive = false;
+    this.quickFeedbackFallbackGeneration += 1;
+    this.stopFallbackPollingIfIdle();
   }
 
   private ensureStatusSubscription(): void {
@@ -4305,6 +4384,7 @@ export class SessionVoteComponent implements OnInit, OnDestroy {
 
   private deactivateSessionFallback(): void {
     this.sessionFallbackActive = false;
+    this.stopFallbackPollingIfIdle();
   }
 
   private resetForSecondRoundStart(): void {
@@ -4447,8 +4527,7 @@ export class SessionVoteComponent implements OnInit, OnDestroy {
     this.qaSub?.unsubscribe();
     this.qaSub = null;
     this.qaSubscriptionKey = null;
-    this.quickFeedbackSub?.unsubscribe();
-    this.quickFeedbackSub = null;
+    this.releaseQuickFeedbackSubscription();
     this.stopFallbackPolling();
     this.stopPresenceHeartbeat();
     this.stopSessionDeadlineTimer();
@@ -4508,17 +4587,29 @@ export class SessionVoteComponent implements OnInit, OnDestroy {
 
   private startFallbackPolling(immediate = false): void {
     if (typeof document !== 'undefined' && document.hidden) return;
+    if (!this.sessionFallbackActive && !this.quickFeedbackFallbackActive) return;
     if (this.pollTimer || this.pollStartTimeout) return;
     const start = () => {
       this.pollStartTimeout = null;
-      if (this.pollTimer || (typeof document !== 'undefined' && document.hidden)) return;
+      if (
+        this.pollTimer ||
+        (typeof document !== 'undefined' && document.hidden) ||
+        (!this.sessionFallbackActive && !this.quickFeedbackFallbackActive)
+      ) {
+        return;
+      }
       this.pollTimer = setInterval(() => {
         if (this.sessionFallbackActive) {
           void this.refreshSessionInfoFallback();
           void this.refreshQuestion();
         }
-        if (this.activeChannel() === 'quickFeedback') {
-          void this.refreshQuickFeedbackResult();
+        if (this.quickFeedbackFallbackActive) {
+          this.ensureQuickFeedbackSubscription();
+          if (this.activeChannel() === 'quickFeedback') {
+            void this.refreshQuickFeedbackResult({
+              fallbackGeneration: this.quickFeedbackFallbackGeneration,
+            });
+          }
         }
       }, VOTE_FALLBACK_POLL_MS);
     };
@@ -4538,6 +4629,12 @@ export class SessionVoteComponent implements OnInit, OnDestroy {
     if (this.pollTimer) {
       clearInterval(this.pollTimer);
       this.pollTimer = null;
+    }
+  }
+
+  private stopFallbackPollingIfIdle(): void {
+    if (!this.sessionFallbackActive && !this.quickFeedbackFallbackActive) {
+      this.stopFallbackPolling();
     }
   }
 
@@ -5375,7 +5472,9 @@ export class SessionVoteComponent implements OnInit, OnDestroy {
     this.qaRefreshRetryAttempt = 0;
   }
 
-  private async refreshQuickFeedbackResult(): Promise<void> {
+  private async refreshQuickFeedbackResult(
+    options: { fallbackGeneration?: number } = {},
+  ): Promise<void> {
     if (
       this.isFinished() ||
       !this.channels().quickFeedback ||
@@ -5386,17 +5485,52 @@ export class SessionVoteComponent implements OnInit, OnDestroy {
       return;
     }
 
+    const isCurrentFallbackGeneration = (): boolean =>
+      options.fallbackGeneration === undefined ||
+      (this.quickFeedbackFallbackActive &&
+        options.fallbackGeneration === this.quickFeedbackFallbackGeneration);
+    if (!isCurrentFallbackGeneration()) {
+      return;
+    }
+    if (
+      options.fallbackGeneration !== undefined &&
+      this.quickFeedbackFallbackRequest?.generation === options.fallbackGeneration &&
+      this.quickFeedbackFallbackRequest.requestEpoch === this.quickFeedbackResultEpoch
+    ) {
+      return;
+    }
+    const requestEpoch = ++this.quickFeedbackResultEpoch;
+    if (options.fallbackGeneration !== undefined) {
+      this.quickFeedbackFallbackRequest = {
+        generation: options.fallbackGeneration,
+        requestEpoch,
+      };
+    }
+    const isCurrentRequest = (): boolean =>
+      requestEpoch === this.quickFeedbackResultEpoch && isCurrentFallbackGeneration();
+
     try {
       const result = await trpc.quickFeedback.results.query({ sessionCode: this.code });
-      if (this.isFinished() || this.sessionDeadline.isExpired()) {
-        this.applyQuickFeedbackResult(null);
+      if (!isCurrentRequest()) {
         return;
       }
-      this.applyQuickFeedbackResult(result);
+      if (this.isFinished() || this.sessionDeadline.isExpired()) {
+        this.applyQuickFeedbackResult(null, requestEpoch);
+        return;
+      }
+      this.applyQuickFeedbackResult(result, requestEpoch);
     } catch {
-      this.applyQuickFeedbackResult(null);
+      if (!isCurrentRequest()) {
+        return;
+      }
+      this.applyQuickFeedbackResult(null, requestEpoch);
     } finally {
-      this.quickFeedbackHydrated = true;
+      if (this.quickFeedbackFallbackRequest?.requestEpoch === requestEpoch) {
+        this.quickFeedbackFallbackRequest = null;
+      }
+      if (isCurrentRequest()) {
+        this.quickFeedbackHydrated = true;
+      }
     }
   }
 
