@@ -6,6 +6,7 @@ const wsTransportCloseMock = vi.fn();
 type MockConnectionState = 'idle' | 'connecting' | 'pending';
 let mockConnectionState: MockConnectionState = 'pending';
 let mockConnectionId = 1;
+let mockTransportState: 'open' | 'connecting' = 'open';
 let pauseReconnect = false;
 const connectionStateObservers = new Set<{
   next(state: { state: MockConnectionState; error: null }): void;
@@ -38,7 +39,7 @@ wsTransportCloseMock.mockImplementation(() => {
 const createWSClientMock = vi.fn(() => ({
   close: wsClientCloseMock,
   get connection() {
-    return { id: mockConnectionId, state: 'open' as const, ws: mockTransport };
+    return { id: mockConnectionId, state: mockTransportState, ws: mockTransport };
   },
   connectionState: {
     get: () => ({ state: mockConnectionState, error: null }),
@@ -68,6 +69,7 @@ async function loadClientModule(pathname: string, beforeImport?: () => void) {
   vi.clearAllMocks();
   mockConnectionState = 'pending';
   mockConnectionId = 1;
+  mockTransportState = 'open';
   pauseReconnect = false;
   connectionStateObservers.clear();
   transportCloseListeners.clear();
@@ -409,6 +411,33 @@ describe('trpc.client host transport', () => {
 
     await forceReconnectTrpcWs();
 
+    expect(wsTransportCloseMock).toHaveBeenCalledTimes(1);
+    expect(wsClientCloseMock).not.toHaveBeenCalled();
+    expect(mockConnectionId).toBe(2);
+  });
+
+  it('gibt den Event-Loop frei, wenn das Binding während des WebSocket-Handshakes wechselt', async () => {
+    const { forceReconnectTrpcWs } = await loadClientModule('/de/session/abc123/host');
+    const connectionStateSubscribe = (
+      createWSClientMock.mock.results[0]?.value as {
+        connectionState: { subscribe: ReturnType<typeof vi.fn> };
+      }
+    ).connectionState.subscribe;
+    // tRPC 11 meldet nach dem ersten `open`-Listener bereits `pending`, die Verbindung
+    // bleibt bis zum zweiten `open`-Listener (openPromise) aber `connecting`.
+    mockTransportState = 'connecting';
+    const subscribeCallsBefore = connectionStateSubscribe.mock.calls.length;
+
+    const reconnected = forceReconnectTrpcWs();
+    for (let i = 0; i < 50; i += 1) await Promise.resolve();
+    const subscribeCallsDuringHandshake =
+      connectionStateSubscribe.mock.calls.length - subscribeCallsBefore;
+    mockTransportState = 'open';
+    await reconnected;
+
+    // Im Browser laufen Microtasks zwischen den `open`-Listenern; eine reine
+    // Microtask-Schleife ließe den zweiten Listener nie laufen und fröre den Tab ein.
+    expect(subscribeCallsDuringHandshake).toBe(1);
     expect(wsTransportCloseMock).toHaveBeenCalledTimes(1);
     expect(wsClientCloseMock).not.toHaveBeenCalled();
     expect(mockConnectionId).toBe(2);

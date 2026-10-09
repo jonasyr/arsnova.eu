@@ -316,14 +316,17 @@ function reconnectWsForBindingChange(): Promise<void> {
             return;
           }
           transitionScheduled = true;
-          queueMicrotask(() => {
+          // Makrotask statt Microtask: tRPC meldet `pending` aus dem ersten `open`-Listener,
+          // die Verbindung bleibt bis zum zweiten (openPromise) `connecting`. Browser leeren
+          // Microtasks zwischen Listenern; eine Microtask-Rekursion fröre den Tab ein.
+          setTimeout(() => {
             subscription?.unsubscribe();
             if (state.state === 'idle') {
               resolve();
               return;
             }
             void reconnectWsForBindingChange().then(resolve);
-          });
+          }, 0);
         },
       });
     });
