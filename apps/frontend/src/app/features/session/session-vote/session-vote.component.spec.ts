@@ -6209,6 +6209,151 @@ describe('SessionVoteComponent', { timeout: 30_000 }, () => {
     fixture.destroy();
   });
 
+  it.each(['Erfolg', 'Fehler'] as const)(
+    'ignoriert einen verspäteten HTTP-%s aus derselben Fallback-Generation',
+    async (staleOutcome) => {
+      type MoodResult = {
+        type: 'MOOD';
+        locked: boolean;
+        totalVotes: number;
+        distribution: { POSITIVE: number; NEUTRAL: number; NEGATIVE: number };
+        currentRound: number;
+      };
+      const fallbackRequests: Array<{
+        resolve: (result: MoodResult) => void;
+        reject: (error: Error) => void;
+      }> = [];
+      quickFeedbackResultsQueryMock.mockImplementation(
+        () =>
+          new Promise<MoodResult>((resolve, reject) => {
+            fallbackRequests.push({ resolve, reject });
+          }),
+      );
+
+      const fixture = TestBed.createComponent(SessionVoteComponent);
+      const component = fixture.componentInstance;
+      component.status.set('ACTIVE');
+      component.sessionSettings.set({
+        id: '6a8edced-5f8f-4cfa-9176-454fac9570ad',
+        code: 'ABC123',
+        type: 'QUIZ',
+        status: 'ACTIVE',
+        serverTime: MOCK_SERVER_TIME,
+        quizName: 'Team-Quiz',
+        participantCount: 6,
+        preset: 'SERIOUS',
+        channels: {
+          quiz: { enabled: true },
+          qa: { enabled: false, open: false, title: null, moderationMode: false },
+          quickFeedback: { enabled: true, open: true },
+        },
+      } as never);
+      const internals = component as unknown as {
+        quickFeedbackFallbackActive: boolean;
+        quickFeedbackFallbackGeneration: number;
+        refreshQuickFeedbackResult: (options: { fallbackGeneration: number }) => Promise<void>;
+      };
+      internals.quickFeedbackFallbackActive = true;
+      internals.quickFeedbackFallbackGeneration = 7;
+
+      const staleRequest = internals.refreshQuickFeedbackResult({ fallbackGeneration: 7 });
+      const currentRequest = internals.refreshQuickFeedbackResult({ fallbackGeneration: 7 });
+      expect(fallbackRequests).toHaveLength(2);
+      fallbackRequests[1]?.resolve({
+        type: 'MOOD',
+        locked: false,
+        totalVotes: 5,
+        distribution: { POSITIVE: 2, NEUTRAL: 2, NEGATIVE: 1 },
+        currentRound: 2,
+      });
+      await currentRequest;
+
+      if (staleOutcome === 'Erfolg') {
+        fallbackRequests[0]?.resolve({
+          type: 'MOOD',
+          locked: false,
+          totalVotes: 3,
+          distribution: { POSITIVE: 1, NEUTRAL: 1, NEGATIVE: 1 },
+          currentRound: 1,
+        });
+      } else {
+        fallbackRequests[0]?.reject(new Error('outdated fallback failure'));
+      }
+      await staleRequest;
+
+      expect(component.quickFeedbackResult()?.totalVotes).toBe(5);
+      expect(component.quickFeedbackResult()?.currentRound).toBe(2);
+      fixture.destroy();
+    },
+  );
+
+  it('ignoriert einen Sichtbarkeits-Refresh nach einem neueren WebSocket-Ergebnis', async () => {
+    let subscriptionHandlers!: { onData: (result: unknown) => void };
+    quickFeedbackOnResultsSubscribeMock.mockImplementation(
+      (_input: unknown, handlers: { onData: (result: unknown) => void }) => {
+        subscriptionHandlers = handlers;
+        return { unsubscribe: vi.fn() };
+      },
+    );
+    let resolveRefresh!: (result: {
+      type: 'MOOD';
+      locked: boolean;
+      totalVotes: number;
+      distribution: { POSITIVE: number; NEUTRAL: number; NEGATIVE: number };
+      currentRound: number;
+    }) => void;
+    quickFeedbackResultsQueryMock.mockReturnValueOnce(
+      new Promise<Parameters<typeof resolveRefresh>[0]>((resolve) => {
+        resolveRefresh = resolve;
+      }),
+    );
+
+    const fixture = TestBed.createComponent(SessionVoteComponent);
+    const component = fixture.componentInstance;
+    component.status.set('ACTIVE');
+    component.sessionSettings.set({
+      id: '6a8edced-5f8f-4cfa-9176-454fac9570ad',
+      code: 'ABC123',
+      type: 'QUIZ',
+      status: 'ACTIVE',
+      serverTime: MOCK_SERVER_TIME,
+      quizName: 'Team-Quiz',
+      participantCount: 6,
+      preset: 'SERIOUS',
+      channels: {
+        quiz: { enabled: true },
+        qa: { enabled: false, open: false, title: null, moderationMode: false },
+        quickFeedback: { enabled: true, open: true },
+      },
+    } as never);
+    const internals = component as unknown as {
+      ensureQuickFeedbackSubscription: () => void;
+      refreshQuickFeedbackResult: () => Promise<void>;
+    };
+
+    internals.ensureQuickFeedbackSubscription();
+    const visibilityRefresh = internals.refreshQuickFeedbackResult();
+    subscriptionHandlers.onData({
+      type: 'MOOD',
+      locked: false,
+      totalVotes: 6,
+      distribution: { POSITIVE: 3, NEUTRAL: 2, NEGATIVE: 1 },
+      currentRound: 2,
+    });
+    resolveRefresh({
+      type: 'MOOD',
+      locked: false,
+      totalVotes: 4,
+      distribution: { POSITIVE: 2, NEUTRAL: 1, NEGATIVE: 1 },
+      currentRound: 1,
+    });
+    await visibilityRefresh;
+
+    expect(component.quickFeedbackResult()?.totalVotes).toBe(6);
+    expect(component.quickFeedbackResult()?.currentRound).toBe(2);
+    fixture.destroy();
+  });
+
   it('legt beim direkten Einstieg ins offene Blitzlicht vor der ersten Stimme eine Teilnahme an', async () => {
     localStorage.removeItem('arsnova-participant-ABC123');
     getInfoQueryMock.mockResolvedValue({

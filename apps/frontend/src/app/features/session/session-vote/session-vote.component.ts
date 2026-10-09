@@ -502,6 +502,7 @@ export class SessionVoteComponent implements OnInit, OnDestroy {
   private quickFeedbackReleasedEpoch = 0;
   private quickFeedbackFallbackActive = false;
   private quickFeedbackFallbackGeneration = 0;
+  private quickFeedbackResultEpoch = 0;
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private pollStartTimeout: ReturnType<typeof setTimeout> | null = null;
   private presenceHeartbeatTimer: ReturnType<typeof setInterval> | null = null;
@@ -1610,7 +1611,15 @@ export class SessionVoteComponent implements OnInit, OnDestroy {
     this.participantLiveChannelOverride = channel;
   }
 
-  private applyQuickFeedbackResult(result: QuickFeedbackResult | null): void {
+  private applyQuickFeedbackResult(
+    result: QuickFeedbackResult | null,
+    requestEpoch?: number,
+  ): void {
+    if (requestEpoch === undefined) {
+      this.quickFeedbackResultEpoch += 1;
+    } else if (requestEpoch !== this.quickFeedbackResultEpoch) {
+      return;
+    }
     const previous = this.quickFeedbackResult();
     const phase = this.quickFeedbackPhaseKey(result);
     const changed = this.quickFeedbackPhaseKey(previous) !== phase;
@@ -5482,24 +5491,29 @@ export class SessionVoteComponent implements OnInit, OnDestroy {
     if (!isCurrentFallbackGeneration()) {
       return;
     }
+    const requestEpoch = ++this.quickFeedbackResultEpoch;
+    const isCurrentRequest = (): boolean =>
+      requestEpoch === this.quickFeedbackResultEpoch && isCurrentFallbackGeneration();
 
     try {
       const result = await trpc.quickFeedback.results.query({ sessionCode: this.code });
-      if (!isCurrentFallbackGeneration()) {
+      if (!isCurrentRequest()) {
         return;
       }
       if (this.isFinished() || this.sessionDeadline.isExpired()) {
-        this.applyQuickFeedbackResult(null);
+        this.applyQuickFeedbackResult(null, requestEpoch);
         return;
       }
-      this.applyQuickFeedbackResult(result);
+      this.applyQuickFeedbackResult(result, requestEpoch);
     } catch {
-      if (!isCurrentFallbackGeneration()) {
+      if (!isCurrentRequest()) {
         return;
       }
-      this.applyQuickFeedbackResult(null);
+      this.applyQuickFeedbackResult(null, requestEpoch);
     } finally {
-      this.quickFeedbackHydrated = true;
+      if (isCurrentRequest()) {
+        this.quickFeedbackHydrated = true;
+      }
     }
   }
 
