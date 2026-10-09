@@ -356,6 +356,13 @@ SOAK_DURATION_MINUTES=30 npm run load:soak:live-session
 SOAK_DURATION_MINUTES=60 npm run load:soak:live-session
 ```
 
+Das lokale Q&A-Classroom-Szenario verwendet weiterhin ein
+`SUBMIT_P95_LIMIT_MS` von 1.000 ms. Der CI-Workflow setzt für denselben
+30-Personen-Funktionssmoke explizit 1.500 ms, um Schwankungen geteilter
+GitHub-Runner von funktionalen Fehlern zu trennen. Für belastbare
+Leistungsaussagen gelten weiterhin die dedizierten Lastprofile und ihre
+strengeren, versionierten Budgets.
+
 ## Demo-Classroom-Dauerlast mit Monitoring
 
 > **Verfügbarkeit:** Der Runner läuft ausschließlich manuell lokal und ist kein

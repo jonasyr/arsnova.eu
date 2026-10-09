@@ -165,7 +165,7 @@ async function chooseJoinIdentity(page, fallbackName, timeout = 15_000) {
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeout) {
     const textFields = page.locator(
-      'input[type="text"], input:not([type]), input[matinput], textarea',
+      '#join-nickname-input, .join-card input[type="text"], .join-card input:not([type]), .join-card input[matinput], .join-card textarea',
     );
     const count = await textFields.count();
     for (let index = 0; index < count; index += 1) {
@@ -221,19 +221,6 @@ async function clickJoinAction(page, timeout = 15_000) {
   ) {
     await directJoinButton.click();
     return true;
-  }
-
-  const fallbackButtons = page.locator('button[type="submit"], button');
-  const count = await fallbackButtons.count();
-  for (let index = 0; index < count; index += 1) {
-    const button = fallbackButtons.nth(index);
-    if (
-      (await button.isVisible().catch(() => false)) &&
-      (await button.isEnabled().catch(() => false))
-    ) {
-      await button.click();
-      return true;
-    }
   }
 
   return false;

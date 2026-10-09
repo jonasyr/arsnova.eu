@@ -300,6 +300,11 @@ Wichtig: Jobs ohne direkte Abhängigkeit laufen **parallel**.
   - [../scripts/load/channel-ws-fanout-classroom-30.mjs](../scripts/load/channel-ws-fanout-classroom-30.mjs)
 - **Wann?** Push/PR auf `main` und `workflow_dispatch`, außer `docs_only` und `schedule`.
 - **Warum?** Prüft Session-/Kanal-Hotpaths (Vote, Q&A, Redis-Blitzlicht, Realtime-WS) ohne Browser; ergänzt E2E um API-nahe Last-Smokes und ist ein direktes Deploy-Gate.
+- **Zeitbudget:** Das Q&A-Szenario behält lokal das strenge
+  `SUBMIT_P95_LIMIT_MS=1000`. Im geteilten GitHub-Runner setzt der Workflow
+  explizit `1500`, damit CPU-Steal bei ansonsten vollständig erfolgreichen
+  90 Submits nicht allein das Deploy-Gate kippt. Fehler, Kontingente und
+  Vollständigkeit bleiben unverändert harte Gates.
 - **Artefakt:** `classroom-smoke-reports` (standardisiertes JSON und JUnit XML pro Szenario + `backend.log`).
 
 ### 4.11 artillery-500
