@@ -4,6 +4,13 @@
 
 Zentrale **Landkarte** für alles unter `docs/`. Für Setup und erste Schritte zusätzlich [README.md](../README.md), [onboarding.md](onboarding.md) und [praktikum/EINSTIEG-TOOLS-UND-STACK.md](praktikum/EINSTIEG-TOOLS-UND-STACK.md).
 
+**Aktueller Release:**
+[arsnova.eu 1.3.0 – Moderationskompass, private CPU-Inferenz und geführte Live-Sessions](releases/1.3.0.md).
+Der zugehörige
+[GitHub-Release](https://github.com/kqc-real/arsnova.eu/releases/tag/v1.3.0)
+verweist auf den erfolgreich in Produktion ausgerollten Commit; optionale
+Inferenzfunktionen bleiben standardmäßig ausgeschaltet.
+
 ---
 
 ## Nach Rolle
@@ -84,7 +91,7 @@ Formale A11y-Abnahmedokumentation (2026-07-27):
 - **Datenmodell:** [`prisma/schema.prisma`](../prisma/schema.prisma)
 - **Geteilte API-Typen:** [`libs/shared-types`](../libs/shared-types/)
 - **Landing auf GitHub Pages:** [Custom-Domain-Runbook](operations/LANDING-GITHUB-PAGES-RUNBOOK.md)
-- **Diagramm-Index:** [diagrams/diagrams.md](diagrams/diagrams.md), [diagrams/architecture-overview.md](diagrams/architecture-overview.md)
+- **Diagramm-Index:** [diagrams/netzwerkplan.md](diagrams/netzwerkplan.md), [diagrams/diagrams.md](diagrams/diagrams.md), [diagrams/architecture-overview.md](diagrams/architecture-overview.md)
 - **Status-Ampel (SLO vs Last):** [ADR-0021](architecture/decisions/0021-separate-service-status-from-load-status-with-live-slo-telemetry.md)
 - **Projektglossar:** [GLOSSAR.md](GLOSSAR.md)
 - **Screenshot-Übersicht:** [screenshots/README.md](screenshots/README.md)

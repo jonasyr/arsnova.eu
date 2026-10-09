@@ -6038,6 +6038,376 @@ describe('SessionVoteComponent', { timeout: 30_000 }, () => {
     fixture.destroy();
   });
 
+  it('pollt Blitzlicht-Ergebnisse nur während eines Subscription-Ausfalls', async () => {
+    vi.useFakeTimers();
+    type QuickFeedbackHandlers = {
+      onData: (data: unknown) => void;
+      onError: () => void;
+      onComplete: () => void;
+    };
+    const handlers: QuickFeedbackHandlers[] = [];
+    const unsubscribe = vi.fn();
+    quickFeedbackOnResultsSubscribeMock.mockImplementation(
+      (_input: unknown, options: QuickFeedbackHandlers) => {
+        handlers.push(options);
+        return { unsubscribe };
+      },
+    );
+    quickFeedbackResultsQueryMock.mockResolvedValue({
+      type: 'MOOD',
+      locked: false,
+      totalVotes: 3,
+      distribution: { POSITIVE: 1, NEUTRAL: 1, NEGATIVE: 1 },
+      currentRound: 1,
+    });
+
+    const fixture = TestBed.createComponent(SessionVoteComponent);
+    const component = fixture.componentInstance;
+    component.status.set('ACTIVE');
+    component.sessionSettings.set({
+      id: '6a8edced-5f8f-4cfa-9176-454fac9570ad',
+      code: 'ABC123',
+      type: 'QUIZ',
+      status: 'ACTIVE',
+      serverTime: MOCK_SERVER_TIME,
+      quizName: 'Team-Quiz',
+      participantCount: 6,
+      preset: 'SERIOUS',
+      channels: {
+        quiz: { enabled: true },
+        qa: { enabled: false, open: false, title: null, moderationMode: false },
+        quickFeedback: { enabled: true, open: true },
+      },
+    } as never);
+    component.activeChannel.set('quickFeedback');
+    const internals = component as unknown as {
+      ensureQuickFeedbackSubscription: () => void;
+      startFallbackPolling: (immediate?: boolean) => void;
+      pollTimer: ReturnType<typeof setInterval> | null;
+      quickFeedbackFallbackActive: boolean;
+    };
+
+    internals.ensureQuickFeedbackSubscription();
+    expect(handlers).toHaveLength(1);
+    handlers[0]?.onData({
+      type: 'MOOD',
+      locked: false,
+      totalVotes: 2,
+      distribution: { POSITIVE: 1, NEUTRAL: 1, NEGATIVE: 0 },
+      currentRound: 1,
+    });
+    quickFeedbackResultsQueryMock.mockClear();
+
+    internals.startFallbackPolling(true);
+    expect(internals.pollTimer).toBeNull();
+    expect(quickFeedbackResultsQueryMock).not.toHaveBeenCalled();
+
+    handlers[0]?.onError();
+    await Promise.resolve();
+    expect(unsubscribe).toHaveBeenCalledOnce();
+    expect(quickFeedbackResultsQueryMock).toHaveBeenCalledOnce();
+    quickFeedbackResultsQueryMock.mockClear();
+
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(quickFeedbackResultsQueryMock).toHaveBeenCalled();
+    expect(handlers).toHaveLength(2);
+
+    handlers[1]?.onData({
+      type: 'MOOD',
+      locked: false,
+      totalVotes: 4,
+      distribution: { POSITIVE: 2, NEUTRAL: 1, NEGATIVE: 1 },
+      currentRound: 2,
+    });
+
+    expect(internals.quickFeedbackFallbackActive).toBe(false);
+    expect(component.quickFeedbackResult()?.totalVotes).toBe(4);
+    expect(component.quickFeedbackResult()?.currentRound).toBe(2);
+    fixture.destroy();
+  });
+
+  it('ignoriert eine verspätete HTTP-Antwort aus einem früheren Subscription-Ausfall', async () => {
+    type MoodResult = {
+      type: 'MOOD';
+      locked: boolean;
+      totalVotes: number;
+      distribution: { POSITIVE: number; NEUTRAL: number; NEGATIVE: number };
+      currentRound: number;
+    };
+    const fallbackResolvers: Array<(result: MoodResult) => void> = [];
+    quickFeedbackResultsQueryMock.mockImplementation(
+      () =>
+        new Promise<MoodResult>((resolve) => {
+          fallbackResolvers.push(resolve);
+        }),
+    );
+
+    const fixture = TestBed.createComponent(SessionVoteComponent);
+    const component = fixture.componentInstance;
+    component.status.set('ACTIVE');
+    component.sessionSettings.set({
+      id: '6a8edced-5f8f-4cfa-9176-454fac9570ad',
+      code: 'ABC123',
+      type: 'QUIZ',
+      status: 'ACTIVE',
+      serverTime: MOCK_SERVER_TIME,
+      quizName: 'Team-Quiz',
+      participantCount: 6,
+      preset: 'SERIOUS',
+      channels: {
+        quiz: { enabled: true },
+        qa: { enabled: false, open: false, title: null, moderationMode: false },
+        quickFeedback: { enabled: true, open: true },
+      },
+    } as never);
+    component.quickFeedbackResult.set({
+      type: 'MOOD',
+      locked: false,
+      totalVotes: 4,
+      distribution: { POSITIVE: 2, NEUTRAL: 1, NEGATIVE: 1 },
+      currentRound: 2,
+    });
+    const internals = component as unknown as {
+      activateQuickFeedbackFallback: () => void;
+      deactivateQuickFeedbackFallback: () => void;
+    };
+
+    internals.activateQuickFeedbackFallback();
+    expect(fallbackResolvers).toHaveLength(1);
+    internals.deactivateQuickFeedbackFallback();
+    component.quickFeedbackResult.set({
+      type: 'MOOD',
+      locked: false,
+      totalVotes: 4,
+      distribution: { POSITIVE: 2, NEUTRAL: 1, NEGATIVE: 1 },
+      currentRound: 2,
+    });
+    internals.activateQuickFeedbackFallback();
+    expect(fallbackResolvers).toHaveLength(2);
+
+    fallbackResolvers[1]?.({
+      type: 'MOOD',
+      locked: false,
+      totalVotes: 5,
+      distribution: { POSITIVE: 2, NEUTRAL: 2, NEGATIVE: 1 },
+      currentRound: 2,
+    });
+    await Promise.resolve();
+    expect(component.quickFeedbackResult()?.totalVotes).toBe(5);
+
+    fallbackResolvers[0]?.({
+      type: 'MOOD',
+      locked: false,
+      totalVotes: 3,
+      distribution: { POSITIVE: 1, NEUTRAL: 1, NEGATIVE: 1 },
+      currentRound: 1,
+    });
+    await Promise.resolve();
+
+    expect(component.quickFeedbackResult()?.totalVotes).toBe(5);
+    expect(component.quickFeedbackResult()?.currentRound).toBe(2);
+    fixture.destroy();
+  });
+
+  it.each(['Erfolg', 'Fehler'] as const)(
+    'ignoriert einen verspäteten HTTP-%s aus einem älteren parallelen Refresh',
+    async (staleOutcome) => {
+      type MoodResult = {
+        type: 'MOOD';
+        locked: boolean;
+        totalVotes: number;
+        distribution: { POSITIVE: number; NEUTRAL: number; NEGATIVE: number };
+        currentRound: number;
+      };
+      const fallbackRequests: Array<{
+        resolve: (result: MoodResult) => void;
+        reject: (error: Error) => void;
+      }> = [];
+      quickFeedbackResultsQueryMock.mockImplementation(
+        () =>
+          new Promise<MoodResult>((resolve, reject) => {
+            fallbackRequests.push({ resolve, reject });
+          }),
+      );
+
+      const fixture = TestBed.createComponent(SessionVoteComponent);
+      const component = fixture.componentInstance;
+      component.status.set('ACTIVE');
+      component.sessionSettings.set({
+        id: '6a8edced-5f8f-4cfa-9176-454fac9570ad',
+        code: 'ABC123',
+        type: 'QUIZ',
+        status: 'ACTIVE',
+        serverTime: MOCK_SERVER_TIME,
+        quizName: 'Team-Quiz',
+        participantCount: 6,
+        preset: 'SERIOUS',
+        channels: {
+          quiz: { enabled: true },
+          qa: { enabled: false, open: false, title: null, moderationMode: false },
+          quickFeedback: { enabled: true, open: true },
+        },
+      } as never);
+      const internals = component as unknown as {
+        refreshQuickFeedbackResult: () => Promise<void>;
+      };
+
+      const staleRequest = internals.refreshQuickFeedbackResult();
+      const currentRequest = internals.refreshQuickFeedbackResult();
+      expect(fallbackRequests).toHaveLength(2);
+      fallbackRequests[1]?.resolve({
+        type: 'MOOD',
+        locked: false,
+        totalVotes: 5,
+        distribution: { POSITIVE: 2, NEUTRAL: 2, NEGATIVE: 1 },
+        currentRound: 2,
+      });
+      await currentRequest;
+
+      if (staleOutcome === 'Erfolg') {
+        fallbackRequests[0]?.resolve({
+          type: 'MOOD',
+          locked: false,
+          totalVotes: 3,
+          distribution: { POSITIVE: 1, NEUTRAL: 1, NEGATIVE: 1 },
+          currentRound: 1,
+        });
+      } else {
+        fallbackRequests[0]?.reject(new Error('outdated fallback failure'));
+      }
+      await staleRequest;
+
+      expect(component.quickFeedbackResult()?.totalVotes).toBe(5);
+      expect(component.quickFeedbackResult()?.currentRound).toBe(2);
+      fixture.destroy();
+    },
+  );
+
+  it('lässt pro Fallback-Generation höchstens eine langsame HTTP-Abfrage gleichzeitig laufen', async () => {
+    let resolveFallback!: (result: {
+      type: 'MOOD';
+      locked: boolean;
+      totalVotes: number;
+      distribution: { POSITIVE: number; NEUTRAL: number; NEGATIVE: number };
+      currentRound: number;
+    }) => void;
+    quickFeedbackResultsQueryMock.mockReturnValueOnce(
+      new Promise<Parameters<typeof resolveFallback>[0]>((resolve) => {
+        resolveFallback = resolve;
+      }),
+    );
+
+    const fixture = TestBed.createComponent(SessionVoteComponent);
+    const component = fixture.componentInstance;
+    component.status.set('ACTIVE');
+    component.sessionSettings.set({
+      id: '6a8edced-5f8f-4cfa-9176-454fac9570ad',
+      code: 'ABC123',
+      type: 'QUIZ',
+      status: 'ACTIVE',
+      serverTime: MOCK_SERVER_TIME,
+      quizName: 'Team-Quiz',
+      participantCount: 6,
+      preset: 'SERIOUS',
+      channels: {
+        quiz: { enabled: true },
+        qa: { enabled: false, open: false, title: null, moderationMode: false },
+        quickFeedback: { enabled: true, open: true },
+      },
+    } as never);
+    const internals = component as unknown as {
+      quickFeedbackFallbackActive: boolean;
+      quickFeedbackFallbackGeneration: number;
+      refreshQuickFeedbackResult: (options: { fallbackGeneration: number }) => Promise<void>;
+    };
+    internals.quickFeedbackFallbackActive = true;
+    internals.quickFeedbackFallbackGeneration = 7;
+
+    const slowRequest = internals.refreshQuickFeedbackResult({ fallbackGeneration: 7 });
+    await internals.refreshQuickFeedbackResult({ fallbackGeneration: 7 });
+    expect(quickFeedbackResultsQueryMock).toHaveBeenCalledOnce();
+
+    resolveFallback({
+      type: 'MOOD',
+      locked: false,
+      totalVotes: 5,
+      distribution: { POSITIVE: 2, NEUTRAL: 2, NEGATIVE: 1 },
+      currentRound: 2,
+    });
+    await slowRequest;
+
+    expect(component.quickFeedbackResult()?.totalVotes).toBe(5);
+    expect(component.quickFeedbackResult()?.currentRound).toBe(2);
+    fixture.destroy();
+  });
+
+  it('ignoriert einen Sichtbarkeits-Refresh nach einem neueren WebSocket-Ergebnis', async () => {
+    let subscriptionHandlers!: { onData: (result: unknown) => void };
+    quickFeedbackOnResultsSubscribeMock.mockImplementation(
+      (_input: unknown, handlers: { onData: (result: unknown) => void }) => {
+        subscriptionHandlers = handlers;
+        return { unsubscribe: vi.fn() };
+      },
+    );
+    let resolveRefresh!: (result: {
+      type: 'MOOD';
+      locked: boolean;
+      totalVotes: number;
+      distribution: { POSITIVE: number; NEUTRAL: number; NEGATIVE: number };
+      currentRound: number;
+    }) => void;
+    quickFeedbackResultsQueryMock.mockReturnValueOnce(
+      new Promise<Parameters<typeof resolveRefresh>[0]>((resolve) => {
+        resolveRefresh = resolve;
+      }),
+    );
+
+    const fixture = TestBed.createComponent(SessionVoteComponent);
+    const component = fixture.componentInstance;
+    component.status.set('ACTIVE');
+    component.sessionSettings.set({
+      id: '6a8edced-5f8f-4cfa-9176-454fac9570ad',
+      code: 'ABC123',
+      type: 'QUIZ',
+      status: 'ACTIVE',
+      serverTime: MOCK_SERVER_TIME,
+      quizName: 'Team-Quiz',
+      participantCount: 6,
+      preset: 'SERIOUS',
+      channels: {
+        quiz: { enabled: true },
+        qa: { enabled: false, open: false, title: null, moderationMode: false },
+        quickFeedback: { enabled: true, open: true },
+      },
+    } as never);
+    const internals = component as unknown as {
+      ensureQuickFeedbackSubscription: () => void;
+      refreshQuickFeedbackResult: () => Promise<void>;
+    };
+
+    internals.ensureQuickFeedbackSubscription();
+    const visibilityRefresh = internals.refreshQuickFeedbackResult();
+    subscriptionHandlers.onData({
+      type: 'MOOD',
+      locked: false,
+      totalVotes: 6,
+      distribution: { POSITIVE: 3, NEUTRAL: 2, NEGATIVE: 1 },
+      currentRound: 2,
+    });
+    resolveRefresh({
+      type: 'MOOD',
+      locked: false,
+      totalVotes: 4,
+      distribution: { POSITIVE: 2, NEUTRAL: 1, NEGATIVE: 1 },
+      currentRound: 1,
+    });
+    await visibilityRefresh;
+
+    expect(component.quickFeedbackResult()?.totalVotes).toBe(6);
+    expect(component.quickFeedbackResult()?.currentRound).toBe(2);
+    fixture.destroy();
+  });
+
   it('legt beim direkten Einstieg ins offene Blitzlicht vor der ersten Stimme eine Teilnahme an', async () => {
     localStorage.removeItem('arsnova-participant-ABC123');
     getInfoQueryMock.mockResolvedValue({
