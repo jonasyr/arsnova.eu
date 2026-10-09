@@ -660,6 +660,7 @@ describe('QuizEditComponent', { timeout: 30_000 }, () => {
       confidenceEnabled: true,
       confidenceLabelLow: 'sehr unsicher',
       confidenceLabelHigh: 'absolut sicher',
+      shuffleAnswerOptions: true,
       answers: [
         { text: 'Antwort A', isCorrect: false },
         { text: 'Antwort B', isCorrect: true },
@@ -1263,6 +1264,7 @@ describe('QuizEditComponent', { timeout: 30_000 }, () => {
       difficulty: 'MEDIUM',
       timer: null,
       skipReadingPhase: false,
+      shuffleAnswerOptions: true,
       answers: [
         { text: 'Zu schnell', isCorrect: false },
         { text: 'Passend', isCorrect: false },
@@ -1341,6 +1343,7 @@ describe('QuizEditComponent', { timeout: 30_000 }, () => {
       timer: null,
       skipReadingPhase: false,
       confidenceEnabled: false,
+      shuffleAnswerOptions: true,
       answers: [
         { text: 'Neu A', isCorrect: false },
         { text: 'Neu B', isCorrect: true },
@@ -1825,6 +1828,7 @@ describe('QuizEditComponent', { timeout: 30_000 }, () => {
       confidenceEnabled: true,
       confidenceLabelLow: 'sehr unsicher',
       confidenceLabelHigh: 'absolut sicher',
+      shuffleAnswerOptions: true,
       answers: [
         { text: 'A', isCorrect: true },
         { text: 'B', isCorrect: false },
@@ -2471,6 +2475,30 @@ describe('QuizEditComponent', { timeout: 30_000 }, () => {
         ],
       }),
     );
+  });
+
+  it('speichert abgeschaltetes Mischen der Wahloptionen für Teilnehmende', () => {
+    const fixture = TestBed.createComponent(QuizEditComponent);
+    const component = fixture.componentInstance;
+    component.form.controls.text.setValue('Welche Aussage stimmt?');
+    component.form.controls.shuffleAnswerOptions.setValue(false);
+    component.answersArray.at(0).controls.text.setValue('Erste');
+    component.answersArray.at(1).controls.text.setValue('Zweite');
+
+    component.saveAll();
+
+    expect(mockStore.addQuestion).toHaveBeenCalledWith(
+      QUIZ_ID,
+      expect.objectContaining({
+        type: 'SINGLE_CHOICE',
+        shuffleAnswerOptions: false,
+        answers: [
+          { text: 'Erste', isCorrect: true },
+          { text: 'Zweite', isCorrect: false },
+        ],
+      }),
+    );
+    fixture.destroy();
   });
 
   it('hält Meta-Expansion und Tokens ohne ::ng-deep / font-weight 800', () => {

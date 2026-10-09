@@ -81,6 +81,12 @@ function normalizeNativeStructuredQuestionIds(payload: JsonRecord): JsonRecord {
       questions: questions.map((entry) => {
         if (!isRecord(entry)) return entry;
         const type = entry['type'];
+        if (type === 'SINGLE_CHOICE' || type === 'MULTIPLE_CHOICE' || type === 'SURVEY') {
+          return {
+            ...entry,
+            shuffleAnswerOptions: readBoolean(entry['shuffleAnswerOptions']) ?? true,
+          };
+        }
         if (type === 'MATCHING' && Array.isArray(entry['matchingPairs'])) {
           return {
             ...entry,

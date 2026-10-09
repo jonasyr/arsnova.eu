@@ -80,6 +80,7 @@ import {
   evaluateShortAnswer,
   isNumericToleranceMode,
   questionSupportsConfidence,
+  questionShufflesParticipantChoiceAnswers,
   normalizeShortTextValue,
   resolveNumericEstimateToleranceMode,
   resolveNumericTolerance,
@@ -200,6 +201,7 @@ type QuestionFormGroup = FormGroup<{
   confidenceLabelHigh: FormControl<string>;
   matchingPairs: FormArray<MatchingPairFormGroup>;
   matchingShuffleRight: FormControl<boolean>;
+  shuffleAnswerOptions: FormControl<boolean>;
   orderingItems: FormArray<OrderingItemFormGroup>;
   categories: FormArray<CategorizationCategoryFormGroup>;
   categorizationItems: FormArray<CategorizationItemFormGroup>;
@@ -691,6 +693,7 @@ export class QuizEditComponent implements OnDestroy {
     }),
     matchingPairs: this.formBuilder.array<MatchingPairFormGroup>([]),
     matchingShuffleRight: this.formBuilder.control(true),
+    shuffleAnswerOptions: this.formBuilder.control(true),
     orderingItems: this.formBuilder.array<OrderingItemFormGroup>([]),
     categories: this.formBuilder.array<CategorizationCategoryFormGroup>([]),
     categorizationItems: this.formBuilder.array<CategorizationItemFormGroup>([]),
@@ -1002,6 +1005,10 @@ export class QuizEditComponent implements OnDestroy {
 
   isSingleChoiceType(): boolean {
     return this.typeControl.value === 'SINGLE_CHOICE';
+  }
+
+  shufflesParticipantChoiceAnswers(): boolean {
+    return questionShufflesParticipantChoiceAnswers(this.typeControl.value);
   }
 
   isMultipleChoiceType(): boolean {
@@ -3444,6 +3451,9 @@ export class QuizEditComponent implements OnDestroy {
               : {}),
           }
         : {}),
+      ...(this.shufflesParticipantChoiceAnswers()
+        ? { shuffleAnswerOptions: this.form.controls.shuffleAnswerOptions.value }
+        : {}),
       ...(this.isMatchingType()
         ? {
             matchingPairs: this.matchingPairsArray.controls.map((pair) => ({
@@ -3536,6 +3546,7 @@ export class QuizEditComponent implements OnDestroy {
             correctCategoryId: string;
           }>;
           categorizationShuffleItems?: boolean;
+          shuffleAnswerOptions?: boolean;
         },
   ): AddQuizQuestionInput {
     const shortTextSettings = this.resolveShortTextQuestionSettings(question);
@@ -3616,6 +3627,7 @@ export class QuizEditComponent implements OnDestroy {
       this.createMatchingPairArray(question.matchingPairs ?? []),
     );
     this.form.controls.matchingShuffleRight.setValue(question.matchingShuffleRight ?? true);
+    this.form.controls.shuffleAnswerOptions.setValue(question.shuffleAnswerOptions ?? true);
     this.form.setControl(
       'orderingItems',
       this.createOrderingItemArray(question.orderingItems ?? []),
@@ -3760,6 +3772,9 @@ export class QuizEditComponent implements OnDestroy {
       matchingPairs: draft.type === 'MATCHING' ? (draft.matchingPairs ?? undefined) : undefined,
       matchingShuffleRight:
         draft.type === 'MATCHING' ? (draft.matchingShuffleRight ?? true) : undefined,
+      shuffleAnswerOptions: questionShufflesParticipantChoiceAnswers(draft.type)
+        ? (draft.shuffleAnswerOptions ?? true)
+        : undefined,
       orderingItems: draft.type === 'ORDERING' ? (draft.orderingItems ?? undefined) : undefined,
       categories: draft.type === 'CATEGORIZATION' ? (draft.categories ?? undefined) : undefined,
       categorizationItems:
@@ -3778,6 +3793,7 @@ export class QuizEditComponent implements OnDestroy {
     this.form.setControl('answers', this.createAnswerArrayForType(type));
     this.resetStructuredFieldsForType(type);
     this.form.controls.matchingShuffleRight.reset(true);
+    this.form.controls.shuffleAnswerOptions.reset(true);
     this.form.controls.categorizationShuffleItems.reset(true);
     this.form.controls.ratingMin.reset(1);
     this.form.controls.ratingMax.reset(5);

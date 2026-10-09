@@ -163,6 +163,7 @@ import {
   buildConfidenceResult,
   buildSessionConfidenceSummary,
   questionSupportsConfidence,
+  questionShufflesParticipantChoiceAnswers,
   resolveEffectiveAggregationRound,
   buildRoundComparisonFromVotes,
   buildResponseTimeAggregate,
@@ -320,10 +321,8 @@ import {
   issueProductFeedbackInvitesAfterFinishAwait,
 } from '../lib/productFeedbackInvite';
 import { checkSessionCreateRate, shouldBypassSessionCreateRate } from '../lib/rateLimit';
-import {
-  buildAnswerDisplayOrderForQuiz,
-  orderAnswersByDisplayMap,
-} from '../lib/answerDisplayOrder';
+import { orderChoiceAnswersForParticipant } from '../lib/answerDisplayOrder';
+import { answerOptionOrderBy } from '../lib/answerOptionOrder';
 import {
   assertSessionEffectivelyActive,
   buildSessionRetentionTimeline,
@@ -2019,7 +2018,7 @@ async function loadSessionConfidenceSummaryByCode(
         include: {
           questions: {
             orderBy: { order: 'asc' },
-            include: { answers: true },
+            include: { answers: { orderBy: answerOptionOrderBy } },
           },
         },
       },
@@ -2083,7 +2082,7 @@ async function loadFinishedQuizSessionExportData(code: string): Promise<SessionE
         include: {
           questions: {
             orderBy: { order: 'asc' },
-            include: { answers: true },
+            include: { answers: { orderBy: answerOptionOrderBy } },
           },
         },
       },
@@ -2203,11 +2202,7 @@ async function loadFinishedQuizSessionExportData(code: string): Promise<SessionE
             text: string;
             isCorrect: boolean;
           }>;
-          const orderedOpts = orderAnswersByDisplayMap(
-            rawAnswers,
-            q.id,
-            session.answerDisplayOrder,
-          );
+          const orderedOpts = rawAnswers;
           optionDistribution = buildMcScOptionDistribution(votes, orderedOpts);
           if (round2Count > 0) {
             const round1Votes = allVotes.filter((vote) => (vote.round ?? 1) === 1);
@@ -2241,11 +2236,7 @@ async function loadFinishedQuizSessionExportData(code: string): Promise<SessionE
             text: string;
             isCorrect: boolean;
           }>;
-          const orderedSolutions = orderAnswersByDisplayMap(
-            rawAnswers,
-            q.id,
-            session.answerDisplayOrder,
-          );
+          const orderedSolutions = rawAnswers;
           const optionCounts = new Map<string, number>();
           for (const answer of orderedSolutions) {
             optionCounts.set(answer.id, 0);
@@ -2698,7 +2689,9 @@ const quizHistoryAccessQuizSelect = Prisma.validator<Prisma.QuizSelect>()({
       categories: true,
       categorizationItems: true,
       categorizationShuffleItems: true,
+      shuffleAnswerOptions: true,
       answers: {
+        orderBy: answerOptionOrderBy,
         select: {
           text: true,
           isCorrect: true,
@@ -2813,6 +2806,10 @@ function buildQuizHistoryAccessPayload(
                 (question.categorizationItems as CategorizationItemInput[] | null) ?? [],
               categorizationShuffleItems: question.categorizationShuffleItems,
             }
+          : {}),
+        ...(questionShufflesParticipantChoiceAnswers(question.type) &&
+        question.shuffleAnswerOptions === false
+          ? { shuffleAnswerOptions: false as const }
           : {}),
         answers: question.answers.map((answer) => ({
           text: answer.text,
@@ -4354,11 +4351,7 @@ async function buildHostCurrentQuestionDto(
   const question = questions[idx] ?? null;
   if (!question) return null;
 
-  const answersOrdered = orderAnswersByDisplayMap(
-    question.answers,
-    question.id,
-    session.answerDisplayOrder,
-  );
+  const answersOrdered = question.answers;
 
   let numericToleranceMode: 'ABSOLUTE_INTERVAL' | 'RELATIVE_PERCENT' | null = null;
   let numericBand: { left: number; right: number } | null = null;
@@ -4896,7 +4889,10 @@ async function fetchHostCurrentQuestionEnvelope(
               categories: true,
               categorizationItems: true,
               categorizationShuffleItems: true,
-              answers: { select: { id: true, text: true, isCorrect: true } },
+              answers: {
+                orderBy: answerOptionOrderBy,
+                select: { id: true, text: true, isCorrect: true },
+              },
             },
           },
           defaultTimer: true,
@@ -5079,7 +5075,10 @@ async function fetchHostVoteProgress(code: string): Promise<HostVoteProgressDTO 
               numericUnitFamily: true,
               numericRequireUnit: true,
               numericAcceptEquivalentUnits: true,
-              answers: { select: { id: true, text: true, isCorrect: true } },
+              answers: {
+                orderBy: answerOptionOrderBy,
+                select: { id: true, text: true, isCorrect: true },
+              },
             },
           },
         },
@@ -8293,13 +8292,6 @@ const sessionCoreRouter = router({
               )
             : null;
 
-        let answerDisplayOrderPayload:
-          ReturnType<typeof buildAnswerDisplayOrderForQuiz> | undefined;
-        if ((session.answerDisplayOrder ?? null) === null) {
-          const built = buildAnswerDisplayOrderForQuiz(session.quiz.questions);
-          if (Object.keys(built).length > 0) answerDisplayOrderPayload = built;
-        }
-
         const nextProgress = markSessionQuestionOpened(progressAfterCurrent, nextQuestion.id, now);
         await tx.session.update({
           where: { id: session.id },
@@ -8314,7 +8306,6 @@ const sessionCoreRouter = router({
             questionProgress: serializeSessionQuestionProgress(nextProgress),
             lastSkippedQuestionId: null,
             lastQuestionSkippedAt: null,
-            ...(answerDisplayOrderPayload && { answerDisplayOrder: answerDisplayOrderPayload }),
           },
         });
         return {
@@ -8777,13 +8768,6 @@ const sessionCoreRouter = router({
             : null;
         const nextProgress = markSessionQuestionOpened(skippedProgress, nextQuestion.id, now);
 
-        let answerDisplayOrderPayload:
-          ReturnType<typeof buildAnswerDisplayOrderForQuiz> | undefined;
-        if ((session.answerDisplayOrder ?? null) === null) {
-          const built = buildAnswerDisplayOrderForQuiz(session.quiz.questions);
-          if (Object.keys(built).length > 0) answerDisplayOrderPayload = built;
-        }
-
         await tx.session.update({
           where: { id: session.id },
           data: {
@@ -8797,7 +8781,6 @@ const sessionCoreRouter = router({
             questionProgress: serializeSessionQuestionProgress(nextProgress),
             lastSkippedQuestionId: currentQuestion.id,
             lastQuestionSkippedAt: now,
-            ...(answerDisplayOrderPayload && { answerDisplayOrder: answerDisplayOrderPayload }),
           },
         });
         return {
@@ -9264,7 +9247,12 @@ const sessionCoreRouter = router({
             select: {
               questions: {
                 orderBy: { order: 'asc' },
-                include: { answers: { select: { id: true, text: true, isCorrect: true } } },
+                include: {
+                  answers: {
+                    orderBy: answerOptionOrderBy,
+                    select: { id: true, text: true, isCorrect: true },
+                  },
+                },
               },
               defaultTimer: true,
               timerScaleByDifficulty: true,
@@ -9308,11 +9296,7 @@ const sessionCoreRouter = router({
         }
       }
 
-      const answersOrdered = orderAnswersByDisplayMap(
-        question.answers,
-        question.id,
-        session.answerDisplayOrder,
-      );
+      const authoredAnswers = question.answers;
 
       const totalQuestions = quiz.questions.length;
       const participantKey =
@@ -9459,7 +9443,7 @@ const sessionCoreRouter = router({
               answers:
                 question.type === 'SHORT_TEXT'
                   ? []
-                  : answersOrdered.map((a) => ({ id: a.id, text: a.text })),
+                  : authoredAnswers.map((a) => ({ id: a.id, text: a.text })),
               activeAt: (session.activeQuestionStartedAt ?? session.statusChangedAt).toISOString(),
               ratingMin: question.ratingMin ?? null,
               ratingMax: question.ratingMax ?? null,
@@ -9504,6 +9488,11 @@ const sessionCoreRouter = router({
 
         const personalizedDto: z.infer<typeof QuestionStudentDTOSchema> = {
           ...baseDto,
+          answers: orderChoiceAnswersForParticipant(
+            baseDto.answers,
+            question,
+            structuredShuffleSeed,
+          ),
           matchingRightOptions:
             question.type === 'MATCHING' && baseDto.matchingRightOptions
               ? stableNonCanonicalShuffle(
@@ -9549,7 +9538,7 @@ const sessionCoreRouter = router({
       }
 
       if (session.status === 'RESULTS') {
-        return (await getOrComputeCached(
+        const revealed = (await getOrComputeCached(
           currentQuestionCache,
           currentQuestionInFlight,
           `${code}:results:${session.currentQuestion}:${session.currentRound}`,
@@ -9563,7 +9552,7 @@ const sessionCoreRouter = router({
               question.type as QuestionType,
               question.type === 'SHORT_TEXT'
                 ? {
-                    answers: answersOrdered,
+                    answers: authoredAnswers,
                     ...resolveShortTextQuestionConfig(question),
                   }
                 : undefined,
@@ -9645,7 +9634,7 @@ const sessionCoreRouter = router({
               showQuestionTypeIndicators: quiz.showQuestionTypeIndicators ?? true,
               order: question.order,
               totalQuestions,
-              answers: answersOrdered.map((a) => ({
+              answers: authoredAnswers.map((a) => ({
                 id: a.id,
                 text: a.text,
                 isCorrect: a.isCorrect,
@@ -9725,6 +9714,14 @@ const sessionCoreRouter = router({
             });
           },
         )) as z.infer<typeof QuestionRevealedDTOSchema>;
+        return {
+          ...revealed,
+          answers: orderChoiceAnswersForParticipant(
+            revealed.answers,
+            question,
+            structuredShuffleSeed,
+          ),
+        };
       }
 
       return null;
@@ -10633,7 +10630,7 @@ const sessionCoreRouter = router({
             include: {
               questions: {
                 orderBy: { order: 'asc' },
-                include: { answers: true },
+                include: { answers: { orderBy: answerOptionOrderBy } },
               },
             },
           },

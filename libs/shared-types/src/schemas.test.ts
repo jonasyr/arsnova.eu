@@ -638,6 +638,19 @@ describe('öffentliche Contract-Schemas', () => {
     expect(historyWithDisabled).toContain('"enableTimerAccommodation":false');
     expect(historyWithDisabled).not.toBe(historyWithoutFlag);
 
+    const historyShuffleDefault = serializeQuizHistoryAccessMaterial({
+      ...quizUploadBase,
+      questions: [{ ...historyQuestion, shuffleAnswerOptions: true }],
+    } as Parameters<typeof serializeQuizHistoryAccessMaterial>[0]);
+    const historyShuffleOff = serializeQuizHistoryAccessMaterial({
+      ...quizUploadBase,
+      questions: [{ ...historyQuestion, shuffleAnswerOptions: false }],
+    } as Parameters<typeof serializeQuizHistoryAccessMaterial>[0]);
+    expect(historyShuffleDefault).toBe(historyWithoutFlag);
+    expect(historyShuffleDefault).not.toContain('shuffleAnswerOptions');
+    expect(historyShuffleOff).toContain('"shuffleAnswerOptions":false');
+    expect(historyShuffleOff).not.toBe(historyWithoutFlag);
+
     const parsed = QuestionStudentDTOSchema.parse({
       id: questionId,
       text: 'Frage',

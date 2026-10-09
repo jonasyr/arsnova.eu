@@ -27,11 +27,13 @@ import {
   type ShortAnswerEvaluationMode,
   type ToleranceLevel,
   questionSupportsConfidence,
+  questionShufflesParticipantChoiceAnswers,
 } from '@arsnova/shared-types';
 import { TRPCError } from '@trpc/server';
 import { Prisma } from '@prisma/client';
 import { publicProcedure, quizUploadAttemptProcedure, resolveClientIp, router } from '../trpc';
 import { prisma } from '../db';
+import { answerOptionOrderBy } from '../lib/answerOptionOrder';
 import {
   checkLearningObjectiveDerivationPrepareRate,
   checkQuizUploadStorageRate,
@@ -109,6 +111,7 @@ function buildQuizUploadPayloadFromStoredQuiz(quiz: {
     confidenceEnabled: boolean;
     confidenceLabelLow: string | null;
     confidenceLabelHigh: string | null;
+    shuffleAnswerOptions?: boolean;
     answers: Array<{
       text: string;
       isCorrect: boolean;
@@ -205,6 +208,10 @@ function buildQuizUploadPayloadFromStoredQuiz(quiz: {
             confidenceLabelLow: question.confidenceLabelLow ?? undefined,
             confidenceLabelHigh: question.confidenceLabelHigh ?? undefined,
           }
+        : {}),
+      ...(questionShufflesParticipantChoiceAnswers(question.type) &&
+      question.shuffleAnswerOptions === false
+        ? { shuffleAnswerOptions: false as const }
         : {}),
       answers: question.answers.map((answer) => ({
         text: answer.text,
@@ -431,10 +438,14 @@ export const quizRouter = router({
                     : Prisma.DbNull,
                 categorizationShuffleItems:
                   q.type === 'CATEGORIZATION' ? (q.categorizationShuffleItems ?? true) : true,
+                shuffleAnswerOptions: questionShufflesParticipantChoiceAnswers(q.type)
+                  ? (q.shuffleAnswerOptions ?? true)
+                  : true,
                 answers: {
-                  create: q.answers.map((a) => ({
+                  create: q.answers.map((a, index) => ({
                     text: a.text,
                     isCorrect: a.isCorrect,
+                    order: index,
                   })),
                 },
               })),
@@ -530,7 +541,9 @@ export const quizRouter = router({
                 confidenceEnabled: true,
                 confidenceLabelLow: true,
                 confidenceLabelHigh: true,
+                shuffleAnswerOptions: true,
                 answers: {
+                  orderBy: answerOptionOrderBy,
                   select: {
                     text: true,
                     isCorrect: true,
