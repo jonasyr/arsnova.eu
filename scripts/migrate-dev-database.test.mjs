@@ -67,4 +67,13 @@ describe('migrate-dev-database', () => {
       'prisma migrate deploy --schema prisma/schema.prisma',
     );
   });
+
+  it('baut in setup:dev und build:prod alle Workspace-Bibliotheken (#532)', () => {
+    const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+    // Das Backend importiert shared-types und session-export-report.
+    assert.match(pkg.scripts['setup:dev'], /npm run build:libs/);
+    assert.match(pkg.scripts['build:prod'], /^npm run build:libs && /);
+    assert.match(pkg.scripts['build:libs'], /@arsnova\/shared-types/);
+    assert.match(pkg.scripts['build:libs'], /@arsnova\/session-export-report/);
+  });
 });
