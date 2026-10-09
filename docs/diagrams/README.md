@@ -22,7 +22,7 @@ Oder über die Kommandopalette (`Ctrl+Shift+P` / `Cmd+Shift+P`):
 
 ### Nach der Installation
 
-1. `diagrams.md` oder `architecture-overview.md` öffnen.
+1. `netzwerkplan.md`, `diagrams.md` oder `architecture-overview.md` öffnen.
 2. **Markdown-Vorschau** öffnen: rechte Maustaste → **„Open Preview“** oder `Ctrl+Shift+V` / `Cmd+Shift+V`.
 3. Die Mermaid-Blöcke sollten in der Vorschau als Diagramme erscheinen.
 
@@ -37,6 +37,7 @@ Falls die Integration in die Markdown-Vorschau nicht funktioniert:
 
 | Datei                          | Inhalt                                                                                                                                                                                                                                                                                       |
 | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `netzwerkplan.md`              | Produktionsnetz: Nginx, die drei Ports, PostgreSQL, Redis, Lesen/Schreiben/Zuschauen und der Ort des Stands (Stand: 2026-10-09)                                                                                                                                                              |
 | `diagrams.md`                  | Backend-, Frontend-, DB-Schema inkl. SessionFeedback, ProductFeedback (Epic 12), Platform/DailyStatistic, MOTD, Kurzantwort, numerischer Schätzfrage, Effective Vote, Wortwolke/Kompass (1.14 / 8.9), Epic #405 Host-Recovery und Kommunikation Dozent/Student/**Admin** (Stand: 2026-09-21) |
 | `architecture-overview.md`     | System-Architektur, Datenfluss inkl. Admin/MOTD/Produktfeedback, optionale Inferenzpfade 1.14/8.9, Prisma/PostgreSQL-Kompaktsicht mit `NUMERIC_ESTIMATE`, ProductFeedback und Session-Lifecycle, Komponenten-Hierarchie, Sicherheit inkl. Rollen-Autorisierung (Stand: 2026-09-21)           |
 | `diagram-consistency-check.md` | Konsistenzprüfung Diagramme vs. Handbuch/Backlog/ADR-0006/Prisma; hält bewusste Vereinfachungen der Mermaid-ER-Diagramme fest (Stand: 2026-09-21).                                                                                                                                           |
