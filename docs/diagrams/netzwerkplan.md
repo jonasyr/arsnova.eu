@@ -3,12 +3,16 @@
 **Stand:** 2026-10-09
 
 Ein Produktionshost. Nginx beendet TLS und verteilt auf einen App-Container.
-PostgreSQL hält den dauerhaften Stand, Redis den flüchtigen. Live-Signale
-bleiben im Speicher dieses einen Node-Prozesses.
+PostgreSQL ist die maßgebliche Datenbank. Redis liegt auf demselben Host, mit
+Volume `redis_data` und AOF, und ist damit lokal dauerhaft. Es ersetzt
+PostgreSQL nicht und ist kein Offsite-Backup. Live-Signale bleiben im Speicher
+dieses einen Node-Prozesses.
 
 Abgleich: `docker-compose.prod.yml`, `docs/deployment-debian-root-server.md`,
 `docs/operations/MULTI-INSTANCE-PLAN.md`, `apps/frontend/src/app/core/trpc.client.ts`,
-`apps/frontend/ngsw-config.json`.
+`apps/frontend/ngsw-config.json`, `apps/backend/src/lib/databasePoolConfig.ts`,
+`apps/backend/src/lib/yjsShareToken.ts`,
+`apps/frontend/src/app/features/session/session-present/session-token-storage.service.ts`.
 
 ## 1. Weg vom Browser zu den Diensten
 
@@ -18,7 +22,7 @@ flowchart TB
     vote[Vote-Client]
     host[Host und Present]
     sw[PWA-Service-Worker]
-    idb[(IndexedDB und Yjs)]
+    idb[("IndexedDB: Quiz-Sammlung und Host-Token")]
   end
 
   subgraph edge [Produktionshost]
@@ -57,8 +61,10 @@ flowchart TB
 
 Die Ports 3000, 3001 und 3002 sind nur an `127.0.0.1` gebunden. Von außen ist
 nur Nginx erreichbar. Der Service Worker läuft nur im Produktionsbuild und
-liefert keine Sitzungsdaten. IndexedDB hält die lokale Quiz-Sammlung, nicht die
-Live-Stimmen.
+liefert keine Sitzungsdaten. IndexedDB hält zwei getrennte Datenbanken. Die
+Yjs-Sammlung speichert die lokalen Quizze, nicht die Live-Stimmen.
+`arsnova-host-tokens` übergibt das aktive Host-Token an den Presenter-Tab und
+verwirft es nach 30 Minuten.
 
 ## 2. Lesen, Schreiben, Zuschauen
 
@@ -105,18 +111,28 @@ flowchart LR
   write[Schreiben per HTTP] --> revision[Revision in PostgreSQL]
   revision --> emitter[EventEmitter im Prozess]
   emitter --> sub[Status- und Fragen-Subscription]
-  sub --> pool[Pool von höchstens 40 Verbindungen]
+  sub --> pool["Pool, Default 40, konfigurierbar bis 80"]
   pool --> pg[(PostgreSQL)]
 
-  qf[Blitzlicht-Subscription] --> redis[(Redis)]
+  qf[Blitzlicht-Subscription] --> redis[("Redis mit Volume und AOF")]
   presence[Anwesenheit und Bremsen] --> redis
   pair[Host-Pairing] --> pubsub[Redis Pub/Sub]
+  yjsMeta["Yjs-Share-Metadaten, bis 730 Tage"] --> redis
 ```
 
 Die Revision ist der Merkzettel. Das Schreiben erhöht sie in PostgreSQL, das
 Zuschauen vergleicht sie. Redis-Pub/Sub weckt heute das Host-Pairing und die
 Sitzungsbereinigung, nicht den Status- oder Fragenkanal. Ein zweiter
 App-Prozess würde diese Signale nicht hören.
+
+Redis schreibt per AOF auf `redis_data`. Yjs-Share-Metadaten bleiben bis zu
+730 Tage. Bestätigte Produktions-Schreibvorgänge warten auf `WAITAOF`.
+Anwesenheit und Bremsen laufen früher ab. Fällt Redis aus, fehlen diese Stände
+auch dann, wenn PostgreSQL unversehrt ist.
+
+Der Pool öffnet standardmäßig 40 Verbindungen. `DATABASE_POOL_MAX` erlaubt 4
+bis 80. Ein Wert außerhalb dieses Bereichs fällt auf 40 zurück. PostgreSQL
+bleibt beim üblichen Limit von 100 Verbindungen.
 
 Der PDF-Worker hängt per Unix-Socket am HTTP-Prozess und liegt außerhalb der
 Live-Kanäle. Die Landing-Seite liegt nicht auf diesem Host.
