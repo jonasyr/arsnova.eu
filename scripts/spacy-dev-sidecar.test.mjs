@@ -100,7 +100,7 @@ test(
   () => {
     const { result, calls } = runWithPythonStubs({ python3: python314 });
     assert.equal(result.status, 1);
-    assert.match(result.stderr, /Python 3\.10–3\.13 erforderlich/);
+    assert.match(result.stderr, /Python 3\.10–3\.13 mit venv-Modul erforderlich/);
     assert.match(result.stderr, /gefunden: Python 3\.14\.8/);
     assert.doesNotMatch(calls, /-m venv/);
   },
@@ -126,3 +126,24 @@ test('--help nennt den unterstützten Python-Bereich', () => {
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /Python 3\.10–3\.13/);
 });
+
+test(
+  'python3.13 ohne venv-Modul: nächster passender Interpreter wird versucht',
+  { skip: skipIfSharedVenv },
+  () => {
+    const { result, calls, tmp } = runWithPythonStubs({
+      python3: python314,
+      // Versionsprüfung besteht, venv-Anlage scheitert (z. B. python3.13-venv fehlt).
+      'python3.13': 'case "$1" in -c) exit 0;; esac\nexit 1',
+      // Versionsprüfung und venv-Anlage bestehen; danach fehlt das venv-python im Stub.
+      'python3.12': 'exit 0',
+    });
+    assert.notEqual(result.status, 0);
+    const venvCalls = calls.split('\n').filter((line) => line.includes(' -m venv '));
+    assert.deepEqual(venvCalls, [
+      `python3.13 -m venv --clear ${tmp}/docker/spacy/.venv`,
+      `python3.12 -m venv --clear ${tmp}/docker/spacy/.venv`,
+    ]);
+    assert.match(result.stdout, /venv mit python3\.13 fehlgeschlagen/);
+  },
+);

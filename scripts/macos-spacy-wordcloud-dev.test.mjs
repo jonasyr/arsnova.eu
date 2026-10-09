@@ -99,6 +99,7 @@ test('wählt für das spaCy-venv nur Python 3.10–3.13 und ersetzt ein altes ve
     /for candidate in python3\.13 python3\.12 python3\.11 python3\.10 python3; do/,
   );
   assert.match(source, /\(3, 10\) <= sys\.version_info\[:2\] < \(3, 14\)/);
-  assert.match(source, /"\$base_python" -m venv --clear "\$venv_dir"/);
+  assert.match(source, /if "\$candidate" -m venv --clear "\$venv_dir"; then/);
+  assert.match(source, /versuche den nächsten Interpreter/);
   assert.doesNotMatch(source, /^\s*python3 -m venv/m);
 });

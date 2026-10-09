@@ -297,31 +297,33 @@ resolve_python() {
 }
 
 # spaCy 3.8.15 (docker/spacy/requirements.txt) hat keine Pakete für Python 3.14+.
-select_base_python() {
-  local candidate
-  for candidate in python3.13 python3.12 python3.11 python3.10 python3; do
-    if command -v "$candidate" >/dev/null 2>&1 \
-      && "$candidate" -c 'import sys; raise SystemExit(0 if (3, 10) <= sys.version_info[:2] < (3, 14) else 1)' \
-        >/dev/null 2>&1; then
-      printf '%s\n' "$candidate"
-      return 0
-    fi
-  done
-  return 1
+python_in_supported_range() {
+  "$1" -c 'import sys; raise SystemExit(0 if (3, 10) <= sys.version_info[:2] < (3, 14) else 1)' \
+    >/dev/null 2>&1
 }
 
 ensure_python() {
-  local venv_dir py base_python
+  local venv_dir py candidate base_python=""
   if resolve_python; then
     return 0
   fi
 
-  base_python="$(select_base_python)" || fail \
-    "Python 3.10–3.13 erforderlich (spaCy 3.8.15 hat keine Pakete für Python 3.14+; gefunden: $(python3 --version 2>/dev/null || echo 'kein python3')). Bitte z. B. python3.13 installieren (brew install python@3.13)."
-
   venv_dir="$ROOT/docker/spacy/.venv"
-  info "Lege spaCy-venv mit $base_python an unter $venv_dir (erster Lauf lädt de/en/fr/es, oft mehrere Minuten) …"
-  "$base_python" -m venv --clear "$venv_dir"
+  # Der erste passende Interpreter kann ohne venv-Modul installiert sein
+  # (Debian/Ubuntu: pythonX.Y-venv separat), daher den nächsten versuchen.
+  for candidate in python3.13 python3.12 python3.11 python3.10 python3; do
+    command -v "$candidate" >/dev/null 2>&1 || continue
+    python_in_supported_range "$candidate" || continue
+    info "Lege spaCy-venv mit $candidate an unter $venv_dir (erster Lauf lädt de/en/fr/es, oft mehrere Minuten) …"
+    if "$candidate" -m venv --clear "$venv_dir"; then
+      base_python="$candidate"
+      break
+    fi
+    info "venv mit $candidate fehlgeschlagen (fehlt das venv-Paket, z. B. ${candidate}-venv?); versuche den nächsten Interpreter …"
+  done
+  [[ -n "$base_python" ]] || fail \
+    "Python 3.10–3.13 mit venv-Modul erforderlich (spaCy 3.8.15 hat keine Pakete für Python 3.14+; gefunden: $(python3 --version 2>/dev/null || echo 'kein python3')). Bitte z. B. python3.13 installieren (brew install python@3.13; Debian/Ubuntu zusätzlich python3.13-venv)."
+
   py="$venv_dir/bin/python"
   "$py" -m pip install --upgrade pip >/dev/null
   "$py" -m pip install -r "$ROOT/docker/spacy/requirements.txt"
