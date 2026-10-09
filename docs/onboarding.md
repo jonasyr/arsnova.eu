@@ -79,7 +79,7 @@ npm run dev
 
 Dann im Browser: **`http://localhost:4200`**
 
-Das ist absichtlich der einfachste Pfad: **Deutsch**, Backend, Frontend und der Host-spaCy-Sidecar laufen parallel, Postgres + Redis sind gestartet, Prisma ist vorbereitet und `shared-types` ist gebaut. Wortwolken-Glättung braucht Python 3.10+; der erste Lauf legt `docker/spacy/.venv` an und lädt die Modelle (oft mehrere Minuten, Spalte `spacy` in concurrently). **Englisch** brauchst du erst später; dafür gibt es **`npm run dev:en`**. Die Startseite ist dann leer — für eine **volle Hörsaal-Session** (Freitext + Q&A, ~500 Einträge) den nächsten Abschnitt nutzen.
+Das ist absichtlich der einfachste Pfad: **Deutsch**, Backend, Frontend und der Host-spaCy-Sidecar laufen parallel, Postgres + Redis sind gestartet, Prisma ist vorbereitet und die Workspace-Bibliotheken (`shared-types`, `session-export-report`) sind gebaut. Wortwolken-Glättung braucht Python 3.10+; der erste Lauf legt `docker/spacy/.venv` an und lädt die Modelle (oft mehrere Minuten, Spalte `spacy` in concurrently). **Englisch** brauchst du erst später; dafür gibt es **`npm run dev:en`**. Die Startseite ist dann leer — für eine **volle Hörsaal-Session** (Freitext + Q&A, ~500 Einträge) den nächsten Abschnitt nutzen.
 
 **Wichtig für Windows:** Diese Befehle laufen dann in **WSL/Ubuntu**, nicht in PowerShell oder Git Bash.
 
@@ -92,7 +92,7 @@ Wenn du sofort eine **gefüllte Host-Session** willst (Freitext-Wortwolke, Q&A-W
 ```bash
 cp .env.example .env   # falls noch nicht geschehen
 npm ci
-npm run setup:dev      # Postgres, Redis, Prisma, shared-types
+npm run setup:dev      # Postgres, Redis, Prisma, shared-types + session-export-report
 npm run spacy:macos-dev
 ```
 
@@ -135,7 +135,7 @@ Für Glättung unter Linux im App-Container: `npm run docker:up:nlp` und `NLP_EN
 
 ### Setup in wenigen Schritten
 
-Nach **Clone oder Fork** müssen PostgreSQL und Redis laufen, das Datenbankschema angewendet sein und **`@arsnova/shared-types` einmal gebaut** sein — sonst fehlt u. a. `libs/shared-types/dist/` und das Backend startet beim ersten `npm run dev` nicht.
+Nach **Clone oder Fork** müssen PostgreSQL und Redis laufen, das Datenbankschema angewendet sein und **die Workspace-Bibliotheken `@arsnova/shared-types` und `@arsnova/session-export-report` einmal gebaut** sein — sonst fehlen `libs/*/dist/` und das Backend startet beim ersten `npm run dev` nicht.
 
 **Reproduzierbar wie in der CI:** Dependencies mit **`npm ci`** installieren (nutzt das Lockfile 1:1). Alternativ: `npm install`.
 
@@ -160,11 +160,11 @@ npm ci
 npm run prisma:migrate
 npm run prisma:generate
 
-# 6. Geteilte Typen bauen (Pflicht vor erstem Dev-Start)
-npm run build -w @arsnova/shared-types
+# 6. Workspace-Bibliotheken bauen: shared-types + session-export-report (Pflicht vor erstem Dev-Start)
+npm run build:libs
 ```
 
-**Kurz:** Einmalig **`npm run setup:dev`** (startet Postgres + Redis, `prisma migrate deploy`, `prisma:generate`, **shared-types-Build**) — deckt die Schritte 3–6 ab, danach **`npm run dev`**. Auf macOS für eine volle Hörsaal-Session stattdessen **`npm run spacy:macos-dev`** ([hohe Befüllung](#volle-lokale-session-mit-hoher-befüllung)).
+**Kurz:** Einmalig **`npm run setup:dev`** (startet Postgres + Redis, `prisma migrate deploy`, `prisma:generate`, **Build von `shared-types` und `session-export-report`** via `build:libs`) — deckt die Schritte 3–6 ab, danach **`npm run dev`**. Auf macOS für eine volle Hörsaal-Session stattdessen **`npm run spacy:macos-dev`** ([hohe Befüllung](#volle-lokale-session-mit-hoher-befüllung)).
 
 **Vor dem ersten Commit / bei Pre-Commit-Hook:** Ist nach `npm ci` noch kein Prisma-Client da, **`npm run prisma:generate`** ausführen (sonst schlägt `tsc` fehl).
 
@@ -206,7 +206,7 @@ belegt die Korrekturen der damals roten Gates.
 | `docker compose` geht nicht             | Docker Desktop ist nicht installiert oder nicht gestartet                        | Docker starten, dann `docker compose version` prüfen                                  |
 | `npm run dev` bricht sofort ab          | Node-Version ist nicht passend                                                   | `node -v` prüfen; dann `nvm use` oder Node 24/22 installieren                         |
 | Browser zeigt nicht `/en/`, sondern `/` | Das ist korrekt: Standard-`dev` ist **Deutsch**                                  | Einfach `http://localhost:4200` nutzen; für Englisch `npm run dev:en`                 |
-| Fehler zu Prisma oder fehlenden Typen   | `setup:dev`, `prisma:generate` oder `shared-types`-Build fehlt                   | `npm run setup:dev` erneut ausführen                                                  |
+| Fehler zu Prisma oder fehlenden Typen   | `setup:dev`, `prisma:generate` oder `build:libs` fehlt                           | `npm run setup:dev` erneut ausführen                                                  |
 | Port 3000 oder 4200 ist schon belegt    | Voriger Dev-Server läuft noch                                                    | `npm run free-dev-ports` und dann erneut `npm run dev`                                |
 | Wortwolke bleibt leer / Seed bricht ab  | Keine Freitextfrage in der Session, oder `npm run dev` parallel zum macOS-Helfer | Demo-Quiz anzeigen; auf macOS nur `spacy:macos-dev`, nicht zusätzlich `npm run dev`   |
 | „Glättung nicht verfügbar“              | Sidecar lädt noch Modelle, Python fehlt, oder `dev:backend` ohne Sidecar         | Spalte `spacy` in concurrently prüfen; Python 3.10+; nach Socket-Bind neu analysieren |
