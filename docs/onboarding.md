@@ -166,7 +166,7 @@ npm run build -w @arsnova/shared-types
 
 **Kurz:** Einmalig **`npm run setup:dev`** (startet Postgres + Redis, `prisma migrate deploy`, `prisma:generate`, **shared-types-Build**) — deckt die Schritte 3–6 ab, danach **`npm run dev`**. Auf macOS für eine volle Hörsaal-Session stattdessen **`npm run spacy:macos-dev`** ([hohe Befüllung](#volle-lokale-session-mit-hoher-befüllung)).
 
-**Vor dem ersten Commit / bei Pre-Commit-Hook:** Ist nach `npm ci` noch kein Prisma-Client da, **`npm run prisma:generate`** ausführen (sonst schlägt `tsc` fehl). Der Hook führt auch `npm test` aus; die PDF-Tests brauchen den Chromium-Build der Projekt-Playwright-Version. `setup:dev` installiert ihn über **`npm run playwright:install`**. Nicht `npx playwright install` aus dem Repo-Root nutzen: Das löst auf die ältere Playwright-CLI aus `artillery` auf und lädt den falschen Build.
+**Vor dem ersten Commit / bei Pre-Commit-Hook:** Ist nach `npm ci` noch kein Prisma-Client da, **`npm run prisma:generate`** ausführen (sonst schlägt `tsc` fehl). Der Hook führt auch `npm test` aus; die PDF-Tests brauchen den Chromium-Build der Projekt-Playwright-Version. `setup:dev` installiert ihn über **`npm run playwright:install`**. Nicht `npx playwright install` aus dem Repo-Root nutzen: Das löst auf die ältere Playwright-CLI aus `artillery` auf und lädt den falschen Build. Auf einem frischen Ubuntu/WSL2 können zusätzlich Systembibliotheken für Chromium fehlen (`Host system is missing dependencies to run browsers.`); dann einmalig **`npm run playwright:install-deps`** ausführen (fragt nach `sudo`, nutzt `apt-get`, daher nur Debian/Ubuntu).
 
 ### Entwicklungsserver starten
 
@@ -214,6 +214,7 @@ belegt die Korrekturen der damals roten Gates.
 | „Wähle die Sprache der Antworten“ in it | Host-UI `it` hat kein Lemma-Modell; Default folgt der UI                         | Am Glätten-Button DE/EN/FR/ES wählen                                                  |
 | `/admin` funktioniert lokal nicht       | `ADMIN_SECRET` wurde nicht gesetzt                                               | `.env` ergänzen und Backend neu starten                                               |
 | Test/Hook: `Executable doesn't exist`   | Playwright-Chromium für die Projekt-Playwright-Version fehlt                     | `npm run playwright:install` (nicht `npx playwright install`)                         |
+| Test/Hook: `missing dependencies`       | Ubuntu/WSL2: Systembibliotheken für Chromium fehlen                              | `npm run playwright:install-deps` (einmalig, fragt nach `sudo`)                       |
 
 **Spezialfall Windows:** Wenn das Setup unter Windows „zufällig kaputt“ wirkt, wechsle auf **WSL2/Ubuntu**, klone das Repo dort unter `~/...` neu und starte den Ablauf noch einmal komplett in WSL.
 

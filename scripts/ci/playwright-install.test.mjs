@@ -134,4 +134,10 @@ test('lokales playwright:install nutzt die Projekt-CLI und läuft in setup:dev',
     'node node_modules/playwright/cli.js install chromium',
   );
   assert.match(pkg.scripts['setup:dev'], /&& npm run playwright:install$/);
+  // Systembibliotheken brauchen sudo/apt-get und gehören daher nicht in setup:dev.
+  assert.equal(
+    pkg.scripts['playwright:install-deps'],
+    'node node_modules/playwright/cli.js install-deps chromium',
+  );
+  assert.doesNotMatch(pkg.scripts['setup:dev'], /install-deps/);
 });
