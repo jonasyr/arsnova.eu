@@ -91,3 +91,15 @@ test('require_localized_dist listet fehlende Locale-Dateien', () => {
   assert.match(source, /apps\/backend\/dist\/index\.js/);
   assert.match(source, /ng serve auf 4200 reicht nicht/);
 });
+
+test('wählt für das spaCy-venv nur Python 3.10–3.13 und ersetzt ein altes venv', () => {
+  const source = readFileSync(script, 'utf8');
+  assert.match(
+    source,
+    /for candidate in python3\.13 python3\.12 python3\.11 python3\.10 python3; do/,
+  );
+  assert.match(source, /\(3, 10\) <= sys\.version_info\[:2\] < \(3, 14\)/);
+  assert.match(source, /if "\$candidate" -m venv --clear "\$venv_dir"; then/);
+  assert.match(source, /versuche den nächsten Interpreter/);
+  assert.doesNotMatch(source, /^\s*python3 -m venv/m);
+});

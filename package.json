@@ -6,7 +6,7 @@
   "license": "MIT",
   "author": "Klaus Quibeldey-Cirkel",
   "engines": {
-    "node": ">=22.13.0 <23 || >=24.0.0 <25"
+    "node": ">=22.22.1 <23 || >=24.0.0 <25"
   },
   "workspaces": [
     "libs/*",
@@ -53,6 +53,7 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy --schema prisma/schema.prisma",
     "prisma:migrate:test": "node --test scripts/migrate-dev-database.test.mjs",
+    "engines:test": "node --test scripts/node-engines.test.mjs",
     "prisma:push": "prisma db push",
     "prisma:studio": "prisma studio",
     "seed:dev-motd": "node scripts/seed-dev-motd.mjs",
@@ -75,9 +76,11 @@
     "seed:betrieb-nutzung": "npm run seed:betrieb-nutzung -w @arsnova/backend --",
     "seed:session-votes": "npm run seed:session-votes -w @arsnova/backend --",
     "seed:moderation-compass": "npm run seed:moderation-compass -w @arsnova/backend --",
-    "setup:dev": "npm run docker:up:dev && npm run prisma:migrate && npm run prisma:generate && npm run build -w @arsnova/shared-types",
+    "setup:dev": "npm run docker:up:dev && npm run prisma:migrate && npm run prisma:generate && npm run build:libs && npm run playwright:install",
     "docker:up": "docker compose up -d",
     "docker:up:dev": "docker compose up -d postgres redis",
+    "playwright:install": "node node_modules/playwright/cli.js install chromium",
+    "playwright:install-deps": "node node_modules/playwright/cli.js install-deps chromium",
     "docker:up:nlp": "docker compose --profile nlp up -d --build spacy",
     "spacy:macos-dev": "bash scripts/macos-spacy-wordcloud-dev.sh",
     "spacy:macos-dev:test": "node --test scripts/macos-spacy-wordcloud-dev.test.mjs",
@@ -87,7 +90,7 @@
     "qa-summary:dev:test": "node --test scripts/qa-summary-dev-server.test.mjs",
     "dev:qa-summary": "node scripts/migrate-dev-database.mjs && node scripts/free-dev-ports.mjs && concurrently -n backend,frontend,summary,spacy -c blue,green,yellow,magenta \"npm run dev:backend:nlp\" \"npm run start:de -w @arsnova/frontend\" \"npm run qa-summary:dev\" \"npm run spacy:dev\"",
     "docker:down": "docker compose down",
-    "build:prod": "npm run build -w @arsnova/shared-types && npm run build -w @arsnova/backend && npm run build:localize -w @arsnova/frontend",
+    "build:prod": "npm run build:libs && npm run build -w @arsnova/backend && npm run build:localize -w @arsnova/frontend",
     "free-port-3000": "node scripts/free-port-3000.mjs",
     "free-dev-ports": "node scripts/free-dev-ports.mjs",
     "load:simulate:50": "node scripts/load/concurrent-50-http.mjs",
@@ -167,6 +170,7 @@
     "js-yaml": "4.3.1",
     "lint-staged": "^17.0.8",
     "prettier": "^3.2.0",
+    "semver": "^7.7.4",
     "typescript": "~5.9.0",
     "typescript-eslint": "^8.56.0",
     "undici": "^7.29.1",

@@ -6,7 +6,7 @@
 
 Marketing- und Informationsseite für arsnova.eu. Astro 7 + Tailwind 3 (PostCSS), SEO-optimiert, für GitHub Pages oder beliebigen Static Host.
 
-**Node.js:** Landing-Build und `dev:landing` benötigen **Node ≥ 22.12** (Astro 7). CI und `.nvmrc` nutzen Node 24 LTS.
+**Node.js:** Astro 7 selbst braucht **Node ≥ 22.12**; da Landing-Build und `dev:landing` aus dem Repo-Root laufen und `npm ci` dort mit `engine-strict` die Root-`engines` erzwingt, gilt praktisch **Node ≥ 22.22.1** (oder Node 24). CI und `.nvmrc` nutzen Node 24 LTS.
 
 ## Sprachen (i18n)
 

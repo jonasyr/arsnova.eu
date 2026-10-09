@@ -14,14 +14,14 @@ Willkommen im Entwickler-Team von **arsnova.eu**. Dieses Dokument hilft dir als 
 
 ### Voraussetzungen
 
-| Tool                    | Version                                                                         | Prüfbefehl               |
-| ----------------------- | ------------------------------------------------------------------------------- | ------------------------ |
-| Node.js                 | **24.18.0 LTS** empfohlen (`.nvmrc`; `nvm use` / `fnm use`), 22.13+ unterstützt | `node -v`                |
-| npm                     | ≥ 10 (nach `npm ci` zur Lockfile-Passung)                                       | `npm -v`                 |
-| Docker & Docker Compose | aktuell                                                                         | `docker compose version` |
-| Git                     | aktuell                                                                         | `git -v`                 |
+| Tool                    | Version                                                                           | Prüfbefehl               |
+| ----------------------- | --------------------------------------------------------------------------------- | ------------------------ |
+| Node.js                 | **24.18.0 LTS** empfohlen (`.nvmrc`; `nvm use` / `fnm use`), 22.22.1+ unterstützt | `node -v`                |
+| npm                     | ≥ 10 (nach `npm ci` zur Lockfile-Passung)                                         | `npm -v`                 |
+| Docker & Docker Compose | aktuell                                                                           | `docker compose version` |
+| Git                     | aktuell                                                                           | `git -v`                 |
 
-**Node-Version:** Nimm für den Einstieg die per `.nvmrc` gepinnte **24.18.0 LTS**. Node **22.13+ LTS** bleibt als Kompatibilitätspfad unterstützt. EOL- und ungerade Majors sind nicht unterstützt. Die vollständige Regel steht in der Root-[`package.json`](../package.json) (`engines`); die CI baut mit **Node 22 und 24** (GitHub Actions).
+**Node-Version:** Nimm für den Einstieg die per `.nvmrc` gepinnte **24.18.0 LTS**. Node **22.22.1+ LTS** bleibt als Kompatibilitätspfad unterstützt (Untergrenze durch `lint-staged`). EOL- und ungerade Majors sind nicht unterstützt; `.npmrc` setzt `engine-strict=true`, daher bricht `npm ci` mit einer nicht passenden Node-Version sofort mit `EBADENGINE` ab. Die vollständige Regel steht in der Root-[`package.json`](../package.json) (`engines`); die CI baut mit **Node 22 und 24** (GitHub Actions).
 
 ### Windows? Bitte direkt WSL2 nutzen
 
@@ -79,7 +79,7 @@ npm run dev
 
 Dann im Browser: **`http://localhost:4200`**
 
-Das ist absichtlich der einfachste Pfad: **Deutsch**, Backend, Frontend und der Host-spaCy-Sidecar laufen parallel, Postgres + Redis sind gestartet, Prisma ist vorbereitet und `shared-types` ist gebaut. Wortwolken-Glättung braucht Python 3.10+; der erste Lauf legt `docker/spacy/.venv` an und lädt die Modelle (oft mehrere Minuten, Spalte `spacy` in concurrently). **Englisch** brauchst du erst später; dafür gibt es **`npm run dev:en`**. Die Startseite ist dann leer — für eine **volle Hörsaal-Session** (Freitext + Q&A, ~500 Einträge) den nächsten Abschnitt nutzen.
+Das ist absichtlich der einfachste Pfad: **Deutsch**, Backend, Frontend und der Host-spaCy-Sidecar laufen parallel, Postgres + Redis sind gestartet, Prisma ist vorbereitet und die Workspace-Bibliotheken (`shared-types`, `session-export-report`) sind gebaut. Wortwolken-Glättung braucht Python 3.10–3.13 (spaCy 3.8.15 hat keine Pakete für 3.14; ist `python3` bereits 3.14, zusätzlich z. B. `python3.13` installieren – das Skript bevorzugt es automatisch); der erste Lauf legt `docker/spacy/.venv` an und lädt die Modelle (oft mehrere Minuten, Spalte `spacy` in concurrently). **Englisch** brauchst du erst später; dafür gibt es **`npm run dev:en`**. Die Startseite ist dann leer — für eine **volle Hörsaal-Session** (Freitext + Q&A, ~500 Einträge) den nächsten Abschnitt nutzen.
 
 **Wichtig für Windows:** Diese Befehle laufen dann in **WSL/Ubuntu**, nicht in PowerShell oder Git Bash.
 
@@ -92,7 +92,7 @@ Wenn du sofort eine **gefüllte Host-Session** willst (Freitext-Wortwolke, Q&A-W
 ```bash
 cp .env.example .env   # falls noch nicht geschehen
 npm ci
-npm run setup:dev      # Postgres, Redis, Prisma, shared-types
+npm run setup:dev      # Postgres, Redis, Prisma, shared-types + session-export-report, Playwright-Chromium
 npm run spacy:macos-dev
 ```
 
@@ -135,7 +135,7 @@ Für Glättung unter Linux im App-Container: `npm run docker:up:nlp` und `NLP_EN
 
 ### Setup in wenigen Schritten
 
-Nach **Clone oder Fork** müssen PostgreSQL und Redis laufen, das Datenbankschema angewendet sein und **`@arsnova/shared-types` einmal gebaut** sein — sonst fehlt u. a. `libs/shared-types/dist/` und das Backend startet beim ersten `npm run dev` nicht.
+Nach **Clone oder Fork** müssen PostgreSQL und Redis laufen, das Datenbankschema angewendet sein und **die Workspace-Bibliotheken `@arsnova/shared-types` und `@arsnova/session-export-report` einmal gebaut** sein — sonst fehlen `libs/*/dist/` und das Backend startet beim ersten `npm run dev` nicht.
 
 **Reproduzierbar wie in der CI:** Dependencies mit **`npm ci`** installieren (nutzt das Lockfile 1:1). Alternativ: `npm install`.
 
@@ -160,13 +160,13 @@ npm ci
 npm run prisma:migrate
 npm run prisma:generate
 
-# 6. Geteilte Typen bauen (Pflicht vor erstem Dev-Start)
-npm run build -w @arsnova/shared-types
+# 6. Workspace-Bibliotheken bauen: shared-types + session-export-report (Pflicht vor erstem Dev-Start)
+npm run build:libs
 ```
 
-**Kurz:** Einmalig **`npm run setup:dev`** (startet Postgres + Redis, `prisma migrate deploy`, `prisma:generate`, **shared-types-Build**) — deckt die Schritte 3–6 ab, danach **`npm run dev`**. Auf macOS für eine volle Hörsaal-Session stattdessen **`npm run spacy:macos-dev`** ([hohe Befüllung](#volle-lokale-session-mit-hoher-befüllung)).
+**Kurz:** Einmalig **`npm run setup:dev`** (startet Postgres + Redis, `prisma migrate deploy`, `prisma:generate`, **Build von `shared-types` und `session-export-report`** via `build:libs`, danach Playwright-Chromium der Projektversion) — deckt die Schritte 3–6 ab und installiert den Browser für den Pre-Commit-Hook, danach **`npm run dev`**. Auf macOS für eine volle Hörsaal-Session stattdessen **`npm run spacy:macos-dev`** ([hohe Befüllung](#volle-lokale-session-mit-hoher-befüllung)).
 
-**Vor dem ersten Commit / bei Pre-Commit-Hook:** Ist nach `npm ci` noch kein Prisma-Client da, **`npm run prisma:generate`** ausführen (sonst schlägt `tsc` fehl).
+**Vor dem ersten Commit / bei Pre-Commit-Hook:** Ist nach `npm ci` noch kein Prisma-Client da, **`npm run prisma:generate`** ausführen (sonst schlägt `tsc` fehl). Der Hook führt auch `npm test` aus; die PDF-Tests brauchen den Chromium-Build der Projekt-Playwright-Version. `setup:dev` installiert ihn über **`npm run playwright:install`**. Nicht `npx playwright install` aus dem Repo-Root nutzen: Das löst auf die ältere Playwright-CLI aus `artillery` auf und lädt den falschen Build. Auf einem frischen Ubuntu/WSL2 können zusätzlich Systembibliotheken für Chromium fehlen (`Host system is missing dependencies to run browsers.`); dann einmalig **`npm run playwright:install-deps`** ausführen (fragt nach `sudo`, nutzt `apt-get`, daher nur Debian/Ubuntu).
 
 ### Entwicklungsserver starten
 
@@ -206,13 +206,15 @@ belegt die Korrekturen der damals roten Gates.
 | `docker compose` geht nicht             | Docker Desktop ist nicht installiert oder nicht gestartet                        | Docker starten, dann `docker compose version` prüfen                                  |
 | `npm run dev` bricht sofort ab          | Node-Version ist nicht passend                                                   | `node -v` prüfen; dann `nvm use` oder Node 24/22 installieren                         |
 | Browser zeigt nicht `/en/`, sondern `/` | Das ist korrekt: Standard-`dev` ist **Deutsch**                                  | Einfach `http://localhost:4200` nutzen; für Englisch `npm run dev:en`                 |
-| Fehler zu Prisma oder fehlenden Typen   | `setup:dev`, `prisma:generate` oder `shared-types`-Build fehlt                   | `npm run setup:dev` erneut ausführen                                                  |
+| Fehler zu Prisma oder fehlenden Typen   | `setup:dev`, `prisma:generate` oder `build:libs` fehlt                           | `npm run setup:dev` erneut ausführen                                                  |
 | Port 3000 oder 4200 ist schon belegt    | Voriger Dev-Server läuft noch                                                    | `npm run free-dev-ports` und dann erneut `npm run dev`                                |
 | Wortwolke bleibt leer / Seed bricht ab  | Keine Freitextfrage in der Session, oder `npm run dev` parallel zum macOS-Helfer | Demo-Quiz anzeigen; auf macOS nur `spacy:macos-dev`, nicht zusätzlich `npm run dev`   |
-| „Glättung nicht verfügbar“              | Sidecar lädt noch Modelle, Python fehlt, oder `dev:backend` ohne Sidecar         | Spalte `spacy` in concurrently prüfen; Python 3.10+; nach Socket-Bind neu analysieren |
+| „Glättung nicht verfügbar“              | Sidecar lädt noch Modelle, Python fehlt, oder `dev:backend` ohne Sidecar         | Spalte `spacy` in concurrently prüfen; Python 3.10–3.13; nach Socket-Bind analysieren |
 | `The table public.Quiz does not exist`  | Postgres läuft, Prisma-Schema wurde nie angewendet                               | `npm run prisma:migrate` (der macOS-Helfer macht das jetzt selbst)                    |
 | „Wähle die Sprache der Antworten“ in it | Host-UI `it` hat kein Lemma-Modell; Default folgt der UI                         | Am Glätten-Button DE/EN/FR/ES wählen                                                  |
 | `/admin` funktioniert lokal nicht       | `ADMIN_SECRET` wurde nicht gesetzt                                               | `.env` ergänzen und Backend neu starten                                               |
+| Test/Hook: `Executable doesn't exist`   | Playwright-Chromium für die Projekt-Playwright-Version fehlt                     | `npm run playwright:install` (nicht `npx playwright install`)                         |
+| Test/Hook: `missing dependencies`       | Ubuntu/WSL2: Systembibliotheken für Chromium fehlen                              | `npm run playwright:install-deps` (einmalig, fragt nach `sudo`)                       |
 
 **Spezialfall Windows:** Wenn das Setup unter Windows „zufällig kaputt“ wirkt, wechsle auf **WSL2/Ubuntu**, klone das Repo dort unter `~/...` neu und starte den Ablauf noch einmal komplett in WSL.
 

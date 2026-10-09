@@ -3,7 +3,7 @@
 - First setup:
   - `cp .env.example .env`
   - `npm ci`
-  - `npm run setup:dev` (starts Postgres/Redis, applies Prisma db push, generates client, builds shared-types)
+  - `npm run setup:dev` (starts Postgres/Redis, runs `prisma migrate deploy`, generates the Prisma client, builds both workspace libraries via `build:libs`, installs the project Playwright Chromium)
 - Dev servers:
   - `npm run dev` or `npm run dev:de`: backend + German frontend + Host-spaCy sidecar (`NLP_ENABLED=true`, socket `/tmp/arsnova-nlp.sock`).
   - `npm run dev:en`: backend + English frontend + Host-spaCy sidecar.
@@ -15,8 +15,8 @@
   - `npm run docker:up` / `npm run docker:down`: full compose up/down.
   - `npm run prisma:push`, `npm run prisma:generate`, `npm run prisma:studio`.
 - Build/typecheck/test/lint:
-  - `npm run build`: shared-types -> backend -> frontend.
-  - `npm run build:prod`: shared-types -> backend -> localized frontend production build.
+  - `npm run build`: `build:libs` (`shared-types`, then `session-export-report`) -> backend -> frontend.
+  - `npm run build:prod`: `build:libs` -> backend -> localized frontend production build.
   - `npm run typecheck`, `npm test`, `npm run lint`, `npm run format:check`.
   - Workspace checks: `npm run test -w @arsnova/backend`, `npm run test -w @arsnova/frontend`, `npm run typecheck -w @arsnova/backend`, `npm run typecheck -w @arsnova/frontend`, `npm run build -w @arsnova/shared-types`.
   - Focused Vitest: append the spec/test path after `--`, e.g. `npm run test -w @arsnova/backend -- src/__tests__/qa.test.ts`.
