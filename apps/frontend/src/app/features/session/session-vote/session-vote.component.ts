@@ -502,6 +502,7 @@ export class SessionVoteComponent implements OnInit, OnDestroy {
   private quickFeedbackReleasedEpoch = 0;
   private quickFeedbackFallbackActive = false;
   private quickFeedbackFallbackGeneration = 0;
+  private quickFeedbackFallbackRequest: { generation: number; requestEpoch: number } | null = null;
   private quickFeedbackResultEpoch = 0;
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private pollStartTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -5491,7 +5492,20 @@ export class SessionVoteComponent implements OnInit, OnDestroy {
     if (!isCurrentFallbackGeneration()) {
       return;
     }
+    if (
+      options.fallbackGeneration !== undefined &&
+      this.quickFeedbackFallbackRequest?.generation === options.fallbackGeneration &&
+      this.quickFeedbackFallbackRequest.requestEpoch === this.quickFeedbackResultEpoch
+    ) {
+      return;
+    }
     const requestEpoch = ++this.quickFeedbackResultEpoch;
+    if (options.fallbackGeneration !== undefined) {
+      this.quickFeedbackFallbackRequest = {
+        generation: options.fallbackGeneration,
+        requestEpoch,
+      };
+    }
     const isCurrentRequest = (): boolean =>
       requestEpoch === this.quickFeedbackResultEpoch && isCurrentFallbackGeneration();
 
@@ -5511,6 +5525,9 @@ export class SessionVoteComponent implements OnInit, OnDestroy {
       }
       this.applyQuickFeedbackResult(null, requestEpoch);
     } finally {
+      if (this.quickFeedbackFallbackRequest?.requestEpoch === requestEpoch) {
+        this.quickFeedbackFallbackRequest = null;
+      }
       if (isCurrentRequest()) {
         this.quickFeedbackHydrated = true;
       }

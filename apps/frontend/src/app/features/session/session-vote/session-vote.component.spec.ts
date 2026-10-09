@@ -6210,7 +6210,7 @@ describe('SessionVoteComponent', { timeout: 30_000 }, () => {
   });
 
   it.each(['Erfolg', 'Fehler'] as const)(
-    'ignoriert einen verspäteten HTTP-%s aus derselben Fallback-Generation',
+    'ignoriert einen verspäteten HTTP-%s aus einem älteren parallelen Refresh',
     async (staleOutcome) => {
       type MoodResult = {
         type: 'MOOD';
@@ -6249,15 +6249,11 @@ describe('SessionVoteComponent', { timeout: 30_000 }, () => {
         },
       } as never);
       const internals = component as unknown as {
-        quickFeedbackFallbackActive: boolean;
-        quickFeedbackFallbackGeneration: number;
-        refreshQuickFeedbackResult: (options: { fallbackGeneration: number }) => Promise<void>;
+        refreshQuickFeedbackResult: () => Promise<void>;
       };
-      internals.quickFeedbackFallbackActive = true;
-      internals.quickFeedbackFallbackGeneration = 7;
 
-      const staleRequest = internals.refreshQuickFeedbackResult({ fallbackGeneration: 7 });
-      const currentRequest = internals.refreshQuickFeedbackResult({ fallbackGeneration: 7 });
+      const staleRequest = internals.refreshQuickFeedbackResult();
+      const currentRequest = internals.refreshQuickFeedbackResult();
       expect(fallbackRequests).toHaveLength(2);
       fallbackRequests[1]?.resolve({
         type: 'MOOD',
@@ -6286,6 +6282,64 @@ describe('SessionVoteComponent', { timeout: 30_000 }, () => {
       fixture.destroy();
     },
   );
+
+  it('lässt pro Fallback-Generation höchstens eine langsame HTTP-Abfrage gleichzeitig laufen', async () => {
+    let resolveFallback!: (result: {
+      type: 'MOOD';
+      locked: boolean;
+      totalVotes: number;
+      distribution: { POSITIVE: number; NEUTRAL: number; NEGATIVE: number };
+      currentRound: number;
+    }) => void;
+    quickFeedbackResultsQueryMock.mockReturnValueOnce(
+      new Promise<Parameters<typeof resolveFallback>[0]>((resolve) => {
+        resolveFallback = resolve;
+      }),
+    );
+
+    const fixture = TestBed.createComponent(SessionVoteComponent);
+    const component = fixture.componentInstance;
+    component.status.set('ACTIVE');
+    component.sessionSettings.set({
+      id: '6a8edced-5f8f-4cfa-9176-454fac9570ad',
+      code: 'ABC123',
+      type: 'QUIZ',
+      status: 'ACTIVE',
+      serverTime: MOCK_SERVER_TIME,
+      quizName: 'Team-Quiz',
+      participantCount: 6,
+      preset: 'SERIOUS',
+      channels: {
+        quiz: { enabled: true },
+        qa: { enabled: false, open: false, title: null, moderationMode: false },
+        quickFeedback: { enabled: true, open: true },
+      },
+    } as never);
+    const internals = component as unknown as {
+      quickFeedbackFallbackActive: boolean;
+      quickFeedbackFallbackGeneration: number;
+      refreshQuickFeedbackResult: (options: { fallbackGeneration: number }) => Promise<void>;
+    };
+    internals.quickFeedbackFallbackActive = true;
+    internals.quickFeedbackFallbackGeneration = 7;
+
+    const slowRequest = internals.refreshQuickFeedbackResult({ fallbackGeneration: 7 });
+    await internals.refreshQuickFeedbackResult({ fallbackGeneration: 7 });
+    expect(quickFeedbackResultsQueryMock).toHaveBeenCalledOnce();
+
+    resolveFallback({
+      type: 'MOOD',
+      locked: false,
+      totalVotes: 5,
+      distribution: { POSITIVE: 2, NEUTRAL: 2, NEGATIVE: 1 },
+      currentRound: 2,
+    });
+    await slowRequest;
+
+    expect(component.quickFeedbackResult()?.totalVotes).toBe(5);
+    expect(component.quickFeedbackResult()?.currentRound).toBe(2);
+    fixture.destroy();
+  });
 
   it('ignoriert einen Sichtbarkeits-Refresh nach einem neueren WebSocket-Ergebnis', async () => {
     let subscriptionHandlers!: { onData: (result: unknown) => void };
