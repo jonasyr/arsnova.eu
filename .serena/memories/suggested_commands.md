@@ -3,7 +3,7 @@
 - First setup:
   - `cp .env.example .env`
   - `npm ci`
-  - `npm run setup:dev` (starts Postgres/Redis, runs `npm run prisma:migrate` (`prisma migrate deploy`, not `db push`), generates the Prisma client, builds the workspace libraries)
+  - `npm run setup:dev` (starts Postgres/Redis, runs `npm run prisma:migrate` (`prisma migrate deploy`, not `db push`), generates the Prisma client, builds `@arsnova/shared-types`). The backend also imports `@arsnova/session-export-report`; if it reports `MODULE_NOT_FOUND` for that package, run `npm run build:libs` (builds both libraries).
 - Dev servers:
   - `npm run dev` or `npm run dev:de`: backend + German frontend + Host-spaCy sidecar (`NLP_ENABLED=true`, socket `/tmp/arsnova-nlp.sock`).
   - `npm run dev:en`: backend + English frontend + Host-spaCy sidecar.
