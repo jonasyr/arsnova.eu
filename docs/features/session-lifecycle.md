@@ -128,10 +128,12 @@ in Slice #417 umgesetzt.
 ## Obergrenzen und Berechtigungen
 
 `MAX_SESSION_DURATION` begrenzt die gesamte Dauer ab `createdAt`. Unterstützt
-werden `PT24H`, `P14D` sowie die Kurzformen `24h` und `14d`. Zulässig sind
-24 Stunden bis 30 Tage. Leer, ungültig oder außerhalb dieses Bereichs fällt auf
-den Betreiberdefault von 14 Tagen zurück. Zusätzlich erzwingt PostgreSQL stets
-das harte 30-Tage-Cap.
+werden `PT24H`, `P180D` sowie die Kurzformen `24h` und `180d`. Zulässig sind
+24 Stunden bis 180 Tage. Leer, ungültig oder außerhalb dieses Bereichs fällt auf
+den Betreiberdefault von 14 Tagen zurück. Ganze Tage sind Kalendertage in der
+Sessionzeitzone. PostgreSQL lässt deshalb das spätere von 180×24 Stunden und
+180 Kalendertagen zu, damit eine Frist über die Zeitumstellung im Herbst nicht
+an der starren Stundenzahl scheitert.
 
 Globale Verlängerungen benötigen neben einem gültigen Hostnachweis ausdrücklich
 den Nachweis des ursprünglichen Hosts. Route, Sessioncode, URL, Clientzustand
@@ -234,8 +236,10 @@ Inhaltszugriff des Hosts.
 
 Die Join-Kapsel neben dem QR-Code bleibt kompakt: Code und Teilnehmerzahl,
 ohne Sessionende und ohne Löschtermin. Die Q&A-Fristzeile des Hosts nennt den
-Zugang für Teilnehmende und, darunter, bis wann der Host die Fragen noch
-einsehen kann. Vote zeigt die offene-bis-Zeile mit hervorgehobener absoluter
+Zugang für Teilnehmende und, darunter, die 14-tägige Nachbereitung ab diesem
+Zugang. Eine kürzere Öffnung zieht bei einer Q&A-Session das Sessionende mit;
+dasselbe gilt, wenn das bisherige Sessionende dieselbe Frist war. Ein unabhängig
+späteres Sessionende einer Quiz-Session bleibt bestehen. Vote zeigt die offene-bis-Zeile mit hervorgehobener absoluter
 Fristzeit und relativer Restzeit, den Kurzstatus eigener Fragen
 (sichtbar / in Prüfung / beantwortet), die Markierung »Wird gerade besprochen«
 für angepinnte Fragen sowie einen Leerzustand mit Quota- und Frist-Hinweis.

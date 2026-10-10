@@ -4,6 +4,7 @@ import {
   computeInitialSessionExpiration,
   computeSessionQaClosesAt,
   getMaxSessionDurationMs,
+  getSessionMaxExpiresAt,
   SESSION_HARD_MAX_DURATION_MS,
   SESSION_OPERATOR_DEFAULT_MAX_DURATION_MS,
 } from './sessionLifecycle';
@@ -125,13 +126,42 @@ describe('sessionLifecycle controlled clock', () => {
     ).toThrow('maximal');
   });
 
-  it('verwendet 14 Tage Betreiberdefault und erzwingt 24h bis 30 Tage', () => {
+  it('erlaubt 180 Kalendertage über das Ende der Sommerzeit', () => {
+    const createdAt = new Date('2026-05-01T10:00:00.000Z');
+    const expiresAt = computeInitialSessionExpiration({
+      createdAt,
+      now: createdAt,
+      timeZone: 'Europe/Berlin',
+      selection: { kind: 'DURATION_DAYS', days: 180 },
+      maxDurationMs: SESSION_HARD_MAX_DURATION_MS,
+    });
+    expect(expiresAt.toISOString()).toBe('2026-10-28T11:00:00.000Z');
+    expect(
+      getSessionMaxExpiresAt(
+        createdAt,
+        'Europe/Berlin',
+        SESSION_HARD_MAX_DURATION_MS,
+      ).toISOString(),
+    ).toBe(expiresAt.toISOString());
+    expect(() =>
+      computeInitialSessionExpiration({
+        createdAt,
+        now: createdAt,
+        timeZone: 'Europe/Berlin',
+        selection: { kind: 'ABSOLUTE', expiresAt: '2026-10-28T11:00:00.001Z' },
+        maxDurationMs: SESSION_HARD_MAX_DURATION_MS,
+      }),
+    ).toThrow('maximal');
+  });
+
+  it('verwendet 14 Tage Betreiberdefault und erzwingt 24h bis 180 Tage', () => {
     expect(getMaxSessionDurationMs(undefined)).toBe(SESSION_OPERATOR_DEFAULT_MAX_DURATION_MS);
     expect(getMaxSessionDurationMs('PT24H')).toBe(24 * 60 * 60 * 1000);
     expect(getMaxSessionDurationMs('14d')).toBe(14 * 24 * 60 * 60 * 1000);
-    expect(getMaxSessionDurationMs('P30D')).toBe(SESSION_HARD_MAX_DURATION_MS);
+    expect(getMaxSessionDurationMs('P30D')).toBe(30 * 24 * 60 * 60 * 1000);
+    expect(getMaxSessionDurationMs('P180D')).toBe(SESSION_HARD_MAX_DURATION_MS);
     expect(getMaxSessionDurationMs('23h')).toBe(SESSION_OPERATOR_DEFAULT_MAX_DURATION_MS);
-    expect(getMaxSessionDurationMs('31d')).toBe(SESSION_OPERATOR_DEFAULT_MAX_DURATION_MS);
+    expect(getMaxSessionDurationMs('181d')).toBe(SESSION_OPERATOR_DEFAULT_MAX_DURATION_MS);
     expect(getMaxSessionDurationMs('garbage')).toBe(SESSION_OPERATOR_DEFAULT_MAX_DURATION_MS);
   });
 });
