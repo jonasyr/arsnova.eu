@@ -302,6 +302,8 @@ const HOST_CLOCK_POLL_MS = 15000;
 const HOST_REALTIME_RESUBSCRIBE_MS = 5000;
 const HOST_MANUAL_RECONNECT_TIMEOUT_MS = 12000;
 const QA_WORD_CLOUD_ANALYSIS_DEBOUNCE_MS = 180;
+/** Frist, nach der ein Presenter-Sync ohne Bühne im aktuellen Sortiermodus trotzdem läuft. */
+const QA_PRESENTER_STAGE_SYNC_FALLBACK_MS = 2000;
 const QA_WORD_CLOUD_ANALYZE_CONFLICT_RETRIES = 3;
 const QA_WORD_CLOUD_ANALYZE_CONFLICT_RETRY_MS = 80;
 const WORD_CLOUD_LEMMA_MAX_ENTRIES = 80;
@@ -760,6 +762,10 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   private readonly qaPresenterStageOrderedQuestions = signal<QaQuestionDTO[] | null>(null);
   /** Invalidiert in-flight `presentProjection`-Refreshes (Beenden / Kanalwechsel). */
   private qaPresenterStageRefreshGeneration = 0;
+  /** Sortiermodus des zuletzt übernommenen presentProjection-Snapshots (null: unbekannt). */
+  private qaPresenterStageSortMode: QaQuestionSortMode | null = null;
+  /** Presenter-Sync, der auf eine Bühne im aktuellen Sortiermodus wartet. */
+  private pendingPresenterStageSyncQuestionId: string | null = null;
   readonly qaListTotalCount = signal(0);
   /** Host: PENDING-Zähler aus qa.list (filterweit, seitenunabhängig); null = Fallback auf geladene Seite. */
   private readonly qaListPendingCount = signal<number | null>(null);
@@ -3834,6 +3840,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
         untracked(() => {
           this.qaPresenterStageRefreshGeneration += 1;
           this.qaPresenterStageOrderedQuestions.set(null);
+          this.clearQaPresenterStageSortState();
         });
         return;
       }
@@ -6332,7 +6339,34 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       session?.presenterSurface === 'ended'
     );
   });
-  private async syncPresenterToStageQuestionId(questionId: string): Promise<void> {
+  private isQaPresenterStageInOtherSortMode(): boolean {
+    return (
+      this.qaPresenterStageSortMode !== null && this.qaPresenterStageSortMode !== this.qaSortMode()
+    );
+  }
+
+  private clearQaPresenterStageSortState(): void {
+    this.qaPresenterStageSortMode = null;
+    this.pendingPresenterStageSyncQuestionId = null;
+  }
+
+  private deferPresenterStageSync(questionId: string): void {
+    this.pendingPresenterStageSyncQuestionId = questionId;
+    // Sicherheitsnetz: Liefert die Bühne den neuen Modus nicht (z. B. Self-Heal nach
+    // Backend-Restart ohne Bühnen-Refresh), mit der vorhandenen Bühne synchronisieren.
+    setTimeout(() => {
+      if (this.destroyRef.destroyed || this.pendingPresenterStageSyncQuestionId !== questionId) {
+        return;
+      }
+      this.pendingPresenterStageSyncQuestionId = null;
+      void this.syncPresenterToStageQuestionId(questionId, { ignoreStageSortMode: true });
+    }, QA_PRESENTER_STAGE_SYNC_FALLBACK_MS);
+  }
+
+  private async syncPresenterToStageQuestionId(
+    questionId: string,
+    options: { readonly ignoreStageSortMode?: boolean } = {},
+  ): Promise<void> {
     if (
       !this.projectionNavigationIsQaQuestions() ||
       this.session()?.presenterSurface === 'ended' ||
@@ -6344,6 +6378,13 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     if (!page || !this.code) {
       return;
     }
+    // Der Presenter-Index bezieht sich auf die Bühnenreihenfolge. Liegt sie noch im alten
+    // Sortiermodus vor, träfe der Index nach dem Bühnen-Refresh eine andere Frage.
+    if (!options.ignoreStageSortMode && this.isQaPresenterStageInOtherSortMode()) {
+      this.deferPresenterStageSync(questionId);
+      return;
+    }
+    this.pendingPresenterStageSyncQuestionId = null;
     const stage = this.qaProjectionStageQuestions();
     const stageIndex = stage.findIndex((question) => question.id === questionId);
     if (stageIndex < 0) {
@@ -6363,13 +6404,24 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       if (!current) {
         return;
       }
+      // Die Bühne kann sich während des Seitenzahl-Syncs geändert haben.
+      if (!options.ignoreStageSortMode && this.isQaPresenterStageInOtherSortMode()) {
+        this.deferPresenterStageSync(questionId);
+        return;
+      }
+      const latestIndex = this.qaProjectionStageQuestions().findIndex(
+        (question) => question.id === questionId,
+      );
+      if (latestIndex < 0) {
+        return;
+      }
       const result = await trpc.session.setPresenterSurface.mutate(
         {
           code: this.code,
           page: {
             context: current.context,
-            index: stageIndex,
-            count: Math.max(current.count, fullCount, stageIndex + 1),
+            index: latestIndex,
+            count: Math.max(current.count, fullCount, latestIndex + 1),
           },
         },
         { signal: AbortSignal.timeout(10000) },
@@ -12521,6 +12573,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     if (!sessionId || !this.projectionNavigationIsQaQuestions()) {
       this.qaPresenterStageRefreshGeneration += 1;
       this.qaPresenterStageOrderedQuestions.set(null);
+      this.clearQaPresenterStageSortState();
       return;
     }
     const generation = ++this.qaPresenterStageRefreshGeneration;
@@ -12542,6 +12595,12 @@ export class SessionHostComponent implements OnInit, OnDestroy {
         ...visible.filter((question) => question.status === 'PINNED'),
         ...visible.filter((question) => question.status === 'ACTIVE'),
       ]);
+      this.qaPresenterStageSortMode = Array.isArray(snapshot) ? null : (snapshot.sortMode ?? null);
+      const pendingSyncId = this.pendingPresenterStageSyncQuestionId;
+      if (pendingSyncId && !this.isQaPresenterStageInOtherSortMode()) {
+        this.pendingPresenterStageSyncQuestionId = null;
+        void this.syncPresenterToStageQuestionId(pendingSyncId);
+      }
       // Self-Heal: Backend-Restart leert die ephemeral Map → Presenter fällt auf Default.
       // skipStageRefresh: sonst publish→refresh→publish-Endlosschleife, solange der
       // Snapshot noch den alten Modus liefert (ephemeral Map / Stub in Specs).
@@ -12566,6 +12625,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     this.qaQuestions.set([]);
     this.qaPresenterStageRefreshGeneration += 1;
     this.qaPresenterStageOrderedQuestions.set(null);
+    this.clearQaPresenterStageSortState();
     this.qaListTotalCount.set(0);
     this.qaListPendingCount.set(null);
     this.qaListSessionPendingCount.set(null);
