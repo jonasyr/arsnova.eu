@@ -1,54 +1,62 @@
 import { describe, expect, it } from 'vitest';
-import { buildAnswerDisplayOrderForQuiz, orderAnswersByDisplayMap } from './answerDisplayOrder';
+import { orderChoiceAnswersForParticipant } from './answerDisplayOrder';
 
-describe('orderAnswersByDisplayMap', () => {
+describe('orderChoiceAnswersForParticipant', () => {
   const answers = [
     { id: 'a', text: 'A' },
     { id: 'b', text: 'B' },
     { id: 'c', text: 'C' },
+    { id: 'd', text: 'D' },
+    { id: 'e', text: 'E' },
   ];
 
-  it('sortiert nach gespeicherter Reihenfolge', () => {
-    const map = { q1: ['c', 'a', 'b'] };
-    expect(orderAnswersByDisplayMap(answers, 'q1', map)).toEqual([
-      { id: 'c', text: 'C' },
-      { id: 'a', text: 'A' },
-      { id: 'b', text: 'B' },
-    ]);
+  it('behält die Autorenreihenfolge, wenn die Mischung aus ist', () => {
+    expect(
+      orderChoiceAnswersForParticipant(
+        answers,
+        { id: 'q1', type: 'SINGLE_CHOICE', shuffleAnswerOptions: false },
+        'seed-a',
+      ),
+    ).toEqual(answers);
   });
 
-  it('fällt bei Längen-Mismatch auf DB-Reihenfolge zurück', () => {
-    const map = { q1: ['a', 'b'] };
-    expect(orderAnswersByDisplayMap(answers, 'q1', map)).toEqual(answers);
+  it('mischt Wahloptionen stabil pro Seed und unterschiedlich zwischen Personen', () => {
+    const first = orderChoiceAnswersForParticipant(
+      answers,
+      { id: 'q1', type: 'MULTIPLE_CHOICE', shuffleAnswerOptions: true },
+      'participant-1',
+    );
+    const firstAgain = orderChoiceAnswersForParticipant(
+      answers,
+      { id: 'q1', type: 'MULTIPLE_CHOICE' },
+      'participant-1',
+    );
+    const second = orderChoiceAnswersForParticipant(
+      answers,
+      { id: 'q1', type: 'SURVEY', shuffleAnswerOptions: true },
+      'participant-2',
+    );
+
+    expect(firstAgain).toEqual(first);
+    expect(first.map((answer) => answer.id).sort()).toEqual(['a', 'b', 'c', 'd', 'e']);
+    expect(second.map((answer) => answer.id).sort()).toEqual(['a', 'b', 'c', 'd', 'e']);
+    expect(second).not.toEqual(first);
   });
 
-  it('fällt bei unbekannter Frage auf DB-Reihenfolge zurück', () => {
-    expect(orderAnswersByDisplayMap(answers, 'qx', { q1: ['a', 'b', 'c'] })).toEqual(answers);
-  });
-});
-
-describe('buildAnswerDisplayOrderForQuiz', () => {
-  it('liefert Permutationen nur für SC/MC/SURVEY mit >1 Option', () => {
-    const qs = [
-      {
-        id: 'q1',
-        type: 'SINGLE_CHOICE',
-        answers: [{ id: 'x' }, { id: 'y' }],
-      },
-      {
-        id: 'q2',
-        type: 'FREETEXT',
-        answers: [{ id: 'only' }],
-      },
-      {
-        id: 'q3',
-        type: 'SURVEY',
-        answers: [{ id: 'a' }],
-      },
-    ];
-    const out = buildAnswerDisplayOrderForQuiz(qs);
-    expect(Object.keys(out).sort()).toEqual(['q1']);
-    expect(new Set(out.q1)).toEqual(new Set(['x', 'y']));
-    expect(out.q1).toHaveLength(2);
+  it('lässt andere Fragentypen und einzelne Optionen unverändert', () => {
+    expect(
+      orderChoiceAnswersForParticipant(
+        answers,
+        { id: 'q1', type: 'SHORT_TEXT', shuffleAnswerOptions: true },
+        'seed',
+      ),
+    ).toEqual(answers);
+    expect(
+      orderChoiceAnswersForParticipant(
+        [answers[0]!],
+        { id: 'q1', type: 'SINGLE_CHOICE', shuffleAnswerOptions: true },
+        'seed',
+      ),
+    ).toEqual([answers[0]]);
   });
 });

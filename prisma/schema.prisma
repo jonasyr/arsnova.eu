@@ -98,6 +98,8 @@ model Question {
   categories                         Json? // Story 1.2j: Array aus { id, name }
   categorizationItems                Json? // Story 1.2j: Array aus { id, text, correctCategoryId }
   categorizationShuffleItems         Boolean                             @default(true) // Elemente pro Teilnehmer:in mischen
+  /// SC/MC/Umfrage: false zeigt Teilnehmenden die Editor-Reihenfolge. Host und Präsentation bleiben immer dabei.
+  shuffleAnswerOptions               Boolean                             @default(true)
   quizId                             String
   quiz                               Quiz                                @relation(fields: [quizId], references: [id], onDelete: Cascade)
   answers                            AnswerOption[]
@@ -115,6 +117,7 @@ model AnswerOption {
   id          String       @id @default(uuid())
   text        String
   isCorrect   Boolean // WICHTIG: Darf im Live-Quiz niemals an Studenten geleakt werden!
+  order       Int          @default(0) // Autorenreihenfolge innerhalb der Frage
   questionId  String
   question    Question     @relation(fields: [questionId], references: [id], onDelete: Cascade)
   voteAnswers VoteAnswer[] // MC: mehrere Votes pro Option möglich
@@ -188,7 +191,7 @@ model Session {
   legalHoldUntil                 DateTime? // Epic 9: schützt vor Purge bis Zeitpunkt
   legalHoldReason                String? // Epic 9: Begründung für Legal Hold
   legalHoldSetAt                 DateTime? // Epic 9: Zeitpunkt des letzten Hold-Setzens
-  /// Pro Session gemischte Anzeige-Reihenfolge der Antwortoptionen: { [questionId]: answerOptionId[] } (einmal bei erster Frage)
+  /// Legacy: frühere sessionweite Mischreihenfolge. Wahloptionen werden inzwischen pro Teilnehmer:in gemischt.
   answerDisplayOrder             Json?
   hostCredentials                HostCredential[]
   hostCredentialExchanges        HostCredentialExchange[]
