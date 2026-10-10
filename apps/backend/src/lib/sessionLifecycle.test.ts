@@ -4,6 +4,7 @@ import {
   computeInitialSessionExpiration,
   computeSessionQaClosesAt,
   getMaxSessionDurationMs,
+  getSessionMaxExpiresAt,
   SESSION_HARD_MAX_DURATION_MS,
   SESSION_OPERATOR_DEFAULT_MAX_DURATION_MS,
 } from './sessionLifecycle';
@@ -121,6 +122,34 @@ describe('sessionLifecycle controlled clock', () => {
         now,
         timeZone: 'UTC',
         selection: { kind: 'ABSOLUTE', expiresAt: '2026-04-04T10:00:00.001Z' },
+      }),
+    ).toThrow('maximal');
+  });
+
+  it('erlaubt 180 Kalendertage über das Ende der Sommerzeit', () => {
+    const createdAt = new Date('2026-05-01T10:00:00.000Z');
+    const expiresAt = computeInitialSessionExpiration({
+      createdAt,
+      now: createdAt,
+      timeZone: 'Europe/Berlin',
+      selection: { kind: 'DURATION_DAYS', days: 180 },
+      maxDurationMs: SESSION_HARD_MAX_DURATION_MS,
+    });
+    expect(expiresAt.toISOString()).toBe('2026-10-28T11:00:00.000Z');
+    expect(
+      getSessionMaxExpiresAt(
+        createdAt,
+        'Europe/Berlin',
+        SESSION_HARD_MAX_DURATION_MS,
+      ).toISOString(),
+    ).toBe(expiresAt.toISOString());
+    expect(() =>
+      computeInitialSessionExpiration({
+        createdAt,
+        now: createdAt,
+        timeZone: 'Europe/Berlin',
+        selection: { kind: 'ABSOLUTE', expiresAt: '2026-10-28T11:00:00.001Z' },
+        maxDurationMs: SESSION_HARD_MAX_DURATION_MS,
       }),
     ).toThrow('maximal');
   });

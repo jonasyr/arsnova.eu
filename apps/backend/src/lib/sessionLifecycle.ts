@@ -81,11 +81,25 @@ function addCalendarDays(date: Date, days: number, timeZone: string): Date {
   return fromInstant(toInstant(date).toZonedDateTimeISO(timeZone).add({ days }).toInstant());
 }
 
+/**
+ * Obergrenze ab `createdAt`. Ganze Tage gelten als Kalendertage in der
+ * Sessionzeitzone; zusätzlich bleibt die starre Millisekundenfrist gültig.
+ * Über die Zeitumstellung im Herbst liegt der Kalendertag bis zu eine Stunde
+ * später, im Frühjahr die starre Frist.
+ */
 export function getSessionMaxExpiresAt(
   createdAt: Date,
+  timeZone: string,
   maxDurationMs = getMaxSessionDurationMs(),
 ): Date {
-  return new Date(createdAt.getTime() + Math.min(maxDurationMs, SESSION_HARD_MAX_DURATION_MS));
+  const cappedMs = Math.min(maxDurationMs, SESSION_HARD_MAX_DURATION_MS);
+  const absoluteEnd = new Date(createdAt.getTime() + cappedMs);
+  const wholeDays = Math.floor(cappedMs / DAY_MS);
+  if (wholeDays < 1 || cappedMs % DAY_MS !== 0) {
+    return absoluteEnd;
+  }
+  const calendarEnd = addCalendarDays(createdAt, wholeDays, timeZone);
+  return calendarEnd.getTime() > absoluteEnd.getTime() ? calendarEnd : absoluteEnd;
 }
 
 function parseAbsoluteExpiration(value: string): Date {
@@ -103,6 +117,7 @@ function assertExpirationAllowed(input: {
   createdAt: Date;
   expiresAt: Date;
   now: Date;
+  timeZone: string;
   maxDurationMs?: number;
 }): void {
   if (input.expiresAt.getTime() <= input.now.getTime()) {
@@ -113,7 +128,7 @@ function assertExpirationAllowed(input: {
   }
   if (
     input.expiresAt.getTime() >
-    getSessionMaxExpiresAt(input.createdAt, input.maxDurationMs).getTime()
+    getSessionMaxExpiresAt(input.createdAt, input.timeZone, input.maxDurationMs).getTime()
   ) {
     throw new TRPCError({
       code: 'BAD_REQUEST',
@@ -196,6 +211,7 @@ export function computeSessionQaClosesAt(input: {
       createdAt: input.createdAt,
       expiresAt: closesAt,
       now: input.openedAt,
+      timeZone: input.timeZone,
       maxDurationMs: input.maxDurationMs,
     });
   }

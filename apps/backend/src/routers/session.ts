@@ -5634,7 +5634,7 @@ const sessionCoreRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Session nicht gefunden.' });
       }
       const serverNow = new Date();
-      const maxExpiresAt = getSessionMaxExpiresAt(session.createdAt);
+      const maxExpiresAt = getSessionMaxExpiresAt(session.createdAt, session.timeZone);
       const originalHost =
         !!ctx.hostToken && (await isOriginalHostSessionToken(code, ctx.hostToken));
       const effectivelyFinished = isSessionEffectivelyFinished(session, serverNow);
@@ -5840,7 +5840,10 @@ const sessionCoreRouter = router({
         newExpiresAt: newExpiresAt.toISOString(),
         qaClosesAt: session.qaClosesAt?.toISOString() ?? null,
         timeZone: input.purpose === 'INITIAL_CONFIGURATION' ? input.timeZone : session.timeZone,
-        maxExpiresAt: getSessionMaxExpiresAt(session.createdAt).toISOString(),
+        maxExpiresAt: getSessionMaxExpiresAt(
+          session.createdAt,
+          input.purpose === 'INITIAL_CONFIGURATION' ? input.timeZone : session.timeZone,
+        ).toISOString(),
         serverNow: serverNow.toISOString(),
         projectedPostProcessingEndsAt: getPostProcessingEndsAt(newExpiresAt).toISOString(),
         projectedPurgeEligibleAt: getPostProcessingEndsAt(newExpiresAt).toISOString(),
@@ -5961,7 +5964,7 @@ const sessionCoreRouter = router({
 
         invalidateSessionStatusCachesForCode(code);
         const serverNow = new Date();
-        const maxExpiresAt = getSessionMaxExpiresAt(updated.createdAt);
+        const maxExpiresAt = getSessionMaxExpiresAt(updated.createdAt, updated.timeZone);
         const effectivelyFinished = isSessionEffectivelyFinished(updated, serverNow);
         const retention = buildSessionRetentionTimeline(updated, serverNow);
         return {
@@ -6055,7 +6058,7 @@ const sessionCoreRouter = router({
         requiresSessionExtension: window.requiresSessionExtension,
         originalHost,
         timeZone: session.timeZone,
-        maxExpiresAt: getSessionMaxExpiresAt(session.createdAt).toISOString(),
+        maxExpiresAt: getSessionMaxExpiresAt(session.createdAt, session.timeZone).toISOString(),
         serverNow: serverNow.toISOString(),
         // Host-Leseende folgt dem Sessionende (+14 Tage), wie buildSessionRetentionTimeline.
         projectedPostProcessingEndsAt: getPostProcessingEndsAt(window.expiresAt).toISOString(),
