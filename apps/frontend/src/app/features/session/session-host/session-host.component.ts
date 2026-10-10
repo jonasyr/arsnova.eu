@@ -2981,8 +2981,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       this.clearQaAuthorSelection();
       this.qaListNavQuestionId.set(null);
       this.ensureQaSubscription();
-      await this.refreshQaQuestions({ replaceStale: true });
-      await this.resetQaNavigableHeroToFirstAndSyncPresenter();
+      await this.refreshQaQuestionsAndResetHero({ replaceStale: true });
     }
     await this.setQaPinnedFilter(false, { scrollToTop: false });
     await this.setQaPendingFilter(false, { scrollToTop: false });
@@ -6394,6 +6393,21 @@ export class SessionHostComponent implements OnInit, OnDestroy {
    * Nach Suche/Sortierung/präsentierbarem Filter: erstes Navigationsergebnis = Host- und Presenter-Hero.
    * Verwaltungsfilter (Pending/Archiv) lösen nur den Listen-Cursor und lassen den Beamer unberührt.
    */
+  /**
+   * Liste für geänderte Kriterien laden, dann Hero und Presenter-Index setzen. Überholt ein
+   * paralleler Refresh (Live-Invalidierung, Polling) diesen Request, verwirft der
+   * Generationsschutz die Antwort; der Hero käme dann aus der Liste der alten Kriterien und
+   * der Presenter-Index zeigte dauerhaft auf die falsche Frage. Deshalb einmal neu laden.
+   */
+  private async refreshQaQuestionsAndResetHero(
+    options?: Parameters<SessionHostComponent['refreshQaQuestions']>[0],
+  ): Promise<void> {
+    if (!(await this.refreshQaQuestions(options))) {
+      await this.refreshQaQuestions(options);
+    }
+    await this.resetQaNavigableHeroToFirstAndSyncPresenter();
+  }
+
   private async resetQaNavigableHeroToFirstAndSyncPresenter(): Promise<void> {
     if (this.qaShowPendingOnly() || this.qaShowArchivedOnly()) {
       this.qaListNavQuestionId.set(null);
@@ -10231,8 +10245,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     this.releaseQaChromeIfUnfiltered();
     this.qaListNavQuestionId.set(null);
     this.ensureQaSubscription();
-    await this.refreshQaQuestions({ replaceStale: true });
-    await this.resetQaNavigableHeroToFirstAndSyncPresenter();
+    await this.refreshQaQuestionsAndResetHero({ replaceStale: true });
     if (options?.scrollToTop !== false) {
       this.scrollQaListToTop();
     }
@@ -10248,8 +10261,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       await this.selectChannel('qa');
     }
     this.ensureQaSubscription();
-    await this.refreshQaQuestions({ replaceStale: true });
-    await this.resetQaNavigableHeroToFirstAndSyncPresenter();
+    await this.refreshQaQuestionsAndResetHero({ replaceStale: true });
     this.scrollQaListToTop();
   }
 
@@ -10828,8 +10840,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     this.qaSortMode.set(mode);
     this.publishQaPresenterSortMode(mode);
     this.ensureQaSubscription();
-    await this.refreshQaQuestions();
-    await this.resetQaNavigableHeroToFirstAndSyncPresenter();
+    await this.refreshQaQuestionsAndResetHero();
     if (options?.scrollToTop !== false) {
       this.scrollHostQaAfterListCriteriaChange();
     }
@@ -12717,8 +12728,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       this.qaShowArchivedOnly.set(false);
     }
     this.ensureQaSubscription();
-    await this.refreshQaQuestions({ replaceStale: true });
-    await this.resetQaNavigableHeroToFirstAndSyncPresenter();
+    await this.refreshQaQuestionsAndResetHero({ replaceStale: true });
     if (options?.scrollToTop !== false) {
       this.scrollHostQaAfterListCriteriaChange();
     }
@@ -12799,8 +12809,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       this.resetQaListPageNavigation();
       this.qaListNextCursor.set(null);
       const refiningSearch = Boolean(previousSearch && search);
-      void this.refreshQaQuestions().then(async () => {
-        await this.resetQaNavigableHeroToFirstAndSyncPresenter();
+      void this.refreshQaQuestionsAndResetHero().then(() => {
         if (!refiningSearch) {
           this.scrollQaListToTop();
         }
@@ -12824,8 +12833,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     this.ensureQaSubscription();
     this.resetQaListPageNavigation();
     this.qaListNextCursor.set(null);
-    void this.refreshQaQuestions().then(async () => {
-      await this.resetQaNavigableHeroToFirstAndSyncPresenter();
+    void this.refreshQaQuestionsAndResetHero().then(() => {
       this.scrollQaListToTop();
     });
   }
