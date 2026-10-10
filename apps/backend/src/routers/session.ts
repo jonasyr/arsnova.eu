@@ -3742,6 +3742,7 @@ function computeQaConfigurationWindow(
     expiresAt: Date;
     timeZone: string;
     qaClosesAt?: Date | null;
+    type?: string;
   },
   selection: z.infer<typeof PreviewSessionQaConfigurationInputSchema>['selection'],
   serverNow: Date,
@@ -3761,10 +3762,19 @@ function computeQaConfigurationWindow(
     allowUnchangedPastClosesAt: mode === 'REPLAN' && !reopenQa ? session.qaClosesAt : null,
   });
   const requiresSessionExtension = qaClosesAt > session.expiresAt;
+  if (requiresSessionExtension) {
+    return { qaClosesAt, expiresAt: qaClosesAt, requiresSessionExtension };
+  }
+  const openingWasSessionEnd =
+    session.qaClosesAt instanceof Date &&
+    session.qaClosesAt.getTime() === session.expiresAt.getTime();
+  const pullSessionEnd =
+    qaClosesAt.getTime() < session.expiresAt.getTime() &&
+    (session.type === 'Q_AND_A' || openingWasSessionEnd);
   return {
     qaClosesAt,
-    expiresAt: requiresSessionExtension ? qaClosesAt : session.expiresAt,
-    requiresSessionExtension,
+    expiresAt: pullSessionEnd ? qaClosesAt : session.expiresAt,
+    requiresSessionExtension: false,
   };
 }
 
@@ -6017,6 +6027,7 @@ const sessionCoreRouter = router({
           createdAt: true,
           expiresAt: true,
           timeZone: true,
+          type: true,
           qaEnabled: true,
           qaClosesAt: true,
           sessionLifecycleRevision: true,
@@ -6060,8 +6071,8 @@ const sessionCoreRouter = router({
         timeZone: session.timeZone,
         maxExpiresAt: getSessionMaxExpiresAt(session.createdAt, session.timeZone).toISOString(),
         serverNow: serverNow.toISOString(),
-        // Host-Leseende folgt dem Sessionende (+14 Tage), wie buildSessionRetentionTimeline.
-        projectedPostProcessingEndsAt: getPostProcessingEndsAt(window.expiresAt).toISOString(),
+        // Nachbereitung der Q&A-Öffnung: 14 Tage nach dem Zugang für Teilnehmende.
+        projectedPostProcessingEndsAt: getPostProcessingEndsAt(window.qaClosesAt).toISOString(),
         projectedPurgeEligibleAt: getPostProcessingEndsAt(window.expiresAt).toISOString(),
       };
     }),
@@ -6244,7 +6255,9 @@ const sessionCoreRouter = router({
                 ? { title }
                 : {}),
               preferredChannel: 'qa',
-              ...(window.requiresSessionExtension ? { expiresAt: window.expiresAt } : {}),
+              ...(window.expiresAt.getTime() !== session.expiresAt.getTime()
+                ? { expiresAt: window.expiresAt }
+                : {}),
               sessionLifecycleRevision: { increment: 1 },
               ...participation,
               ...(reopenFinished ? finishedSessionReopenData() : {}),

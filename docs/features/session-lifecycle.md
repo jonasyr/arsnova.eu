@@ -236,8 +236,10 @@ Inhaltszugriff des Hosts.
 
 Die Join-Kapsel neben dem QR-Code bleibt kompakt: Code und Teilnehmerzahl,
 ohne Sessionende und ohne Löschtermin. Die Q&A-Fristzeile des Hosts nennt den
-Zugang für Teilnehmende und, darunter, bis wann der Host die Fragen noch
-einsehen kann. Vote zeigt die offene-bis-Zeile mit hervorgehobener absoluter
+Zugang für Teilnehmende und, darunter, die 14-tägige Nachbereitung ab diesem
+Zugang. Eine kürzere Öffnung zieht bei einer Q&A-Session das Sessionende mit;
+dasselbe gilt, wenn das bisherige Sessionende dieselbe Frist war. Ein unabhängig
+späteres Sessionende einer Quiz-Session bleibt bestehen. Vote zeigt die offene-bis-Zeile mit hervorgehobener absoluter
 Fristzeit und relativer Restzeit, den Kurzstatus eigener Fragen
 (sichtbar / in Prüfung / beantwortet), die Markierung »Wird gerade besprochen«
 für angepinnte Fragen sowie einen Leerzustand mit Quota- und Frist-Hinweis.

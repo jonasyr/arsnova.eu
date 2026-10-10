@@ -2251,6 +2251,46 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     fixture.destroy();
   });
 
+  it('setzt die Host-Lesefrist 14 Tage nach der verkürzten Öffnung, nicht nach dem alten Sessionende', () => {
+    const fixture = setup();
+    const participantEnd = '2026-12-31T13:15:00.000Z';
+    const staleSessionEnd = '2027-04-08T12:15:00.000Z';
+    const hostRead = '2027-01-14T13:15:00.000Z';
+    const staleHostRead = '2027-04-22T12:15:00.000Z';
+    fixture.componentInstance.session.set({
+      ...defaultSession,
+      type: 'Q_AND_A',
+      timeZone: 'Europe/Berlin',
+      expiresAt: staleSessionEnd,
+      qaClosesAt: participantEnd,
+      channels: {
+        quiz: { enabled: false },
+        qa: {
+          enabled: true,
+          open: true,
+          title: 'Fragen',
+          moderationMode: true,
+          state: 'OPEN',
+          closesAt: participantEnd,
+        },
+        quickFeedback: { enabled: false, open: false },
+      },
+    });
+    fixture.componentInstance.sessionLifecycle.set({
+      ...defaultLifecycle,
+      expiresAt: staleSessionEnd,
+      qaClosesAt: participantEnd,
+      postProcessingEndsAt: staleHostRead,
+    });
+
+    const format = (iso: string) =>
+      fixture.componentInstance.formatSessionLifecycleDateTime(iso, 'Europe/Berlin');
+    expect(fixture.componentInstance.qaDeadlineLabel()).toContain(format(participantEnd));
+    expect(fixture.componentInstance.qaHostReadLabel()).toContain(format(hostRead));
+    expect(fixture.componentInstance.qaHostReadLabel()).not.toContain(format(staleHostRead));
+    fixture.destroy();
+  });
+
   it('zeigt auf der Q&A-Karte die persistierte Frist, nicht nur das Sessionende', () => {
     const fixture = setup();
     const createdAt = '2026-09-23T04:42:00.000Z';

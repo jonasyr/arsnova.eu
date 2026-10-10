@@ -10090,6 +10090,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       );
     }
     return (
+      this.projectedHostReadEnd(this.qaDeadlineInstant()) ??
       this.projectedHostReadEnd(session?.expiresAt ?? lifecycle?.expiresAt ?? null) ??
       lifecycle?.postProcessingEndsAt ??
       null
