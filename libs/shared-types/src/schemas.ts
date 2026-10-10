@@ -55,6 +55,11 @@ export const QuestionTypeEnum = z.enum([
 ]);
 export type QuestionType = z.infer<typeof QuestionTypeEnum>;
 
+/** Single Choice, Multiple Choice und Umfrage: Optionen können pro Teilnehmer:in gemischt werden. */
+export function questionShufflesParticipantChoiceAnswers(type: string): boolean {
+  return type === 'SINGLE_CHOICE' || type === 'MULTIPLE_CHOICE' || type === 'SURVEY';
+}
+
 /** Toleranzmodus für numerische Schätzfragen (Story 1.2d). */
 export const NumericEstimateToleranceModeEnum = z.enum(['ABSOLUTE_INTERVAL', 'RELATIVE_PERCENT']);
 export type NumericEstimateToleranceMode = z.infer<typeof NumericEstimateToleranceModeEnum>;
@@ -1939,6 +1944,11 @@ export const AddQuestionInputSchema = z
     confidenceEnabled: z.boolean().optional(),
     confidenceLabelLow: z.string().max(50).optional(),
     confidenceLabelHigh: z.string().max(50).optional(),
+    /**
+     * Single Choice, Multiple Choice, Umfrage: false zeigt Teilnehmenden die Editor-Reihenfolge.
+     * Host und Präsentation bleiben immer in dieser Reihenfolge. Standard: mischen.
+     */
+    shuffleAnswerOptions: z.boolean().optional(),
     // Story 1.2g: Matching
     matchingPairs: z.array(MatchingPairInputSchema).min(2).max(6).optional(),
     matchingShuffleRight: z.boolean().optional(),
@@ -2927,6 +2937,10 @@ function buildQuizHistoryAccessMaterial(input: QuizUploadInput): QuizHistoryAcce
           question.type === 'CATEGORIZATION'
             ? (question.categorizationShuffleItems ?? true)
             : false,
+        ...(questionShufflesParticipantChoiceAnswers(question.type) &&
+        question.shuffleAnswerOptions === false
+          ? { shuffleAnswerOptions: false as const }
+          : {}),
         answers: [...question.answers]
           .map((answer) => ({ text: answer.text, isCorrect: answer.isCorrect }))
           .sort(
@@ -5403,6 +5417,7 @@ const ExportedQuestionSchema = z
     confidenceLabelLow: z.string().nullable().optional(),
     confidenceLabelHigh: z.string().nullable().optional(),
     // Story 1.2g, 1.2h, 1.2j: Neue Fragentypen in Export/Import
+    shuffleAnswerOptions: z.boolean().optional(),
     matchingPairs: z.array(MatchingPairInputSchema).optional(),
     matchingShuffleRight: z.boolean().optional(),
     orderingItems: z.array(OrderingItemInputSchema).optional(),

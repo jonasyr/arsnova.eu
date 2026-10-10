@@ -660,6 +660,7 @@ describe('QuizEditComponent', { timeout: 30_000 }, () => {
       confidenceEnabled: true,
       confidenceLabelLow: 'sehr unsicher',
       confidenceLabelHigh: 'absolut sicher',
+      shuffleAnswerOptions: true,
       answers: [
         { text: 'Antwort A', isCorrect: false },
         { text: 'Antwort B', isCorrect: true },
@@ -1263,6 +1264,7 @@ describe('QuizEditComponent', { timeout: 30_000 }, () => {
       difficulty: 'MEDIUM',
       timer: null,
       skipReadingPhase: false,
+      shuffleAnswerOptions: true,
       answers: [
         { text: 'Zu schnell', isCorrect: false },
         { text: 'Passend', isCorrect: false },
@@ -1341,6 +1343,7 @@ describe('QuizEditComponent', { timeout: 30_000 }, () => {
       timer: null,
       skipReadingPhase: false,
       confidenceEnabled: false,
+      shuffleAnswerOptions: true,
       answers: [
         { text: 'Neu A', isCorrect: false },
         { text: 'Neu B', isCorrect: true },
@@ -1825,6 +1828,7 @@ describe('QuizEditComponent', { timeout: 30_000 }, () => {
       confidenceEnabled: true,
       confidenceLabelLow: 'sehr unsicher',
       confidenceLabelHigh: 'absolut sicher',
+      shuffleAnswerOptions: true,
       answers: [
         { text: 'A', isCorrect: true },
         { text: 'B', isCorrect: false },
@@ -2471,6 +2475,82 @@ describe('QuizEditComponent', { timeout: 30_000 }, () => {
         ],
       }),
     );
+  });
+
+  it('behält abgeschaltetes Mischen beim erneuten Öffnen einer Wahlfrage', () => {
+    quiz.questions = [
+      {
+        id: QUESTION_ID,
+        text: 'Welche Aussage stimmt?',
+        type: 'SINGLE_CHOICE',
+        difficulty: 'EASY',
+        order: 0,
+        enabled: true,
+        timer: null,
+        shuffleAnswerOptions: false,
+        answers: [
+          {
+            id: '79b35123-ff7f-4ff8-b8bf-a2ca695f57d4',
+            text: 'Erste',
+            isCorrect: true,
+          },
+          {
+            id: '7f87b192-df9b-45ce-af85-9a44ef0f4b44',
+            text: 'Zweite',
+            isCorrect: false,
+          },
+        ],
+        ratingMin: null,
+        ratingMax: null,
+        ratingLabelMin: null,
+        ratingLabelMax: null,
+      },
+    ];
+
+    const fixture = TestBed.createComponent(QuizEditComponent);
+    const component = fixture.componentInstance;
+
+    component.editQuestion(QUESTION_ID);
+
+    expect(component.form.controls.shuffleAnswerOptions.value).toBe(false);
+
+    component.form.controls.text.setValue('Geänderte Frage');
+    component.saveAll();
+
+    expect(mockStore.updateQuestion).toHaveBeenCalledWith(
+      QUIZ_ID,
+      QUESTION_ID,
+      expect.objectContaining({
+        text: 'Geänderte Frage',
+        type: 'SINGLE_CHOICE',
+        shuffleAnswerOptions: false,
+      }),
+    );
+    fixture.destroy();
+  });
+
+  it('speichert abgeschaltetes Mischen der Wahloptionen für Teilnehmende', () => {
+    const fixture = TestBed.createComponent(QuizEditComponent);
+    const component = fixture.componentInstance;
+    component.form.controls.text.setValue('Welche Aussage stimmt?');
+    component.form.controls.shuffleAnswerOptions.setValue(false);
+    component.answersArray.at(0).controls.text.setValue('Erste');
+    component.answersArray.at(1).controls.text.setValue('Zweite');
+
+    component.saveAll();
+
+    expect(mockStore.addQuestion).toHaveBeenCalledWith(
+      QUIZ_ID,
+      expect.objectContaining({
+        type: 'SINGLE_CHOICE',
+        shuffleAnswerOptions: false,
+        answers: [
+          { text: 'Erste', isCorrect: true },
+          { text: 'Zweite', isCorrect: false },
+        ],
+      }),
+    );
+    fixture.destroy();
   });
 
   it('hält Meta-Expansion und Tokens ohne ::ng-deep / font-weight 800', () => {

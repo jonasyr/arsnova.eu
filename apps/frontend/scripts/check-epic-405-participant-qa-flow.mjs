@@ -15,6 +15,8 @@
  *   BASE_URL=http://localhost:4200/de TRPC_URL=http://localhost:3000/trpc \
  *     npm run smoke:epic-405-participant-qa -w @arsnova/frontend
  */
+import { mkdir } from 'node:fs/promises';
+import { join } from 'node:path';
 import { createTRPCProxyClient, httpBatchLink } from '@trpc/client';
 import { chromium, webkit } from 'playwright';
 import { configureQaSessionIfNeeded } from '../../../scripts/load/lib/configure-qa-if-needed.mjs';
@@ -191,18 +193,64 @@ async function dismissRecoveryCardIfPresent(page) {
   await waitForRecoveryUiGone(page);
 }
 
-async function prepareHostSurface(page) {
-  await page
-    .locator(
-      [
-        '.session-host__live-participants-count',
-        '[data-testid="qa-tools-toggle"]',
-        '[data-testid="host-recovery-card-done"]',
-        '[data-testid="host-access-revoked"]',
-      ].join(', '),
-    )
-    .first()
-    .waitFor({ state: 'visible', timeout: 45_000 });
+const HOST_SURFACE_SELECTORS = [
+  '.session-host__live-participants-count',
+  '[data-testid="qa-tools-toggle"]',
+  '[data-testid="host-recovery-card-done"]',
+  '[data-testid="host-access-revoked"]',
+];
+
+async function waitForHostSurface(page, timeout) {
+  await page.waitForFunction(
+    (selectors) => {
+      return selectors.some((selector) => {
+        const element = document.querySelector(selector);
+        if (!(element instanceof HTMLElement)) return false;
+        const style = getComputedStyle(element);
+        if (style.display === 'none' || style.visibility === 'hidden') return false;
+        const rect = element.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+      });
+    },
+    HOST_SURFACE_SELECTORS,
+    { timeout },
+  );
+}
+
+async function captureHostFailure(page, label) {
+  const diagnostics = await hostPageDiagnostics(page).catch(() => null);
+  const dir = process.env.SMOKE_ARTIFACT_DIR;
+  if (dir) {
+    await mkdir(dir, { recursive: true }).catch(() => undefined);
+    await page
+      .screenshot({ path: join(dir, `${label}.png`), fullPage: true })
+      .catch(() => undefined);
+  }
+  return diagnostics;
+}
+
+async function prepareHostSurface(page, hostUrl) {
+  const firstAttemptReady = await waitForHostSurface(page, 20_000).then(
+    () => true,
+    () => false,
+  );
+  if (!firstAttemptReady) {
+    const diagnostics = await captureHostFailure(page, 'epic-405-participant-host-first-load');
+    console.log(
+      `Host-Oberfläche nach dem ersten Laden nicht sichtbar. Lade neu. DOM: ${JSON.stringify(diagnostics)}`,
+    );
+    await page.goto(hostUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+    await waitForPathSuffix(page, new URL(hostUrl).pathname);
+    try {
+      await waitForHostSurface(page, 25_000);
+    } catch (error) {
+      const retryDiagnostics = await captureHostFailure(page, 'epic-405-participant-host-reload');
+      throw new Error(
+        `${error instanceof Error ? error.message : String(error)}\nHost-DOM nach Reload: ${JSON.stringify(retryDiagnostics)}`,
+        { cause: error },
+      );
+    }
+  }
   if (
     await page
       .getByTestId('host-access-revoked')
@@ -562,12 +610,13 @@ async function main() {
     attachHostPageGuards(host);
     const participant = await participantContext.newPage();
 
-    await host.goto(`${BASE_URL}/session/${created.code}/host`, {
+    const hostUrl = `${BASE_URL}/session/${created.code}/host`;
+    await host.goto(hostUrl, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });
     await waitForPathSuffix(host, `/session/${created.code}/host`);
-    await prepareHostSurface(host);
+    await prepareHostSurface(host, hostUrl);
 
     await participant.goto(`${BASE_URL}/join/${created.code}`, {
       waitUntil: 'domcontentloaded',

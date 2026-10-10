@@ -68,7 +68,10 @@ const learningSourceQuestionSelect = {
   categories: true,
   categorizationItems: true,
   categorizationShuffleItems: true,
-  answers: { select: { text: true, isCorrect: true } },
+  answers: {
+    orderBy: [{ order: 'asc' }, { id: 'asc' }],
+    select: { text: true, isCorrect: true },
+  },
 } as const satisfies Prisma.QuestionSelect;
 
 type LearningSourceQuestion = Prisma.QuestionGetPayload<{

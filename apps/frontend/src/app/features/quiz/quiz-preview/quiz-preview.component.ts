@@ -33,6 +33,7 @@ import {
   SHORT_TEXT_DEFAULT_EVALUATION_MODE,
   SHORT_TEXT_DEFAULT_TOLERANCE_LEVEL,
   questionSupportsConfidence,
+  questionShufflesParticipantChoiceAnswers,
   resolveShortTextMaxLength,
   resolveEffectiveQuestionTimer,
   type CreateSessionOutput,
@@ -1343,6 +1344,9 @@ export class QuizPreviewComponent implements OnDestroy {
             numericMax: question.numericMax,
             numericTwoRounds: question.numericTwoRounds,
           }
+        : {}),
+      ...(questionShufflesParticipantChoiceAnswers(question.type)
+        ? { shuffleAnswerOptions: question.shuffleAnswerOptions ?? true }
         : {}),
       ...(question.type === 'MATCHING'
         ? {

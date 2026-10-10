@@ -13355,6 +13355,14 @@
           <context context-type="linenumber">566,568</context>
         </context-group>
       </trans-unit>
+      <trans-unit id="quizEdit.shuffleAnswerOptions" datatype="html">
+        <source>Antwortoptionen auf den Geräten der Teilnehmenden mischen</source>
+        <target>Mezclar las opciones de respuesta en los dispositivos de quienes participan</target>
+      </trans-unit>
+      <trans-unit id="quizEdit.shuffleAnswerOptionsHint" datatype="html">
+        <source>Host und Präsentation zeigen immer die Reihenfolge aus dem Editor. Ohne Mischen gilt dieselbe Reihenfolge auch für Teilnehmende.</source>
+        <target>Quien modera y la presentación muestran siempre el orden del editor. Sin mezclar, quienes participan ven el mismo orden.</target>
+      </trans-unit>
       <trans-unit id="quizEdit.matchingShuffleRight" datatype="html">
         <source> Rechte Begriffe für jede teilnehmende Person mischen</source>
         <target>Barajar los términos de la derecha para cada participante</target>
