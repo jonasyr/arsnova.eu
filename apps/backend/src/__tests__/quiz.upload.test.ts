@@ -92,10 +92,12 @@ describe('quiz.upload (Story 2.1a)', () => {
       expect(createCall.data.name).toBe('Test-Quiz');
       expect(createCall.data.questions.create).toHaveLength(1);
       expect(createCall.data.questions.create[0].text).toBe('Was ist 2+2?');
+      expect(createCall.data.questions.create[0].shuffleAnswerOptions).toBe(true);
       expect(createCall.data.questions.create[0].answers.create).toHaveLength(2);
       expect(createCall.data.questions.create[0].answers.create[1]).toEqual({
         text: '4',
         isCorrect: true,
+        order: 1,
       });
       expect(createCall.data.motifImageUrl).toBeNull();
       expect(createCall.data.timerScaleByDifficulty).toBe(true);

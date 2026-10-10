@@ -38,6 +38,7 @@ import {
   resolveShortTextEvaluationKind,
   resolveShortTextMaxLength,
   questionSupportsConfidence,
+  questionShufflesParticipantChoiceAnswers,
   usesNumericShortTextEvaluation,
   type Difficulty,
   type AddQuestionInput,
@@ -147,6 +148,7 @@ export interface QuizQuestion {
   confidenceLabelLow?: string | null;
   confidenceLabelHigh?: string | null;
   // Story 1.2g: Matching
+  shuffleAnswerOptions?: boolean;
   matchingPairs?: MatchingPairInput[];
   matchingShuffleRight?: boolean;
   // Story 1.2h: Ordering
@@ -325,6 +327,7 @@ export interface AddQuizQuestionInput {
   confidenceEnabled?: boolean;
   confidenceLabelLow?: string | null;
   confidenceLabelHigh?: string | null;
+  shuffleAnswerOptions?: boolean;
   matchingPairs?: MatchingPairInput[];
   matchingShuffleRight?: boolean;
   orderingItems?: OrderingItemInput[];
@@ -382,6 +385,7 @@ type ValidatedQuestionInput = {
   confidenceEnabled: boolean;
   confidenceLabelLow: string | null;
   confidenceLabelHigh: string | null;
+  shuffleAnswerOptions: boolean;
   matchingPairs: MatchingPairInput[] | null;
   matchingShuffleRight: boolean;
   orderingItems: OrderingItemInput[] | null;
@@ -2081,6 +2085,9 @@ export class QuizStoreService implements OnDestroy {
                   numericTwoRounds: question.numericTwoRounds ?? undefined,
                 }
               : {}),
+            ...(questionShufflesParticipantChoiceAnswers(question.type)
+              ? { shuffleAnswerOptions: question.shuffleAnswerOptions ?? true }
+              : {}),
             ...(question.type === 'MATCHING'
               ? {
                   matchingPairs: question.matchingPairs ?? undefined,
@@ -2311,6 +2318,9 @@ export class QuizStoreService implements OnDestroy {
               numericTwoRounds: q.numericTwoRounds ?? undefined,
             }
           : {}),
+        ...(questionShufflesParticipantChoiceAnswers(q.type)
+          ? { shuffleAnswerOptions: q.shuffleAnswerOptions ?? true }
+          : {}),
         ...(q.type === 'MATCHING'
           ? {
               matchingPairs: q.matchingPairs ?? undefined,
@@ -2484,6 +2494,9 @@ export class QuizStoreService implements OnDestroy {
             numericMin: isNumericEstimate ? (question.numericMin ?? null) : null,
             numericMax: isNumericEstimate ? (question.numericMax ?? null) : null,
             numericTwoRounds: isNumericEstimate ? (question.numericTwoRounds ?? false) : false,
+            shuffleAnswerOptions: questionShufflesParticipantChoiceAnswers(question.type)
+              ? (question.shuffleAnswerOptions ?? true)
+              : undefined,
             matchingPairs: isMatching ? (question.matchingPairs ?? undefined) : undefined,
             matchingShuffleRight: isMatching ? (question.matchingShuffleRight ?? true) : undefined,
             orderingItems: isOrdering ? (question.orderingItems ?? undefined) : undefined,
@@ -2569,6 +2582,9 @@ export class QuizStoreService implements OnDestroy {
       numericMin: parsed.numericMin,
       numericMax: parsed.numericMax,
       numericTwoRounds: parsed.numericTwoRounds,
+      shuffleAnswerOptions: questionShufflesParticipantChoiceAnswers(parsed.type)
+        ? (parsed.shuffleAnswerOptions ?? true)
+        : undefined,
       matchingPairs: parsed.type === 'MATCHING' ? (parsed.matchingPairs ?? undefined) : undefined,
       matchingShuffleRight:
         parsed.type === 'MATCHING' ? (parsed.matchingShuffleRight ?? true) : undefined,
@@ -2645,6 +2661,9 @@ export class QuizStoreService implements OnDestroy {
       numericMin: parsed.numericMin,
       numericMax: parsed.numericMax,
       numericTwoRounds: parsed.numericTwoRounds,
+      shuffleAnswerOptions: questionShufflesParticipantChoiceAnswers(parsed.type)
+        ? (parsed.shuffleAnswerOptions ?? true)
+        : undefined,
       matchingPairs: parsed.type === 'MATCHING' ? (parsed.matchingPairs ?? undefined) : undefined,
       matchingShuffleRight:
         parsed.type === 'MATCHING' ? (parsed.matchingShuffleRight ?? true) : undefined,
@@ -5427,6 +5446,9 @@ function validateQuestionInput(input: AddQuizQuestionInput): ValidatedQuestionIn
       rightId: pair.rightId,
       right: pair.right.trim(),
     })),
+    shuffleAnswerOptions: questionShufflesParticipantChoiceAnswers(input.type)
+      ? (input.shuffleAnswerOptions ?? true)
+      : undefined,
     matchingShuffleRight: input.matchingShuffleRight ?? undefined,
     orderingItems: input.orderingItems,
     categories: input.categories,
@@ -5508,6 +5530,9 @@ function validateQuestionInput(input: AddQuizQuestionInput): ValidatedQuestionIn
     numericMin: isNumeric ? (input.numericMin ?? null) : null,
     numericMax: isNumeric ? (input.numericMax ?? null) : null,
     numericTwoRounds: isNumeric ? (input.numericTwoRounds ?? false) : false,
+    shuffleAnswerOptions: questionShufflesParticipantChoiceAnswers(parsed.data.type)
+      ? (parsed.data.shuffleAnswerOptions ?? true)
+      : true,
     matchingPairs: parsed.data.type === 'MATCHING' ? (parsed.data.matchingPairs ?? null) : null,
     matchingShuffleRight:
       parsed.data.type === 'MATCHING' ? (parsed.data.matchingShuffleRight ?? true) : true,
@@ -5642,6 +5667,9 @@ function normalizeStoredQuestion(value: unknown, fallbackOrder: number): QuizQue
           numericTwoRounds: readBoolean(candidate['numericTwoRounds']) ?? undefined,
         }
       : {}),
+    ...(typeRaw && questionShufflesParticipantChoiceAnswers(typeRaw)
+      ? { shuffleAnswerOptions: readBoolean(candidate['shuffleAnswerOptions']) ?? true }
+      : {}),
     ...(isStoredMatching
       ? {
           matchingPairs: normalizeStoredMatchingPairs(candidate['matchingPairs']),
@@ -5736,6 +5764,9 @@ function normalizeStoredQuestion(value: unknown, fallbackOrder: number): QuizQue
     numericTwoRounds: isNumericStored
       ? (readBoolean(candidate['numericTwoRounds']) ?? false)
       : false,
+    shuffleAnswerOptions: questionShufflesParticipantChoiceAnswers(parsed.data.type)
+      ? (parsed.data.shuffleAnswerOptions ?? true)
+      : undefined,
     matchingPairs:
       parsed.data.type === 'MATCHING' ? (parsed.data.matchingPairs ?? undefined) : undefined,
     matchingShuffleRight:
@@ -6063,6 +6094,7 @@ function questionSemanticFingerprint(question: QuizQuestion): string {
     numericMin: question.numericMin,
     numericMax: question.numericMax,
     numericTwoRounds: question.numericTwoRounds,
+    shuffleAnswerOptions: question.shuffleAnswerOptions,
     matchingPairs: question.matchingPairs,
     matchingShuffleRight: question.matchingShuffleRight,
     orderingItems: question.orderingItems,

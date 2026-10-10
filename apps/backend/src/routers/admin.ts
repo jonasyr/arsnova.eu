@@ -30,6 +30,7 @@ import {
   QuizExportV1Schema,
   SESSION_POST_PROCESSING_HOURS,
   resolveShortTextMaxLength,
+  questionShufflesParticipantChoiceAnswers,
 } from '@arsnova/shared-types';
 import { adminProcedure, publicProcedure, router } from '../trpc';
 import { createHash, randomUUID } from 'crypto';
@@ -710,7 +711,7 @@ export const adminRouter = router({
                   text: true,
                   type: true,
                   answers: {
-                    orderBy: { id: 'asc' },
+                    orderBy: [{ order: 'asc' }, { id: 'asc' }],
                     select: { id: true, text: true, isCorrect: true },
                   },
                 },
@@ -754,7 +755,7 @@ export const adminRouter = router({
                   text: true,
                   type: true,
                   answers: {
-                    orderBy: { id: 'asc' },
+                    orderBy: [{ order: 'asc' }, { id: 'asc' }],
                     select: { id: true, text: true, isCorrect: true },
                   },
                 },
@@ -1127,7 +1128,7 @@ export const adminRouter = router({
                   text: true,
                   type: true,
                   answers: {
-                    orderBy: { id: 'asc' },
+                    orderBy: [{ order: 'asc' }, { id: 'asc' }],
                     select: { id: true, text: true, isCorrect: true },
                   },
                 },
@@ -1304,8 +1305,9 @@ export const adminRouter = router({
                   categories: true,
                   categorizationItems: true,
                   categorizationShuffleItems: true,
+                  shuffleAnswerOptions: true,
                   answers: {
-                    orderBy: { id: 'asc' },
+                    orderBy: [{ order: 'asc' }, { id: 'asc' }],
                     select: { text: true, isCorrect: true },
                   },
                 },
@@ -1422,6 +1424,10 @@ export const adminRouter = router({
                     }> | null) ?? [],
                   categorizationShuffleItems: question.categorizationShuffleItems,
                 }
+              : {}),
+            ...(questionShufflesParticipantChoiceAnswers(question.type) &&
+            question.shuffleAnswerOptions === false
+              ? { shuffleAnswerOptions: false as const }
               : {}),
             enabled: true,
           })),
