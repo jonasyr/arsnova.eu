@@ -3614,6 +3614,9 @@ export class QuizEditComponent implements OnDestroy {
             confidenceLabelHigh: question.confidenceLabelHigh ?? '',
           }
         : {}),
+      ...(questionShufflesParticipantChoiceAnswers(question.type)
+        ? { shuffleAnswerOptions: question.shuffleAnswerOptions ?? true }
+        : {}),
     };
   }
 
