@@ -982,7 +982,7 @@ Im Datenmodell existieren unter anderem:
 
 Wichtige Lebenszyklusregeln im Ist-Stand:
 
-- jede Session hat eine absolute Frist `expiresAt` (Default 24 Stunden nach `createdAt`, verlängerbar bis 30 Tage)
+- jede Session hat eine absolute Frist `expiresAt` (Default 24 Stunden nach `createdAt`, verlängerbar bis 180 Tage)
 - nach manuellem oder automatischem Ende gilt `endedAt`; Host-Nachbereitung 14 Tage, danach Purge sofern kein Legal Hold
 - ein offener Q&A-Kanal (`qaOpen`, `qaClosesAt`) bleibt nach Quiz-`FINISHED` beschreibbar bis zum früheren Zeitpunkt aus `qaClosesAt` und `expiresAt`
 - Bonuscodes werden nach **90 Tagen** bereinigt

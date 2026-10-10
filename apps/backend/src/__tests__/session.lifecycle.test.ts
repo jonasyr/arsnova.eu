@@ -808,8 +808,8 @@ describe('session absolute lifecycle', () => {
       newQaClosesAt: '2026-09-15T06:30:00.123Z',
       newExpiresAt: '2026-09-16T06:00:00.000Z',
       requiresSessionExtension: false,
-      // Host-Leseende folgt dem Sessionende (+14 Tage), wie getLifecycleForHost.
-      projectedPostProcessingEndsAt: '2026-09-30T06:00:00.000Z',
+      // Nachbereitung folgt der Teilnehmerfrist (+14 Tage), nicht einem späteren Sessionende.
+      projectedPostProcessingEndsAt: '2026-09-29T06:30:00.123Z',
     });
 
     await caller.configureQaChannel({
@@ -838,6 +838,57 @@ describe('session absolute lifecycle', () => {
       }),
     );
     expect(prismaMock.session.update.mock.calls[0]?.[0].data.expiresAt).toBeUndefined();
+  });
+
+  it('zieht bei einer Q&A-Session das Sessionende auf die verkürzte Öffnung', async () => {
+    const qaSession = qaConfigurationRow({
+      type: 'Q_AND_A',
+      quizId: null,
+      qaEnabled: true,
+      qaOpen: true,
+      qaClosesAt: new Date('2026-09-22T06:00:00.000Z'),
+      expiresAt: new Date('2026-09-22T06:00:00.000Z'),
+      qaTitle: 'Fragenwand',
+      preferredChannel: 'qa',
+    });
+    prismaMock.session.findUnique.mockResolvedValue(qaSession);
+    prismaMock.session.update.mockResolvedValue({
+      ...qaSession,
+      qaClosesAt: new Date('2026-09-18T06:00:00.000Z'),
+      expiresAt: new Date('2026-09-18T06:00:00.000Z'),
+      sessionLifecycleRevision: 3,
+    });
+
+    await expect(
+      caller.previewQaConfiguration({
+        code: 'ABC123',
+        mode: 'REPLAN',
+        selection: { kind: 'ABSOLUTE', closesAt: '2026-09-18T06:00:00.000Z' },
+      }),
+    ).resolves.toMatchObject({
+      newQaClosesAt: '2026-09-18T06:00:00.000Z',
+      newExpiresAt: '2026-09-18T06:00:00.000Z',
+      requiresSessionExtension: false,
+      projectedPostProcessingEndsAt: '2026-10-02T06:00:00.000Z',
+    });
+
+    await caller.configureQaChannel({
+      code: 'ABC123',
+      mode: 'REPLAN',
+      selection: { kind: 'ABSOLUTE', closesAt: '2026-09-18T06:00:00.000Z' },
+      expectedLifecycleRevision: 2,
+      previewServerNow: '2026-09-15T07:00:00.000Z',
+      confirmedQaClosesAt: '2026-09-18T06:00:00.000Z',
+      confirmedExpiresAt: '2026-09-18T06:00:00.000Z',
+      confirmSessionExtension: false,
+      reopenQa: false,
+      qaTitle: 'Fragenwand',
+      moderationMode: false,
+    });
+
+    expect(prismaMock.session.update.mock.calls[0]?.[0].data.expiresAt).toEqual(
+      new Date('2026-09-18T06:00:00.000Z'),
+    );
   });
 
   it('lehnt eine veraltete Q&A-Konfigurationsrevision ab', async () => {

@@ -2990,7 +2990,7 @@ export async function createQuizHistoryAccessProof(
 
 export const SESSION_DEFAULT_DURATION_HOURS = 24;
 export const SESSION_OPERATOR_DEFAULT_MAX_DURATION_DAYS = 14;
-export const SESSION_HARD_MAX_DURATION_DAYS = 30;
+export const SESSION_HARD_MAX_DURATION_DAYS = 180;
 export const SESSION_POST_PROCESSING_HOURS = 336;
 
 /** IANA-Zeitzone der Session; die konkrete Unterstützung prüft der Server. */

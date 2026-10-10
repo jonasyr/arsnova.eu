@@ -187,13 +187,13 @@ describe('öffentliche Contract-Schemas', () => {
       CreateSessionInputSchema.safeParse({
         type: 'Q_AND_A',
         timeZone: 'Europe/Berlin',
-        expiration: { kind: 'DURATION_DAYS', days: 30 },
+        expiration: { kind: 'DURATION_DAYS', days: 180 },
       }).success,
     ).toBe(true);
     expect(
       CreateSessionInputSchema.safeParse({
         type: 'Q_AND_A',
-        expiration: { kind: 'DURATION_DAYS', days: 31 },
+        expiration: { kind: 'DURATION_DAYS', days: 181 },
       }).success,
     ).toBe(false);
     expect(

@@ -149,9 +149,7 @@ export class SessionExpirationDialogComponent {
   }
 
   currentHostReadUntil(): string {
-    return (
-      this.data.lifecycle.postProcessingEndsAt ?? this.hostReadUntil(this.data.lifecycle.expiresAt)
-    );
+    return this.hostReadUntil(this.participantAccessEndsAt());
   }
 
   hostReadUntil(accessEndsAt: string): string {

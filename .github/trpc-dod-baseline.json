@@ -499,7 +499,7 @@
     },
     "session.changeExpiration": {
       "kind": "mutation",
-      "fingerprint": "sha256:a615b4ca7bea2749eca339b87e4215ebe0f706cd7beeb154f8ba15593de71b2f",
+      "fingerprint": "sha256:c30020cd848a14a51fbeb64ee799d6db8ae25daad186db78de2c4f7e44a3a8b6",
       "missing": []
     },
     "session.checkParticipantNickname": {
@@ -524,7 +524,7 @@
     },
     "session.configureQaChannel": {
       "kind": "mutation",
-      "fingerprint": "sha256:66ada1920c4769d77252150f82e1483f4d698b31fc8951db6d6363647070cf66",
+      "fingerprint": "sha256:622c67ee6a79b250af1f8058b7575dcfe1138dc628300d50ea7774c7029a675b",
       "missing": []
     },
     "session.confirmReadingReady": {
@@ -654,7 +654,7 @@
     },
     "session.getLifecycleForHost": {
       "kind": "query",
-      "fingerprint": "sha256:95a066f32a67c304b326e10db2b367bc477aadaf5ca824b9fed4db788b494bc3",
+      "fingerprint": "sha256:929bc14f76fc196cf31461b44cfb0acecf92adee886e4480fa40cb3c89d6a840",
       "missing": []
     },
     "session.getLiveFreetext": {
@@ -809,12 +809,12 @@
     },
     "session.previewExpiration": {
       "kind": "query",
-      "fingerprint": "sha256:75a185db044b154b88a5fce691add577ab1ff0051d395fa1a34cae036f1a5a97",
+      "fingerprint": "sha256:fa6f5e8be0fb74eb8b979a13dc17b4e5fa94f55079a7493eed5ceac3d37193d3",
       "missing": []
     },
     "session.previewQaConfiguration": {
       "kind": "query",
-      "fingerprint": "sha256:495d3cbd5c4e6a46a893aa28d851ae8e4f2542887fbfe505eaf36fe69f5d0c7d",
+      "fingerprint": "sha256:9f91fc1e7f69b7951b45e0758c4f88f968865fcfe56bede8dc43a6edf33a639f",
       "missing": []
     },
     "session.react": {
