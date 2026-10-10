@@ -128,7 +128,7 @@ in Slice #417 umgesetzt.
 ## Obergrenzen und Berechtigungen
 
 `MAX_SESSION_DURATION` begrenzt die gesamte Dauer ab `createdAt`. Unterstützt
-werden `PT24H`, `P14D` sowie die Kurzformen `24h` und `14d`. Zulässig sind
+werden `PT24H`, `P180D` sowie die Kurzformen `24h` und `180d`. Zulässig sind
 24 Stunden bis 180 Tage. Leer, ungültig oder außerhalb dieses Bereichs fällt auf
 den Betreiberdefault von 14 Tagen zurück. Ganze Tage sind Kalendertage in der
 Sessionzeitzone. PostgreSQL lässt deshalb das spätere von 180×24 Stunden und

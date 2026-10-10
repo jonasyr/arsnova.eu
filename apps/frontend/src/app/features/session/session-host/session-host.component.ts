@@ -10078,14 +10078,30 @@ export class SessionHostComponent implements OnInit, OnDestroy {
 
   private qaPostProcessingEndsAtInstant(): string | null {
     const lifecycle = this.sessionLifecycle();
+    const session = this.session();
+    const finished =
+      session?.status === 'FINISHED' ||
+      lifecycle?.status === 'FINISHED' ||
+      typeof lifecycle?.endedAt === 'string';
+    if (finished) {
+      return (
+        lifecycle?.postProcessingEndsAt ??
+        this.projectedHostReadEnd(session?.expiresAt ?? lifecycle?.expiresAt ?? null)
+      );
+    }
     return (
+      this.projectedHostReadEnd(session?.expiresAt ?? lifecycle?.expiresAt ?? null) ??
       lifecycle?.postProcessingEndsAt ??
-      (lifecycle?.expiresAt
-        ? new Date(
-            Date.parse(lifecycle.expiresAt) + SESSION_POST_PROCESSING_HOURS * 60 * 60 * 1000,
-          ).toISOString()
-        : null)
+      null
     );
+  }
+
+  private projectedHostReadEnd(sessionEnd: string | null): string | null {
+    const endMs = sessionEnd ? Date.parse(sessionEnd) : Number.NaN;
+    if (!Number.isFinite(endMs)) {
+      return null;
+    }
+    return new Date(endMs + SESSION_POST_PROCESSING_HOURS * 60 * 60 * 1000).toISOString();
   }
 
   isChannelBadgeAlert(channel: SessionChannelTab): boolean {
@@ -11468,6 +11484,24 @@ export class SessionHostComponent implements OnInit, OnDestroy {
           }
         : current,
     );
+    const postProcessingEndsAt = this.projectedHostReadEnd(result.expiresAt);
+    this.sessionLifecycle.update((current) =>
+      current
+        ? {
+            ...current,
+            ...(reopenedFromFinished ? { status: 'LOBBY' as const, endedAt: null } : {}),
+            expiresAt: result.expiresAt,
+            qaClosesAt: result.qaClosesAt,
+            sessionLifecycleRevision: result.sessionLifecycleRevision,
+            serverNow: result.serverNow,
+            ...(postProcessingEndsAt ? { postProcessingEndsAt } : {}),
+          }
+        : current,
+    );
+    const savedLifecycle = this.sessionLifecycle();
+    if (savedLifecycle) {
+      this.sessionDeadline.applySnapshot(savedLifecycle);
+    }
     if (this.releaseQaPendingFilterIfUnavailable()) {
       this.ensureQaSubscription();
     }

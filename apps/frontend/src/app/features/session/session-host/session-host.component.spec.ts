@@ -2187,6 +2187,70 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     fixture.destroy();
   });
 
+  it('zeigt die neue Host-Lesefrist auf der Karte, ohne den Dialog erneut zu öffnen', async () => {
+    const previousClose = '2026-03-25T12:00:00.000Z';
+    const savedClose = '2027-04-08T12:15:00.000Z';
+    const savedHostRead = '2027-04-22T12:15:00.000Z';
+    getLifecycleForHostQueryMock.mockResolvedValue({
+      ...defaultLifecycle,
+      expiresAt: previousClose,
+      qaClosesAt: previousClose,
+      postProcessingEndsAt: '2026-04-08T12:00:00.000Z',
+    });
+    dialogOpenMock.mockReturnValue({
+      afterClosed: () =>
+        of({
+          ...configuredQaChannelResult,
+          expiresAt: savedClose,
+          qaClosesAt: savedClose,
+          channels: {
+            ...configuredQaChannelResult.channels,
+            qa: {
+              ...configuredQaChannelResult.channels.qa,
+              closesAt: savedClose,
+            },
+          },
+        }),
+    });
+    const fixture = setup();
+    fixture.componentInstance.session.set({
+      ...defaultSession,
+      timeZone: 'Europe/Berlin',
+      expiresAt: previousClose,
+      qaClosesAt: previousClose,
+      channels: {
+        quiz: { enabled: true },
+        qa: {
+          enabled: true,
+          open: true,
+          title: 'Fragen',
+          moderationMode: true,
+          state: 'OPEN',
+          closesAt: previousClose,
+        },
+        quickFeedback: { enabled: false, open: false },
+      },
+    });
+    fixture.componentInstance.sessionLifecycle.set({
+      ...defaultLifecycle,
+      expiresAt: previousClose,
+      qaClosesAt: previousClose,
+      postProcessingEndsAt: '2026-04-08T12:00:00.000Z',
+    });
+
+    await fixture.componentInstance.openQaConfigurationDialog();
+
+    const format = (iso: string) =>
+      fixture.componentInstance.formatSessionLifecycleDateTime(iso, 'Europe/Berlin');
+    expect(fixture.componentInstance.qaDeadlineLabel()).toContain(format(savedClose));
+    expect(fixture.componentInstance.qaHostReadLabel()).toContain(format(savedHostRead));
+    expect(fixture.componentInstance.qaHostReadLabel()).not.toContain(
+      format('2026-04-08T12:00:00.000Z'),
+    );
+    expect(getLifecycleForHostQueryMock).toHaveBeenCalledTimes(1);
+    fixture.destroy();
+  });
+
   it('zeigt auf der Q&A-Karte die persistierte Frist, nicht nur das Sessionende', () => {
     const fixture = setup();
     const createdAt = '2026-09-23T04:42:00.000Z';
