@@ -44,7 +44,7 @@ function parseDurationMilliseconds(raw: string | undefined): number | null {
 
 /**
  * Betreibergrenze: fehlende oder ungültige Konfiguration fällt sicher auf
- * 14 Tage zurück; 24 Stunden bis 30 Tage sind die einzigen gültigen Werte.
+ * 14 Tage zurück; 24 Stunden bis 180 Tage sind die einzigen gültigen Werte.
  */
 export function getMaxSessionDurationMs(raw = process.env['MAX_SESSION_DURATION']): number {
   const parsed = parseDurationMilliseconds(raw);

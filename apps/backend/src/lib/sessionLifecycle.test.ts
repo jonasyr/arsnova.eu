@@ -125,13 +125,14 @@ describe('sessionLifecycle controlled clock', () => {
     ).toThrow('maximal');
   });
 
-  it('verwendet 14 Tage Betreiberdefault und erzwingt 24h bis 30 Tage', () => {
+  it('verwendet 14 Tage Betreiberdefault und erzwingt 24h bis 180 Tage', () => {
     expect(getMaxSessionDurationMs(undefined)).toBe(SESSION_OPERATOR_DEFAULT_MAX_DURATION_MS);
     expect(getMaxSessionDurationMs('PT24H')).toBe(24 * 60 * 60 * 1000);
     expect(getMaxSessionDurationMs('14d')).toBe(14 * 24 * 60 * 60 * 1000);
-    expect(getMaxSessionDurationMs('P30D')).toBe(SESSION_HARD_MAX_DURATION_MS);
+    expect(getMaxSessionDurationMs('P30D')).toBe(30 * 24 * 60 * 60 * 1000);
+    expect(getMaxSessionDurationMs('P180D')).toBe(SESSION_HARD_MAX_DURATION_MS);
     expect(getMaxSessionDurationMs('23h')).toBe(SESSION_OPERATOR_DEFAULT_MAX_DURATION_MS);
-    expect(getMaxSessionDurationMs('31d')).toBe(SESSION_OPERATOR_DEFAULT_MAX_DURATION_MS);
+    expect(getMaxSessionDurationMs('181d')).toBe(SESSION_OPERATOR_DEFAULT_MAX_DURATION_MS);
     expect(getMaxSessionDurationMs('garbage')).toBe(SESSION_OPERATOR_DEFAULT_MAX_DURATION_MS);
   });
 });

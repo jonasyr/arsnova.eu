@@ -129,9 +129,9 @@ in Slice #417 umgesetzt.
 
 `MAX_SESSION_DURATION` begrenzt die gesamte Dauer ab `createdAt`. Unterstützt
 werden `PT24H`, `P14D` sowie die Kurzformen `24h` und `14d`. Zulässig sind
-24 Stunden bis 30 Tage. Leer, ungültig oder außerhalb dieses Bereichs fällt auf
+24 Stunden bis 180 Tage. Leer, ungültig oder außerhalb dieses Bereichs fällt auf
 den Betreiberdefault von 14 Tagen zurück. Zusätzlich erzwingt PostgreSQL stets
-das harte 30-Tage-Cap.
+das harte 180-Tage-Cap.
 
 Globale Verlängerungen benötigen neben einem gültigen Hostnachweis ausdrücklich
 den Nachweis des ursprünglichen Hosts. Route, Sessioncode, URL, Clientzustand
