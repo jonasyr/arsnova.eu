@@ -424,11 +424,20 @@ async function selectQaSort(page, label) {
   await revealLatestQaQuestions(page);
 }
 
-/** Wartet, bis die Liste die erwartete Reihenfolge zeigt, statt nach fester Zeit einmal zu lesen. */
-async function waitForQaCards(page, predicate, timeout = 10_000) {
+/**
+ * Wartet, bis die Liste die erwartete Reihenfolge zeigt und sie `stableMs` lang hält.
+ * Ein einzelner Treffer reicht nicht: Eine späte Antwort könnte die Liste danach wieder überschreiben.
+ */
+async function waitForQaCards(page, predicate, timeout = 10_000, stableMs = 1_000) {
   const startedAt = Date.now();
+  let matchedSince = null;
   while (Date.now() - startedAt < timeout) {
-    if (predicate(await qaCardTexts(page))) return true;
+    if (predicate(await qaCardTexts(page))) {
+      matchedSince ??= Date.now();
+      if (Date.now() - matchedSince >= stableMs) return true;
+    } else {
+      matchedSince = null;
+    }
     await page.waitForTimeout(200);
   }
   return false;
