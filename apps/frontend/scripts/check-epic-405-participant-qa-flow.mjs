@@ -421,13 +421,21 @@ async function selectQaSort(page, label) {
     .locator('.session-qa-sort-toggle mat-button-toggle')
     .filter({ hasText: label })
     .click();
-  await page.waitForTimeout(400);
   await revealLatestQaQuestions(page);
 }
 
+/** Wartet, bis die Liste die erwartete Reihenfolge zeigt, statt nach fester Zeit einmal zu lesen. */
+async function waitForQaCards(page, predicate, timeout = 10_000) {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeout) {
+    if (predicate(await qaCardTexts(page))) return true;
+    await page.waitForTimeout(200);
+  }
+  return false;
+}
+
 async function firstQaCardContains(page, snippet) {
-  const texts = await qaCardTexts(page);
-  return texts[0]?.includes(snippet) === true;
+  return waitForQaCards(page, (texts) => texts[0]?.includes(snippet) === true);
 }
 
 async function seedRankedQaBoardAndAssertHostViews(page, hostTrpc, created, failures) {
@@ -475,9 +483,11 @@ async function seedRankedQaBoardAndAssertHostViews(page, hostTrpc, created, fail
     action: 'PIN',
   });
   await page.getByRole('button', { name: /Nur hervorgehobene Fragen anzeigen/i }).click();
-  await page.waitForTimeout(400);
+  const favoriteOk = await waitForQaCards(
+    page,
+    (texts) => texts.length === 1 && texts[0].includes('Hausaufgabenfrist'),
+  );
   const favoriteTexts = await qaCardTexts(page);
-  const favoriteOk = favoriteTexts.length === 1 && favoriteTexts[0].includes('Hausaufgabenfrist');
   logStep(favoriteOk, 'Host filtert Favoriten (hervorgehobene Frage)');
   if (!favoriteOk) {
     failures.push(`Favoritenfilter zeigte unerwartete Karten: ${favoriteTexts.join(' | ')}`);
