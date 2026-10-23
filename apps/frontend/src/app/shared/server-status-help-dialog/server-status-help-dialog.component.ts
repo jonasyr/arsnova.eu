@@ -22,6 +22,7 @@ import {
 import { MatIcon } from '@angular/material/icon';
 import { MatTab, MatTabGroup, MatTabLabel } from '@angular/material/tabs';
 import type {
+  OpenWeightLlmRuntimeProbeDTO,
   PublicLiveConnections,
   PublicTrafficErrorClasses,
   PublicTrafficQuality,
@@ -233,6 +234,149 @@ export interface ServerStatusHelpDialogData {
 
                 <section
                   class="status-help-dialog__metric-group status-help-dialog__metric-group--block"
+                  aria-labelledby="server-status-llm-heading"
+                >
+                  <h4
+                    id="server-status-llm-heading"
+                    class="status-help-dialog__metric-group-title status-help-dialog__metric-group-title--with-icon"
+                  >
+                    <mat-icon aria-hidden="true">psychology</mat-icon>
+                    <span i18n="@@app.footer.statusMetricGroupOpenWeightLlm">Lokale Text-KI</span>
+                  </h4>
+                  <p
+                    class="status-help-dialog__copy status-help-dialog__copy--compact"
+                    i18n="@@app.footer.statusOpenWeightLlmHint"
+                  >
+                    Diese Prüfung betrifft nur die Text-KI auf diesem Server: ein lokal betriebenes
+                    Open-Weight-Modell, kein Cloud-Anbieter. Geprüft werden die drei Hilfen unten.
+                    Das Ergebnis ändert den allgemeinen Betriebsstatus nicht.
+                  </p>
+                  @if (llmModelLabel(); as modelLabel) {
+                    <p class="status-help-dialog__copy status-help-dialog__copy--compact">
+                      <span i18n="@@app.footer.statusOpenWeightLlmModel">Modell:</span>
+                      {{ modelLabel }}
+                    </p>
+                  }
+                  <div
+                    class="status-help-dialog__llm-live"
+                    role="status"
+                    aria-live="polite"
+                    aria-atomic="true"
+                  >
+                    @if (llmProbeLoading()) {
+                      <p
+                        class="status-help-dialog__copy status-help-dialog__copy--compact"
+                        i18n="@@app.footer.statusOpenWeightLlmLoading"
+                      >
+                        Prüfung läuft …
+                      </p>
+                    } @else if (llmProbeError()) {
+                      <p
+                        class="status-help-dialog__copy status-help-dialog__copy--compact"
+                        i18n="@@app.footer.statusOpenWeightLlmError"
+                      >
+                        Prüfung derzeit nicht möglich.
+                      </p>
+                      <div class="status-help-dialog__actions">
+                        <button
+                          mat-button
+                          type="button"
+                          (click)="refreshLlmProbe()"
+                          [disabled]="llmProbeLoading()"
+                          i18n="@@app.footer.statusOpenWeightLlmRefresh"
+                        >
+                          Erneut prüfen
+                        </button>
+                      </div>
+                    } @else if (llmProbe(); as llm) {
+                      <div
+                        class="status-help-dialog__metrics status-help-dialog__metrics--overview"
+                      >
+                        <article class="status-help-dialog__metric">
+                          <div class="status-help-dialog__metric-head">
+                            <mat-icon aria-hidden="true">verified</mat-icon>
+                            <span i18n="@@app.footer.statusMetricOpenWeightLlmOverall">Gesamt</span>
+                          </div>
+                          <strong class="status-help-dialog__metric-value--prose">{{
+                            formatLlmProbeStatus(llm.overall)
+                          }}</strong>
+                          <p
+                            class="status-help-dialog__metric-hint"
+                            i18n="@@app.footer.statusMetricOpenWeightLlmOverallHint"
+                          >
+                            Gemeinsames Ergebnis der drei Hilfen.
+                          </p>
+                        </article>
+                        <article class="status-help-dialog__metric">
+                          <div class="status-help-dialog__metric-head">
+                            <mat-icon aria-hidden="true">label</mat-icon>
+                            <span i18n="@@app.footer.statusMetricOpenWeightLlmTopicLabel"
+                              >Themennamen</span
+                            >
+                          </div>
+                          <strong class="status-help-dialog__metric-value--prose">{{
+                            formatLlmProbeStatus(llm.tasks.topic_label.status)
+                          }}</strong>
+                          <p
+                            class="status-help-dialog__metric-hint"
+                            i18n="@@app.footer.statusMetricOpenWeightLlmTopicLabelHint"
+                          >
+                            Kurze Namen für ähnliche Fragen oder Freitextantworten in der Wortwolke
+                            »Thema«.
+                          </p>
+                        </article>
+                        <article class="status-help-dialog__metric">
+                          <div class="status-help-dialog__metric-head">
+                            <mat-icon aria-hidden="true">summarize</mat-icon>
+                            <span i18n="@@app.footer.statusMetricOpenWeightLlmQaSummary"
+                              >Q&amp;A-Kurzfassung</span
+                            >
+                          </div>
+                          <strong class="status-help-dialog__metric-value--prose">{{
+                            formatLlmProbeStatus(llm.tasks.qa_summary.status)
+                          }}</strong>
+                          <p
+                            class="status-help-dialog__metric-hint"
+                            i18n="@@app.footer.statusMetricOpenWeightLlmQaSummaryHint"
+                          >
+                            Fasst wiederkehrende Fragen und Hinweise für die Moderation zusammen.
+                          </p>
+                        </article>
+                        <article class="status-help-dialog__metric">
+                          <div class="status-help-dialog__metric-head">
+                            <mat-icon aria-hidden="true">school</mat-icon>
+                            <span i18n="@@app.footer.statusMetricOpenWeightLlmLearning"
+                              >Lernziele</span
+                            >
+                          </div>
+                          <strong class="status-help-dialog__metric-value--prose">{{
+                            formatLlmProbeStatus(llm.tasks.learning_objectives.status)
+                          }}</strong>
+                          <p
+                            class="status-help-dialog__metric-hint"
+                            i18n="@@app.footer.statusMetricOpenWeightLlmLearningHint"
+                          >
+                            Schlägt aus Quizfragen prüfbare Lernziele als Entwurf vor.
+                          </p>
+                        </article>
+                      </div>
+                      <div class="status-help-dialog__actions">
+                        <button
+                          mat-button
+                          type="button"
+                          (click)="refreshLlmProbe()"
+                          [disabled]="llmProbeLoading()"
+                          i18n="@@app.footer.statusOpenWeightLlmRefresh"
+                        >
+                          Erneut prüfen
+                        </button>
+                      </div>
+                    }
+                  </div>
+                </section>
+
+                <section
+                  class="status-help-dialog__metric-group status-help-dialog__metric-group--block"
                   aria-labelledby="server-status-traffic-heading"
                 >
                   <h4
@@ -305,7 +449,7 @@ export interface ServerStatusHelpDialogData {
                     </article>
                     <article class="status-help-dialog__metric">
                       <div class="status-help-dialog__metric-head">
-                        <mat-icon aria-hidden="true">error_outline</mat-icon>
+                        <mat-icon aria-hidden="true">error</mat-icon>
                         <span i18n="@@app.footer.statusMetricErrorRate">Fehlerrate</span>
                       </div>
                       <strong
@@ -356,7 +500,9 @@ export interface ServerStatusHelpDialogData {
                     <article class="status-help-dialog__metric">
                       <div class="status-help-dialog__metric-head">
                         <mat-icon aria-hidden="true">science</mat-icon>
-                        <span i18n="@@app.footer.statusMetricSampleSize">Stichprobengröße</span>
+                        <span i18n="@@app.footer.statusMetricSampleSize"
+                          >Stichprobenumfang (n)</span
+                        >
                       </div>
                       <strong
                         [class.status-help-dialog__metric-value--prose]="
@@ -364,6 +510,12 @@ export interface ServerStatusHelpDialogData {
                         "
                         >{{ formatTrafficSampleSize(s.trafficQuality) }}</strong
                       >
+                      <p
+                        class="status-help-dialog__metric-hint"
+                        i18n="@@app.footer.statusMetricSampleSizeHint"
+                      >
+                        Überwachte API-Anfragen im Messfenster (60&nbsp;s).
+                      </p>
                     </article>
                   </div>
                   @if (s.trafficQuality.errorClasses; as errors) {
@@ -534,7 +686,7 @@ export interface ServerStatusHelpDialogData {
                     </article>
                     <article class="status-help-dialog__metric">
                       <div class="status-help-dialog__metric-head">
-                        <mat-icon aria-hidden="true">question_answer</mat-icon>
+                        <mat-icon aria-hidden="true">forum</mat-icon>
                         <span i18n="@@app.footer.statusMetricQualityQaSubmit">Q&A einreichen</span>
                       </div>
                       <strong
@@ -594,7 +746,7 @@ export interface ServerStatusHelpDialogData {
                     </article>
                     <article class="status-help-dialog__metric status-help-dialog__metric--key">
                       <div class="status-help-dialog__metric-head">
-                        <mat-icon aria-hidden="true">chat_bubble_outline</mat-icon>
+                        <mat-icon aria-hidden="true">chat_bubble</mat-icon>
                         <span i18n="@@app.footer.statusMetricActiveQaSessions"
                           >Aktive Q&A-Sessions</span
                         >
@@ -677,7 +829,7 @@ export interface ServerStatusHelpDialogData {
                   <div class="status-help-dialog__metrics">
                     <article class="status-help-dialog__metric">
                       <div class="status-help-dialog__metric-head">
-                        <mat-icon aria-hidden="true">poll</mat-icon>
+                        <mat-icon aria-hidden="true">ballot</mat-icon>
                         <span i18n="@@app.footer.statusMetricVotes">Abstimmungen / Minute</span>
                       </div>
                       <strong>{{ formatCount(s.votesLastMinute) }}</strong>
@@ -690,7 +842,7 @@ export interface ServerStatusHelpDialogData {
                     </article>
                     <article class="status-help-dialog__metric">
                       <div class="status-help-dialog__metric-head">
-                        <mat-icon aria-hidden="true">question_answer</mat-icon>
+                        <mat-icon aria-hidden="true">forum</mat-icon>
                         <span i18n="@@app.footer.statusMetricQaQuestions">Q&A-Fragen / Minute</span>
                       </div>
                       <strong>{{
@@ -985,7 +1137,7 @@ export interface ServerStatusHelpDialogData {
                       </article>
                       <article class="status-help-dialog__metric">
                         <div class="status-help-dialog__metric-head">
-                          <mat-icon aria-hidden="true">question_answer</mat-icon>
+                          <mat-icon aria-hidden="true">forum</mat-icon>
                           <span i18n="@@app.footer.statusMetricQaAccepted">Q&A-Fragen</span>
                         </div>
                         <strong
@@ -1011,7 +1163,7 @@ export interface ServerStatusHelpDialogData {
                       </article>
                       <article class="status-help-dialog__metric status-help-dialog__metric--wide">
                         <div class="status-help-dialog__metric-head">
-                          <mat-icon aria-hidden="true">chat_bubble_outline</mat-icon>
+                          <mat-icon aria-hidden="true">chat_bubble</mat-icon>
                           <span i18n="@@app.footer.statusMetricQaQuestionsTotal"
                             >Q&A-Fragen gesamt</span
                           >
@@ -1026,7 +1178,7 @@ export interface ServerStatusHelpDialogData {
                       </article>
                       <article class="status-help-dialog__metric status-help-dialog__metric--wide">
                         <div class="status-help-dialog__metric-head">
-                          <mat-icon aria-hidden="true">emoji_events</mat-icon>
+                          <mat-icon aria-hidden="true">trophy</mat-icon>
                           <span i18n="@@app.footer.statusMetricLargestQaCollection"
                             >Größte Q&A-Sammlung</span
                           >
@@ -1135,24 +1287,49 @@ export interface ServerStatusHelpDialogData {
                         class="status-help-dialog__metric-group-title status-help-dialog__metric-group-title--with-icon"
                       >
                         <mat-icon aria-hidden="true">category</mat-icon>
-                        <span i18n="@@app.footer.statusMetricGroupSize">Reichweite nach Größe</span>
+                        <span i18n="@@app.footer.statusMetricGroupSize"
+                          >Sessions nach Gruppengröße</span
+                        >
                       </h4>
+                      <p
+                        class="status-help-dialog__copy status-help-dialog__copy--compact"
+                        i18n="@@app.footer.statusMetricGroupSizeHint"
+                      >
+                        Klassierte Häufigkeitsverteilung der Sessions nach Zahl der Teilnahmen.
+                        Median und Quartile sind aus den Klassenmitten genähert (XS: 6, S: 20, M:
+                        66, L: 200, XL: 301).
+                      </p>
                       <dl class="status-help-dialog__meta status-help-dialog__meta--size">
                         <div class="status-help-dialog__meta-item">
-                          <dt i18n="@@app.footer.statusUsageSizeSample">Stichprobe:</dt>
-                          <dd>{{ formatCount(size.sampleSize) }}</dd>
+                          <dt i18n="@@app.footer.statusUsageSizeSample">Stichprobenumfang (n):</dt>
+                          <dd>
+                            {{ formatCount(size.sampleSize) }}
+                            <span i18n="@@app.footer.statusUsageSizeSessionsUnit">Sessions</span>
+                          </dd>
                         </div>
                         @if (size.median != null) {
                           <div class="status-help-dialog__meta-item">
-                            <dt i18n="@@app.footer.statusUsageSizeMedian">Median:</dt>
-                            <dd>{{ formatCount(size.median) }}</dd>
+                            <dt i18n="@@app.footer.statusUsageSizeMedian">
+                              Median (Klassenmitte):
+                            </dt>
+                            <dd>
+                              ≈ {{ formatCount(size.median) }}
+                              <span i18n="@@app.footer.statusUsageSizeParticipationsUnit"
+                                >Teilnahmen / Session</span
+                              >
+                            </dd>
                           </div>
                         }
                         @if (size.quartile1 != null && size.quartile3 != null) {
                           <div class="status-help-dialog__meta-item">
-                            <dt i18n="@@app.footer.statusUsageSizeQuartiles">Q1–Q3:</dt>
+                            <dt i18n="@@app.footer.statusUsageSizeQuartiles">
+                              Quartilsbereich (Q1–Q3):
+                            </dt>
                             <dd>
-                              {{ formatCount(size.quartile1) }}–{{ formatCount(size.quartile3) }}
+                              ≈ {{ formatCount(size.quartile1) }}–{{ formatCount(size.quartile3) }}
+                              <span i18n="@@app.footer.statusUsageSizeParticipationsUnit"
+                                >Teilnahmen / Session</span
+                              >
                             </dd>
                           </div>
                         }
@@ -1162,9 +1339,20 @@ export interface ServerStatusHelpDialogData {
                           <article class="status-help-dialog__metric">
                             <div class="status-help-dialog__metric-head">
                               <mat-icon aria-hidden="true">category</mat-icon>
-                              <span>{{ cls.id }} ({{ cls.label }})</span>
+                              <span
+                                >{{ cls.id }} ({{ cls.label }}
+                                <ng-container i18n="@@app.footer.statusUsageSizeClassRangeUnit"
+                                  >Teilnahmen</ng-container
+                                >)</span
+                              >
                             </div>
                             <strong>{{ formatCount(cls.count) }}</strong>
+                            <p class="status-help-dialog__metric-hint">
+                              <span i18n="@@app.footer.statusUsageSizeSessionsUnit">Sessions</span>
+                              @if (size.sampleSize > 0) {
+                                · {{ formatSizeClassShare(cls.count, size.sampleSize) }}
+                              }
+                            </p>
                           </article>
                         }
                       </div>
@@ -1385,7 +1573,7 @@ export interface ServerStatusHelpDialogData {
                           id="server-status-record-heading"
                           class="status-help-dialog__section-title status-help-dialog__section-title--with-icon"
                         >
-                          <mat-icon aria-hidden="true">emoji_events</mat-icon>
+                          <mat-icon aria-hidden="true">trophy</mat-icon>
                           <span i18n="@@help.statsTitle">Höchste Join-Teilnahme einer Session</span>
                         </h4>
                         <p class="status-help-dialog__record-hint" i18n="@@help.statsHint">
@@ -1443,25 +1631,32 @@ export interface ServerStatusHelpDialogData {
                               <mat-icon aria-hidden="true">analytics</mat-icon>
                               <span i18n="@@app.footer.statusDailyHistoryMedian">Median</span>
                             </div>
-                            <strong>{{ statsFmt.median }}</strong>
+                            <strong
+                              >{{ statsFmt.median }}
+                              <span i18n="@@help.statsUnit">Joins</span></strong
+                            >
                             <p
                               class="status-help-dialog__metric-hint"
                               i18n="@@app.footer.statusDailyHistoryMedianHint"
                             >
-                              Nur gemessene Tage im Fenster
+                              Über {{ statsFmt.sampleSize }} gemessene Tage (n) im 100-Tage-Fenster
                             </p>
                           </article>
                           <article class="status-help-dialog__metric">
                             <div class="status-help-dialog__metric-head">
                               <mat-icon aria-hidden="true">equalizer</mat-icon>
-                              <span i18n="@@app.footer.statusDailyHistoryIqr">IQR</span>
+                              <span i18n="@@app.footer.statusDailyHistoryIqr"
+                                >Quartilsabstand (IQR)</span
+                              >
                             </div>
-                            <strong>{{ statsFmt.iqr }}</strong>
+                            <strong
+                              >{{ statsFmt.iqr }} <span i18n="@@help.statsUnit">Joins</span></strong
+                            >
                             <p
                               class="status-help-dialog__metric-hint"
                               i18n="@@app.footer.statusDailyHistoryIqrHint"
                             >
-                              Q3−Q1 der gemessenen Tage
+                              Q3−Q1 der täglichen Join-Höchststände
                             </p>
                           </article>
                           <article class="status-help-dialog__metric">
@@ -1469,12 +1664,14 @@ export interface ServerStatusHelpDialogData {
                               <mat-icon aria-hidden="true">leaderboard</mat-icon>
                               <span i18n="@@app.footer.statusDailyHistoryMax">Maximum</span>
                             </div>
-                            <strong>{{ statsFmt.max }}</strong>
+                            <strong
+                              >{{ statsFmt.max }} <span i18n="@@help.statsUnit">Joins</span></strong
+                            >
                             <p
                               class="status-help-dialog__metric-hint"
                               i18n="@@app.footer.statusDailyHistoryMaxHint"
                             >
-                              Höchster Join-Stand im Fenster
+                              Höchster Tages-Join-Stand im 100-Tage-Fenster
                             </p>
                           </article>
                         </div>
@@ -1605,6 +1802,14 @@ export class ServerStatusHelpDialogComponent {
   readonly showCustomRange = signal(false);
   /** Join-Legacy inkl. Chart erst bei Bedarf laden/zeichnen. */
   readonly joinLegacyExpanded = signal(false);
+  readonly llmProbe = signal<OpenWeightLlmRuntimeProbeDTO | null>(null);
+  readonly llmProbeLoading = signal(false);
+  readonly llmProbeError = signal(false);
+  readonly llmModelLabel = computed(() => {
+    const probe = this.llmProbe();
+    if (!probe) return null;
+    return this.formatLlmModelLabel(probe.modelReported ?? probe.modelAlias);
+  });
 
   readonly usageStats = computed<PublicUsageStats | null>(() => {
     return this.usageOverride() ?? this.effectiveStats()?.usage ?? null;
@@ -1723,6 +1928,7 @@ export class ServerStatusHelpDialogComponent {
 
   constructor() {
     this.destroyRef.onDestroy(() => this.destroyChart());
+    void this.loadLlmProbe();
 
     if (typeof globalThis.addEventListener === 'function') {
       globalThis.addEventListener(THEME_PRESET_DOM_EVENT, this.refreshChartForThemeChange);
@@ -1799,6 +2005,13 @@ export class ServerStatusHelpDialogComponent {
     return formatLocaleCount(value, this.locale);
   }
 
+  protected formatSizeClassShare(count: number, sampleSize: number): string {
+    if (sampleSize <= 0) return '0 %';
+    return `${formatLocaleNumber((count / sampleSize) * 100, this.locale, {
+      maximumFractionDigits: 1,
+    })} %`;
+  }
+
   protected formatQaLiveValue(
     value: number | null,
     status: ServerStatsDTO['qaMinuteMetricsStatus'] | ServerStatsDTO['qaPresenceMetricsStatus'],
@@ -1842,6 +2055,53 @@ export class ServerStatusHelpDialogComponent {
         return $localize`:@@app.footer.dependencyUnavailable:nicht erreichbar`;
       default:
         return $localize`:@@app.footer.dependencyUnknown:unbekannt`;
+    }
+  }
+
+  protected formatLlmProbeStatus(status: OpenWeightLlmRuntimeProbeDTO['overall']): string {
+    switch (status) {
+      case 'ok':
+        return $localize`:@@app.footer.dependencyOk:ok`;
+      case 'busy':
+        return $localize`:@@app.footer.openWeightLlmBusy:beschäftigt`;
+      case 'degraded':
+        return $localize`:@@app.footer.dependencyDegraded:eingeschränkt`;
+      case 'unavailable':
+        return $localize`:@@app.footer.dependencyUnavailable:nicht erreichbar`;
+      case 'disabled':
+        return $localize`:@@app.footer.openWeightLlmDisabled:ausgeschaltet`;
+      default:
+        return $localize`:@@app.footer.dependencyUnknown:unbekannt`;
+    }
+  }
+
+  private formatLlmModelLabel(raw: string | null | undefined): string | null {
+    if (!raw?.trim()) return null;
+    const value = raw.trim();
+    if (/qwen3-4b-instruct-2507-q4_k_m/i.test(value)) {
+      return 'Qwen3-4B Instruct (Q4_K_M)';
+    }
+    return value;
+  }
+
+  protected refreshLlmProbe(): void {
+    void this.loadLlmProbe(true);
+  }
+
+  private async loadLlmProbe(refresh = false): Promise<void> {
+    if (this.llmProbeLoading()) return;
+    this.llmProbeLoading.set(true);
+    this.llmProbeError.set(false);
+    try {
+      const probe = await trpc.health.openWeightLlmProbe.query(
+        refresh ? { refresh: true } : undefined,
+      );
+      this.llmProbe.set(probe);
+    } catch {
+      this.llmProbe.set(null);
+      this.llmProbeError.set(true);
+    } finally {
+      this.llmProbeLoading.set(false);
     }
   }
 

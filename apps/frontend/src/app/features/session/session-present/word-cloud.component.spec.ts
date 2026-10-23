@@ -41,13 +41,13 @@ describe('WordCloudComponent', () => {
   it('zeigt Kontext-Pills neben den Zaehlern', () => {
     const fixture = TestBed.createComponent(WordCloudComponent);
     fixture.componentRef.setInput('responses', ['Motivation durch Teamarbeit']);
-    fixture.componentRef.setInput('contextPills', ['Themen', 'Beste Fragen', 'ohne Glättung']);
+    fixture.componentRef.setInput('contextPills', ['Themen', 'Beste Fragen', 'ohne Wort-Glättung']);
     fixture.detectChanges();
 
     const pills = [
       ...fixture.nativeElement.querySelectorAll('.word-cloud__meta-pill--context'),
     ].map((el) => (el.textContent ?? '').trim());
-    expect(pills).toEqual(['Themen', 'Beste Fragen', 'ohne Glättung']);
+    expect(pills).toEqual(['Themen', 'Beste Fragen', 'ohne Wort-Glättung']);
   });
 
   it('waehlt einen vorgegebenen Fokusbegriff in der Wolke', () => {
@@ -1059,6 +1059,14 @@ describe('WordCloudComponent', () => {
     expect(component.wordTooltip(entry!)).toContain('validierung');
     expect(component.wordTooltip(entry!)).toContain('validiert');
     expect(component.wordTooltip(entry!)).toContain('validieren');
+    const blocks = component.wordTooltipBlocks(entry!);
+    expect(
+      blocks.some((block) => block.kind === 'heading' && block.text === 'Weitere gezählte Formen'),
+    ).toBe(true);
+    expect(blocks.some((block) => block.kind === 'markdown')).toBe(true);
+    expect(blocks.filter((block) => block.kind === 'markdown').length).toBeLessThan(
+      entry!.variants.length,
+    );
   });
 
   it('zeigt im Q&A-Tooltip den gewichteten Wert, die Metrikbasis und zugehörige Fragen', () => {
@@ -1088,6 +1096,11 @@ describe('WordCloudComponent', () => {
     expect(tooltip).toContain('In 2 Fragen gefunden');
     expect(tooltip).toContain('Gewichtung: beste Fragen');
     expect(tooltip).toContain('Fragen:');
+    expect(
+      component
+        .wordTooltipBlocks(entry!)
+        .some((block) => block.kind === 'heading' && block.text === 'Zugehörige Fragen'),
+    ).toBe(true);
     expect(tooltip).toContain('• Sollten wir zuerst Python oder zuerst');
     expect(tooltip).toContain('   Formel herleiten?');
     expect(tooltip).toContain('• Sollten wir Python Beispiele als');
@@ -1869,5 +1882,108 @@ describe('WordCloudComponent', () => {
       /:host-context\(html\.preset-playful\) \.word-cloud__word \{[\s\S]*surface-container-lowest\) 46%,\s*var\(--mat-sys-primary-container\)/,
     );
     expect(styles).not.toMatch(/color-mix\(in srgb, white /);
+  });
+
+  it('hält den d3-cloud-Zufalls-Seed beim Wechsel der Sortiergewichte stabil und animiert Positionsübergänge mit prefers-reduced-motion-Schutz', async () => {
+    const fixture = TestBed.createComponent(WordCloudComponent);
+    fixture.componentRef.setInput('analysisEntries', [
+      {
+        key: 'kapitel-4',
+        label: 'Klausurrelevanz Kapitel 4',
+        count: 74,
+        basisLabel: 'Klausurrelevanz Kapitel 4',
+        confidence: 0.92,
+        variants: [],
+        members: [],
+      },
+      {
+        key: 'folien-moodle',
+        label: 'Folien im Moodle',
+        count: 32,
+        basisLabel: 'Folien im Moodle',
+        confidence: 0.91,
+        variants: [],
+        members: [],
+      },
+    ]);
+    fixture.detectChanges();
+
+    const component = fixture.componentInstance as unknown as {
+      stageWidth: { set: (value: number) => void };
+      displayWords: () => unknown[];
+      createLayoutWords: (entries: unknown[]) => Array<{
+        text: string;
+        size: number;
+        rotate: 0 | 90;
+        padding: number;
+        entry: { groupKey: string };
+      }>;
+      createTermSeededRandom: (
+        words: ReadonlyArray<{ size: number; entry: { groupKey: string } }>,
+        baseSeedSignature: string,
+      ) => () => number;
+      layoutStableRandomSeedSignature: () => string;
+      layoutInputSignature: () => string;
+    };
+    component.stageWidth.set(960);
+    fixture.detectChanges();
+
+    const seedBefore = component.layoutStableRandomSeedSignature();
+    const inputSigBefore = component.layoutInputSignature();
+    const wordsBefore = component.createLayoutWords(component.displayWords());
+    const rngBefore = component.createTermSeededRandom(wordsBefore, seedBefore);
+    // Vor dem Sortierwechsel ist kapitel-4 größer (Platz 1) und folien-moodle kleiner (Platz 2).
+    const kapitelTripletBefore = [rngBefore(), rngBefore(), rngBefore()];
+    const folienTripletBefore = [rngBefore(), rngBefore(), rngBefore()];
+
+    // Sortierwechsel: gleiche Cluster-Keys, aber umgekehrte Gewichte (count) und Ränge
+    fixture.componentRef.setInput('analysisEntries', [
+      {
+        key: 'folien-moodle',
+        label: 'Folien im Moodle',
+        count: 68,
+        basisLabel: 'Folien im Moodle',
+        confidence: 0.91,
+        variants: [],
+        members: [],
+      },
+      {
+        key: 'kapitel-4',
+        label: 'Klausurrelevanz Kapitel 4',
+        count: 19,
+        basisLabel: 'Klausurrelevanz Kapitel 4',
+        confidence: 0.92,
+        variants: [],
+        members: [],
+      },
+    ]);
+    fixture.detectChanges();
+
+    expect(component.layoutInputSignature()).not.toBe(inputSigBefore);
+    expect(component.layoutStableRandomSeedSignature()).toBe(seedBefore);
+
+    const wordsAfter = component.createLayoutWords(component.displayWords());
+    const rngAfter = component.createTermSeededRandom(
+      wordsAfter,
+      component.layoutStableRandomSeedSignature(),
+    );
+    // Nach dem Sortierwechsel sortiert d3-cloud folien-moodle zuerst und kapitel-4 als Zweites;
+    // trotzdem behält jeder groupKey exakt sein eigenes Zufallstriplet (startX, startY, dt).
+    const folienTripletAfter = [rngAfter(), rngAfter(), rngAfter()];
+    const kapitelTripletAfter = [rngAfter(), rngAfter(), rngAfter()];
+    expect(folienTripletAfter).toEqual(folienTripletBefore);
+    expect(kapitelTripletAfter).toEqual(kapitelTripletBefore);
+
+    const { readFileSync } = await import('node:fs');
+    const { fileURLToPath } = await import('node:url');
+    const { dirname, join } = await import('node:path');
+    const styles = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), 'word-cloud.component.scss'),
+      'utf8',
+    );
+    expect(styles).toMatch(/\.word-cloud__word--positioned \{[\s\S]*transition:/);
+    expect(styles).toMatch(
+      /@media \(prefers-reduced-motion: reduce\) \{[\s\S]*\.word-cloud__word--positioned \{[\s\S]*transition: none;/,
+    );
   });
 });

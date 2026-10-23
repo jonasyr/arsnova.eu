@@ -150,6 +150,7 @@ const {
   setPreferredLiveChannelMutateMock,
   setPresenterSurfaceMutateMock,
   setQaWordCloudProjectionMutateMock,
+  setFreetextWordCloudProjectionMutateMock,
   setQaPresenterSortModeMutateMock,
   pauseQuizMutateMock,
   resumeQuizMutateMock,
@@ -217,6 +218,7 @@ const {
   setPreferredLiveChannelMutateMock: vi.fn(),
   setPresenterSurfaceMutateMock: vi.fn(),
   setQaWordCloudProjectionMutateMock: vi.fn(),
+  setFreetextWordCloudProjectionMutateMock: vi.fn(),
   setQaPresenterSortModeMutateMock: vi.fn(),
   pauseQuizMutateMock: vi.fn(),
   resumeQuizMutateMock: vi.fn(),
@@ -284,6 +286,7 @@ vi.mock('../../../core/trpc.client', () => ({
       setPreferredLiveChannel: { mutate: setPreferredLiveChannelMutateMock },
       setPresenterSurface: { mutate: setPresenterSurfaceMutateMock },
       setQaWordCloudProjection: { mutate: setQaWordCloudProjectionMutateMock },
+      setFreetextWordCloudProjection: { mutate: setFreetextWordCloudProjectionMutateMock },
       pauseQuiz: { mutate: pauseQuizMutateMock },
       resumeQuiz: { mutate: resumeQuizMutateMock },
       closeQaChannel: { mutate: closeQaChannelMutateMock },
@@ -1345,13 +1348,13 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
   it('wählt Moderations-Icons passend zu Pin/Unpin und Archiv/Zurück', () => {
     const fixture = setup();
     const component = fixture.componentInstance;
-    expect(component.qaActionIcon('PIN')).toBe('push_pin');
-    expect(component.qaActionIcon('UNPIN')).toBe('undo');
+    expect(component.qaActionIcon('PIN')).toBe('keep');
+    expect(component.qaActionIcon('UNPIN')).toBe('keep_off');
     expect(component.qaActionIcon('ARCHIVE')).toBe('archive');
     expect(component.qaActionIcon('APPROVE', 'PENDING')).toBe('check');
-    expect(component.qaActionIcon('APPROVE', 'ARCHIVED')).toBe('outbox');
-    expect(component.qaActionIcon('DELETE')).toBe('delete_outline');
-    expect(component.qaActionIcon('DELETE', 'DELETED')).toBe('delete');
+    expect(component.qaActionIcon('APPROVE', 'ARCHIVED')).toBe('unarchive');
+    expect(component.qaActionIcon('DELETE')).toBe('delete');
+    expect(component.qaActionIcon('DELETE', 'DELETED')).toBe('delete_forever');
     fixture.destroy();
   });
 
@@ -4503,7 +4506,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
       '[data-testid="qa-summary-total"]',
     ) as HTMLElement | null;
     expect(totalChip).not.toBeNull();
-    expect(totalChip?.querySelector('mat-icon')?.textContent?.trim()).toBe('chat_bubble_outline');
+    expect(totalChip?.querySelector('mat-icon')?.textContent?.trim()).toBe('chat_bubble');
     expect(totalChip?.getAttribute('aria-label')).toMatch(/Gesamt:\s*4/);
     expect(totalChip?.textContent).toMatch(/4/);
     const pendingChip = statusStrip?.querySelector(
@@ -7373,6 +7376,49 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     },
   );
 
+  it('öffnet nach Quiz-FINISHED ohne offenes Q&A den Beenden-Dialog', async () => {
+    getInfoQueryMock.mockResolvedValue({
+      ...defaultSession,
+      status: 'FINISHED',
+      hostEnded: false,
+      channels: {
+        quiz: { enabled: true },
+        qa: { enabled: false, open: false, title: null, moderationMode: false },
+        quickFeedback: { enabled: false, open: false },
+      },
+    });
+    onStatusChangedSubscribeMock.mockImplementation(
+      (_input: unknown, opts: { onData: (data: unknown) => void }) => {
+        opts.onData({ status: 'FINISHED', currentQuestion: null });
+        return { unsubscribe: unsubscribeMock };
+      },
+    );
+
+    const fixture = setup();
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(fixture.componentInstance.isSessionActive()).toBe(false);
+    expect(fixture.componentInstance.keepQaOpenOnHostLeave()).toBe(false);
+    expect(fixture.componentInstance.isLiveHostSurface()).toBe(true);
+
+    dialogOpenMock.mockClear();
+    endMutateMock.mockClear();
+    await fixture.componentInstance.onSessionEndAnchorClick();
+
+    expect(dialogOpenMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        data: expect.objectContaining({
+          title: 'Gesamte Session beenden?',
+          confirmLabel: 'Gesamte Session beenden',
+        }),
+      }),
+    );
+    expect(endMutateMock).toHaveBeenCalledWith({ code: 'ABC123' });
+    fixture.destroy();
+  });
+
   it('blendet den Bonus-Code-Hinweis im Beenden-Dialog aus, wenn noch keine Ergebnisse vorliegen', async () => {
     getInfoQueryMock.mockResolvedValue({
       ...defaultSession,
@@ -7497,10 +7543,63 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     fixture.detectChanges();
 
     const button = fixture.nativeElement.querySelector(
-      '.session-host__qa-deadline button',
+      '[data-testid="qa-settings"]',
     ) as HTMLButtonElement | null;
     expect(button?.textContent).toContain('Q&A-Einstellungen');
     expect(button?.querySelector('mat-icon')?.textContent?.trim()).toBe('tune');
+    fixture.destroy();
+  });
+
+  it('zeigt Q&A-Einstellungen nach Quiz-FINISHED, solange Q&A offen ist', async () => {
+    getLifecycleForHostQueryMock.mockResolvedValue({
+      ...defaultLifecycle,
+      status: 'FINISHED',
+    });
+    getInfoQueryMock.mockResolvedValue({
+      ...defaultSession,
+      status: 'FINISHED',
+      serverNow: '2026-03-24T12:00:00.000Z',
+      expiresAt: '2026-03-25T12:00:00.000Z',
+      qaClosesAt: '2026-03-25T12:00:00.000Z',
+      channels: {
+        quiz: { enabled: true },
+        qa: {
+          enabled: true,
+          open: true,
+          title: 'Fragen',
+          moderationMode: true,
+          state: 'OPEN',
+          closesAt: '2026-03-25T12:00:00.000Z',
+        },
+        quickFeedback: { enabled: false, open: false },
+      },
+    });
+    dialogOpenMock.mockReturnValue({ afterClosed: () => of(null) });
+    const fixture = setup();
+    await fixture.componentInstance.ngOnInit();
+    fixture.componentInstance.sessionLifecycle.set({
+      ...defaultLifecycle,
+      status: 'FINISHED',
+    });
+    fixture.componentInstance.session.update((current) =>
+      current ? { ...current, status: 'FINISHED' } : current,
+    );
+    fixture.componentInstance.activeChannel.set('qa');
+    fixture.componentInstance.postProcessingEnded.set(false);
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.effectiveStatus()).toBe('FINISHED');
+    const button = fixture.nativeElement.querySelector(
+      '[data-testid="qa-settings"]',
+    ) as HTMLButtonElement | null;
+    expect(button?.textContent).toContain('Q&A-Einstellungen');
+
+    dialogOpenMock.mockClear();
+    await fixture.componentInstance.openQaConfigurationDialog();
+    expect(dialogOpenMock).toHaveBeenCalledWith(
+      QaChannelConfigurationDialogComponent,
+      expect.anything(),
+    );
     fixture.destroy();
   });
 
@@ -8137,6 +8236,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
         metric: 'TOP',
         normalization: 'NONE',
       }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     expect(
       fixture.nativeElement.querySelector(
@@ -8528,6 +8628,16 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
       timeout: 5000,
       interval: 25,
     });
+    fixture.detectChanges();
+
+    const stage = fixture.nativeElement.querySelector(
+      '.session-host__word-cloud-stage',
+    ) as HTMLElement | null;
+    const status = stage?.querySelector('.session-host__word-cloud-status') as HTMLElement | null;
+    expect(status).not.toBeNull();
+    expect(status?.classList.contains('session-host__word-cloud-status--cover')).toBe(true);
+    expect(stage?.querySelector('.session-host__word-cloud-progress')).not.toBeNull();
+    expect(stage?.querySelector('app-word-cloud')).not.toBeNull();
 
     component.freetextResponses.set([
       'Lineare Regression im Projekt',
@@ -9285,7 +9395,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
       '.session-host__extra--freetext .session-host__extra-action--smooth',
     ) as HTMLButtonElement | null;
     expect(activeSmoothButton?.getAttribute('aria-pressed')).toBe('true');
-    expect(activeSmoothButton?.textContent).toContain('Glättung ist an');
+    expect(activeSmoothButton?.textContent).toContain('Wort-Glättung ist an');
     expect(component.freetextWordCloudMode()).toBe('PHRASES');
     expect(lemmaAnalyzeCalls()).toHaveLength(1);
     expect(lemmaAnalyzeCalls()[0]).toEqual([
@@ -9432,7 +9542,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     wordCloudAnalyzeQueryMock.mockRejectedValue(new Error('sidecar timeout'));
     await component.setFreetextWordCloudMode('WORDS');
     await vi.waitUntil(
-      () => component.freetextWordCloudSmoothingHint() === 'Glättung fehlgeschlagen',
+      () => component.freetextWordCloudSmoothingHint() === 'Wort-Glättung fehlgeschlagen',
       { timeout: 5000, interval: 25 },
     );
 
@@ -9509,7 +9619,9 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     expect(lemmaAnalyzeCalls()).toHaveLength(1);
     expect(component.freetextWordCloudSmoothingStatus()).toBe('stale');
     expect(component.freetextWordCloudSmoothingLabel()).toBe('Neu analysieren');
-    expect(component.freetextWordCloudSmoothingHint()).toBe('Neue Antworten seit letzter Glättung');
+    expect(component.freetextWordCloudSmoothingHint()).toBe(
+      'Neue Antworten seit letzter Wort-Glättung',
+    );
     expect(component.displayedFreetextAnalysisEntries()).toMatchObject([{ label: 'Regression' }]);
 
     await component.toggleFreetextWordCloudSmoothing();
@@ -9766,7 +9878,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     const component = fixture.componentInstance;
     await component.toggleFreetextWordCloudSmoothing();
     await vi.waitUntil(
-      () => component.freetextWordCloudSmoothingHint() === 'Glättung fehlgeschlagen',
+      () => component.freetextWordCloudSmoothingHint() === 'Wort-Glättung fehlgeschlagen',
       { timeout: 5000, interval: 25 },
     );
 
@@ -11643,7 +11755,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     fixture.detectChanges();
 
     expect(component.qaSortMode()).toBe('TOP');
-    expect(component.qaMobileMoreAriaLabel()).toContain('Meist unterstützt');
+    expect(component.qaMobileMoreAriaLabel()).toContain('Stimmensaldo');
     expect(document.activeElement).toBe(moreButton);
     fixture.destroy();
   });
@@ -12649,7 +12761,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     expect(component.qaWordCloudQuestionWeight(component.qaQuestions()[0]!)).toBe(27);
     expect(component.qaWordCloudTitle()).toBe('Q&A-Wortwolke');
     expect(component.qaWordCloudInfo()).toBe('1 sichtbare Frage');
-    expect(text).toContain('Umstritten');
+    expect(text).toContain('Kontroverse');
     expect(text).toContain('Zeit');
     expect(text).not.toContain('8 positiv · 8 negativ');
     const voteStats = fixture.nativeElement.querySelectorAll('.session-qa-card__vote-stat');
@@ -12836,7 +12948,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
       expect(data.sortMode()).toBe('CONTROVERSIAL');
       expect(data.title()).toBe('Q&A-Wortwolke');
       expect(data.tooltipMetricLabel()).toBe('Kontroverse');
-      expect(data.weightingHint()).toContain('gegensätzlichen Reaktionen');
+      expect(data.weightingHint()).toContain('hoher Kontroverse');
     } finally {
       if (previousDescriptor) {
         Object.defineProperty(documentRef.documentElement, 'requestFullscreen', previousDescriptor);
@@ -13067,6 +13179,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
         sessionCode: 'ABC123',
         mode: 'THEME',
       }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     expect(fixture.componentInstance.qaWordCloudAnalysisEntries()).toMatchObject([
       {
@@ -13228,6 +13341,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     );
     expect(wordCloudAnalyzeQueryMock).toHaveBeenCalledWith(
       expect.objectContaining({ mode: 'THEME', locale: 'fr', normalization: 'NONE' }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
 
     await vi.waitUntil(() => fixture.componentInstance.qaWordCloudSmoothingStatus() === 'active', {
@@ -13329,16 +13443,19 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    expect(wordCloudAnalyzeQueryMock).toHaveBeenCalledWith({
-      sessionCode: 'ABC123',
-      mode: 'THEME',
-      locale: fixture.componentInstance.qaWordCloudAnalysisLocale(),
-      metric: 'BEST',
-      filter: 'ALL_ELIGIBLE',
-      normalization: 'NONE',
-      maxEntries: 40,
-      limit: 100,
-    });
+    expect(wordCloudAnalyzeQueryMock).toHaveBeenCalledWith(
+      {
+        sessionCode: 'ABC123',
+        mode: 'THEME',
+        locale: fixture.componentInstance.qaWordCloudAnalysisLocale(),
+        metric: 'BEST',
+        filter: 'ALL_ELIGIBLE',
+        normalization: 'NONE',
+        maxEntries: 40,
+        limit: 100,
+      },
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
     expect(fixture.componentInstance.qaWordCloudThemeFallbackHint()).toBeNull();
     expect(fixture.componentInstance.qaWordCloudAnalysisEntries()).toMatchObject([
       {
@@ -14021,9 +14138,9 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
   }
 
   function lemmaAnalyzeCalls(): unknown[] {
-    return wordCloudAnalyzeQueryMock.mock.calls.filter(
-      (call) => (call[0] as { normalization?: string }).normalization === 'LEMMA',
-    );
+    return wordCloudAnalyzeQueryMock.mock.calls
+      .filter((call) => (call[0] as { normalization?: string }).normalization === 'LEMMA')
+      .map((call) => [call[0]]);
   }
 
   it('startet Sprachformen-Glaettung beim Oeffnen als LEXICAL+LEMMA', async () => {
@@ -14138,6 +14255,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
         mode: 'THEME',
         normalization: 'NONE',
       }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
 
     expect(fixture.componentInstance.qaWordCloudEffectiveAnalysisVariant()).toBe('THEME');
@@ -14156,7 +14274,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     expect(
       (lemmaAnalyzeCalls()[0] as [{ maxNgramLength?: number }])[0]?.maxNgramLength,
     ).toBeUndefined();
-    expect(fixture.componentInstance.qaWordCloudSmoothingLabel()).toBe('Glättung ist an');
+    expect(fixture.componentInstance.qaWordCloudSmoothingLabel()).toBe('Wort-Glättung ist an');
     expect(fixture.componentInstance.qaWordCloudVisibleTerms()).toBeNull();
     expect(fixture.componentInstance.qaWordCloudAnalysisEntries()).toMatchObject([
       { label: 'Kapitel 4' },
@@ -14272,7 +14390,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
 
     expect(fixture.componentInstance.qaWordCloudLemmaSnapshotVisible()).toBe(true);
     expect(fixture.componentInstance.qaWordCloudSmoothingStatus()).toBe('active');
-    expect(fixture.componentInstance.qaWordCloudSmoothingLabel()).toBe('Glättung ist an');
+    expect(fixture.componentInstance.qaWordCloudSmoothingLabel()).toBe('Wort-Glättung ist an');
     expect(
       fixture.componentInstance.qaWordCloudAnalysisEntries()?.map((entry) => entry.label),
     ).toEqual(['Klausur']);
@@ -14525,6 +14643,11 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     expect(
       fixture.componentInstance.qaWordCloudAnalysisEntries()?.map((entry) => entry.label),
     ).toEqual(['Kapitel 4', 'Klausur']);
+    const [, dialogConfig] = dialogOpenMock.mock.calls.at(-1) as [
+      unknown,
+      { data: { hasPreparedThemes?: () => boolean } },
+    ];
+    expect(dialogConfig.data.hasPreparedThemes?.()).toBe(false);
 
     releaseSemantic?.(undefined);
     await vi.waitUntil(
@@ -14643,7 +14766,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
       }),
     ]);
     expect(fixture.componentInstance.qaWordCloudSmoothingStatus()).toBe('active');
-    expect(fixture.componentInstance.qaWordCloudSmoothingLabel()).toBe('Glättung ist an');
+    expect(fixture.componentInstance.qaWordCloudSmoothingLabel()).toBe('Wort-Glättung ist an');
     expect(fixture.componentInstance.qaWordCloudAnalysisEntries()).toMatchObject([
       { label: 'Prüfung' },
     ]);
@@ -14873,7 +14996,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
 
     await fixture.componentInstance.setQaSortMode('CONTROVERSIAL');
     await vi.waitUntil(
-      () => fixture.componentInstance.qaWordCloudSmoothingHint() === 'Glättung fehlgeschlagen',
+      () => fixture.componentInstance.qaWordCloudSmoothingHint() === 'Wort-Glättung fehlgeschlagen',
       { timeout: 5000, interval: 25 },
     );
 
@@ -15114,7 +15237,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     expect(fixture.componentInstance.qaWordCloudSmoothingStatus()).toBe('stale');
     expect(fixture.componentInstance.qaWordCloudSmoothingLabel()).toBe('Neu analysieren');
     expect(fixture.componentInstance.qaWordCloudSmoothingHint()).toBe(
-      'Neue Fragen seit letzter Glättung',
+      'Neue Fragen seit letzter Wort-Glättung',
     );
     expect(fixture.componentInstance.qaWordCloudAnalysisEntries()).toEqual(
       expect.arrayContaining([expect.objectContaining({ label: 'Klausur' })]),
@@ -15219,7 +15342,8 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     dialogOpenMock.mockReturnValueOnce({ afterClosed: () => NEVER });
     await fixture.componentInstance.openQaWordCloudDialog();
     await vi.waitUntil(
-      () => fixture.componentInstance.qaWordCloudSmoothingHint() === 'Glättung nicht verfügbar',
+      () =>
+        fixture.componentInstance.qaWordCloudSmoothingHint() === 'Wort-Glättung nicht verfügbar',
       { timeout: 5000, interval: 25 },
     );
     await vi.waitUntil(
@@ -15314,7 +15438,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     dialogOpenMock.mockReturnValueOnce({ afterClosed: () => NEVER });
     await fixture.componentInstance.openQaWordCloudDialog();
     await vi.waitUntil(
-      () => fixture.componentInstance.qaWordCloudSmoothingHint() === 'Glättung fehlgeschlagen',
+      () => fixture.componentInstance.qaWordCloudSmoothingHint() === 'Wort-Glättung fehlgeschlagen',
       { timeout: 5000, interval: 25 },
     );
 
@@ -17243,6 +17367,75 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     fixture.detectChanges();
     expect(component.qaPresenterHeroQuestionId()).toBe('arch-2');
     expect(component.projectionQaNavDisplayIndex()).toBe(1);
+    fixture.destroy();
+  });
+
+  it('schaltet den Fragen-Navigator nach Session-Ende weiter, auch ohne Bühnen-Snapshot', async () => {
+    const questions = [
+      {
+        id: 'active-1',
+        text: 'Erste',
+        upvoteCount: 2,
+        status: 'ACTIVE' as const,
+        createdAt: '2026-03-13T12:00:00.000Z',
+        myVote: null,
+        isOwn: false,
+        hasUpvoted: false,
+      },
+      {
+        id: 'active-2',
+        text: 'Zweite',
+        upvoteCount: 1,
+        status: 'ACTIVE' as const,
+        createdAt: '2026-03-13T12:01:00.000Z',
+        myVote: null,
+        isOwn: false,
+        hasUpvoted: false,
+      },
+    ];
+    const fixture = setup();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const component = fixture.componentInstance;
+    component.session.set({
+      ...defaultSession,
+      status: 'FINISHED',
+      preferredChannel: 'qa',
+      presenterSurface: 'default',
+      presenterPage: { context: 'qa-questions', index: 0, count: 1 },
+      channels: {
+        quiz: { enabled: true },
+        qa: { enabled: true, open: false, title: 'Fragen', moderationMode: false },
+        quickFeedback: { enabled: false, open: false },
+      },
+    });
+    qaListQueryMock.mockResolvedValue(qaHostSnapshot(questions as QaQuestionDTO[]));
+    qaPresentProjectionQueryMock.mockResolvedValue({
+      questions: [],
+      state: 'SESSION_ENDED',
+    });
+    component.activeChannel.set('qa');
+    component.qaQuestions.set(questions as never);
+    (
+      component as SessionHostComponent & {
+        qaPresenterStageOrderedQuestions: { set: (value: QaQuestionDTO[] | null) => void };
+      }
+    ).qaPresenterStageOrderedQuestions.set([]);
+    fixture.detectChanges();
+
+    expect(component.projectionPageDisplayCount()).toBe(2);
+    expect(component.projectionQaNavDisplayIndex()).toBe(0);
+    expect(fixture.nativeElement.textContent).toContain('1 / 2');
+
+    setPresenterSurfaceMutateMock.mockClear();
+    await component.changeProjectionPage(1);
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(component.projectionQaNavDisplayIndex()).toBe(1);
+    expect(component.qaPresenterHeroQuestionId()).toBe('active-2');
+    expect(fixture.nativeElement.textContent).toContain('2 / 2');
+    expect(setPresenterSurfaceMutateMock).not.toHaveBeenCalled();
     fixture.destroy();
   });
 
@@ -22446,9 +22639,16 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
       0,
     );
     expect(buttonTexts).toEqual(['Session beenden', 'Weitere Aktionen']);
+    // Die Stopp-Aktion hängt an quickFeedbackResult; unter Coverage kann der Host-Abruf
+    // nach dem Kanalwechsel etwas länger brauchen als ein festes flush.
+    await vi.waitFor(() => {
+      expect(fixture.componentInstance.quickFeedbackResult()).not.toBeNull();
+    });
+    fixture.detectChanges();
     const roundControl = fixture.nativeElement.querySelector(
       '[data-testid="feedback-primary-round-control"]',
     ) as HTMLButtonElement;
+    expect(roundControl).not.toBeNull();
     expect(roundControl.textContent).toContain('Stopp');
     expect(roundControl.closest('app-feedback-host')).not.toBeNull();
     roundControl.click();
@@ -23085,6 +23285,32 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     fixture.destroy();
   });
 
+  it('lädt die Rangliste nach Session-Ende nur einmal', async () => {
+    getInfoQueryMock.mockResolvedValue({
+      ...defaultSession,
+      status: 'FINISHED',
+    });
+    onStatusChangedSubscribeMock.mockImplementation(
+      (_input: unknown, opts: { onData: (d: unknown) => void }) => {
+        opts.onData({ status: 'FINISHED', currentQuestion: null });
+        return { unsubscribe: unsubscribeMock };
+      },
+    );
+    getLeaderboardQueryMock.mockResolvedValue([]);
+    getTeamLeaderboardQueryMock.mockResolvedValue([]);
+
+    const fixture = setup();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    await flushComponentAfterStable(fixture, 50);
+    const afterStart = getLeaderboardQueryMock.mock.calls.length;
+    expect(afterStart).toBeGreaterThan(0);
+    expect(afterStart).toBeLessThan(5);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(getLeaderboardQueryMock.mock.calls.length).toBe(afterStart);
+    fixture.destroy();
+  });
+
   it('zeigt Team-Leaderboard bei Teammodus im Abschlussstatus', async () => {
     getInfoQueryMock.mockResolvedValue({
       ...defaultSession,
@@ -23380,7 +23606,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
       finished!.compareDocumentPosition(summary!) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(finished?.querySelectorAll('.mat-mdc-unelevated-button')).toHaveLength(1);
-    let resolveExport!: (result: 'pdf-download') => void;
+    let resolveExport!: (result: 'pdf-download' | 'pdf-view') => void;
     const exportPlan = vi
       .spyOn(TestBed.inject(SessionResultsExportService), 'exportPdfFromSessionCode')
       .mockImplementationOnce(
@@ -23413,7 +23639,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     fixture.detectChanges();
     expect(exportPlan).toHaveBeenCalledWith(
       'ABC123',
-      expect.objectContaining({ profile: 'visual' }),
+      expect.objectContaining({ profile: 'visual', disposition: 'view' }),
     );
     expect(planButton.getAttribute('aria-busy')).toBe('true');
     expect(planButton.getAttribute('aria-disabled')).toBe('true');
@@ -23423,7 +23649,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     );
     planButton.click();
     expect(exportPlan).toHaveBeenCalledTimes(1);
-    resolveExport('pdf-download');
+    resolveExport('pdf-view');
     await vi.waitUntil(() => !fixture.componentInstance.exportExporting(), {
       timeout: 1000,
       interval: 10,
@@ -23431,7 +23657,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     fixture.detectChanges();
     expect(document.activeElement).toBe(planButton);
     expect(planButton.getAttribute('aria-disabled')).not.toBe('true');
-    expect(fixture.componentInstance.exportStatus()).toBe('Ergebnis-PDF heruntergeladen.');
+    expect(fixture.componentInstance.exportStatus()).toBe('Nachbesprechungsplan geöffnet.');
     const exportTrigger = host.querySelector<HTMLButtonElement>('.session-host__export-more-btn');
     expect(exportTrigger?.textContent).toContain('Exportieren');
     exportTrigger!.focus();
@@ -23456,7 +23682,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
     fixture.detectChanges();
     expect(exportPlan).toHaveBeenLastCalledWith(
       'ABC123',
-      expect.objectContaining({ profile: 'pdfUa' }),
+      expect.objectContaining({ profile: 'pdfUa', disposition: 'download' }),
     );
     expect(exportTrigger!.disabled).toBe(false);
     expect(exportTrigger!.getAttribute('aria-disabled')).toBe('true');
@@ -26174,6 +26400,38 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
       fixture.destroy();
     });
 
+    it('blendet den Kompass in der Quiz-Gesamtauswertung aus und zeigt ihn in einem anderen Kanal', async () => {
+      getInfoQueryMock.mockResolvedValue({
+        ...defaultSession,
+        status: 'FINISHED',
+        channels: {
+          quiz: { enabled: true },
+          qa: { enabled: true, open: true, title: 'Fragen', moderationMode: true },
+          quickFeedback: { enabled: false, open: false },
+        },
+      });
+
+      const fixture = setup();
+      fixture.detectChanges();
+      await fixture.whenStable();
+      await flushComponentAfterStable(fixture, 50);
+      const component = fixture.componentInstance;
+      component.activeChannel.set('quiz');
+      fixture.detectChanges();
+
+      expect(
+        fixture.nativeElement.querySelector('[data-testid="host-moderation-compass"]'),
+      ).toBeNull();
+
+      component.activeChannel.set('qa');
+      fixture.detectChanges();
+
+      expect(
+        fixture.nativeElement.querySelector('[data-testid="host-moderation-compass"]'),
+      ).not.toBeNull();
+      fixture.destroy();
+    });
+
     it('blendet den Kompass im reinen Blitzlicht aus und zeigt ihn neben einem anderen Kanal', async () => {
       getInfoQueryMock.mockResolvedValue({
         ...defaultSession,
@@ -26456,7 +26714,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
             {
               kind: 'full-context',
               requestContract: 'qa-summary-context-v2',
-              outputContract: 'qa-summary-model-output-v2',
+              outputContract: 'qa-summary-model-output-v3',
               promptContextContract: 'moderation-prompt-context-v1',
               definitionVersion: 'moderation-prompt-definitions-v1',
             },
@@ -26676,7 +26934,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
         },
       };
 
-      await expect(component.followModerationCompassSource(source)).resolves.toBeUndefined();
+      await expect(component.followModerationCompassSource(source)).resolves.toBe(false);
 
       expect(component.hostSteeringCallout()?.retry).toEqual(expect.any(Function));
       expect(component.skipCurrentResultQuestionOnNext()).toBe(false);
@@ -27065,6 +27323,127 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
       fixture.destroy();
     });
 
+    it('lässt eine aktive Presenter-Fläche beim Wortwolken-Sprung unverändert', async () => {
+      getInfoQueryMock.mockResolvedValue({
+        ...defaultSession,
+        status: 'ACTIVE',
+        presenterSurface: 'freetextWordCloud',
+        preferredChannel: 'quiz',
+        channels: {
+          quiz: { enabled: true },
+          qa: { enabled: true, open: true, title: 'Fragen', moderationMode: true },
+          quickFeedback: { enabled: false, open: false },
+        },
+      });
+      const closed$ = new Subject<unknown>();
+      dialogOpenMock.mockReturnValue({
+        afterClosed: () => closed$.asObservable(),
+        beforeClosed: () => of(undefined),
+        close: (result?: unknown) => closed$.next(result),
+      });
+
+      const fixture = setup();
+      fixture.detectChanges();
+      await fixture.whenStable();
+      await flushComponentAfterStable(fixture, 50);
+      const component = fixture.componentInstance;
+      component.activeChannel.set('quiz');
+      setPreferredLiveChannelMutateMock.mockClear();
+      setPresenterSurfaceMutateMock.mockClear();
+
+      await component.followModerationCompassSource({
+        kind: 'qa-term',
+        label: 'Übung · Grenzen von ChatGPT in der Übung',
+        target: {
+          channel: 'qa',
+          surface: 'word-cloud',
+          termLabel: 'Übung',
+        },
+      });
+
+      expect(component.activeChannel()).toBe('qa');
+      expect(setPreferredLiveChannelMutateMock).not.toHaveBeenCalled();
+      expect(setPresenterSurfaceMutateMock).not.toHaveBeenCalled();
+      expect(component.session()?.presenterSurface).toBe('freetextWordCloud');
+
+      closed$.next(undefined);
+      await fixture.whenStable();
+      expect(setPresenterSurfaceMutateMock).not.toHaveBeenCalled();
+      expect(setPreferredLiveChannelMutateMock).not.toHaveBeenCalled();
+
+      await component.returnToModerationCompass();
+      expect(component.activeChannel()).toBe('quiz');
+      expect(setPreferredLiveChannelMutateMock).not.toHaveBeenCalled();
+      expect(setPresenterSurfaceMutateMock).not.toHaveBeenCalled();
+      expect(component.session()?.presenterSurface).toBe('freetextWordCloud');
+      fixture.destroy();
+    });
+
+    it('nutzt den nachgeladenen Bestand für Themen jenseits der Listenseite', async () => {
+      getInfoQueryMock.mockResolvedValue({
+        ...defaultSession,
+        status: 'ACTIVE',
+        channels: {
+          quiz: { enabled: true },
+          qa: { enabled: true, open: true, title: 'Fragen', moderationMode: true },
+          quickFeedback: { enabled: false, open: false },
+        },
+      });
+      const pageQuestion = {
+        id: '11111111-1111-4111-8111-111111111111',
+        text: 'Unverwandte Einzelfrage',
+        upvoteCount: 1,
+        status: 'ACTIVE' as const,
+        createdAt: '2026-03-13T12:00:00.000Z',
+        myVote: null,
+        isOwn: false,
+        hasUpvoted: false,
+      };
+      const inventoryQuestions = [
+        pageQuestion,
+        {
+          id: '22222222-2222-4222-8222-222222222222',
+          text: 'Wie berechnet man den Median?',
+          upvoteCount: 2,
+          status: 'ACTIVE' as const,
+          createdAt: '2026-03-13T12:01:00.000Z',
+          myVote: null,
+          isOwn: false,
+          hasUpvoted: false,
+        },
+        {
+          id: '33333333-3333-4333-8333-333333333333',
+          text: 'Median noch einmal erklären',
+          upvoteCount: 2,
+          status: 'ACTIVE' as const,
+          createdAt: '2026-03-13T12:02:00.000Z',
+          myVote: null,
+          isOwn: false,
+          hasUpvoted: false,
+        },
+      ];
+      qaListQueryMock.mockResolvedValue(qaHostSnapshot(inventoryQuestions));
+
+      const fixture = setup();
+      fixture.detectChanges();
+      await fixture.whenStable();
+      await flushComponentAfterStable(fixture, 50);
+      const component = fixture.componentInstance;
+      component.qaQuestions.set([pageQuestion]);
+      component.qaListTotalCount.set(3);
+      fixture.detectChanges();
+
+      await vi.waitUntil(
+        () =>
+          component
+            .moderationCompassCards()
+            .find((card) => card.kind === 'topics')
+            ?.sources.some((source) => source.label.includes('Median')) === true,
+        { timeout: 5000, interval: 25 },
+      );
+      fixture.destroy();
+    });
+
     it('zeigt Kompass-Beispiele nach dem Schliessen der Q&A-Wortwolke oben in der Liste', async () => {
       getInfoQueryMock.mockResolvedValue({
         ...defaultSession,
@@ -27355,7 +27734,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
       fixture.destroy();
     });
 
-    it('nimmt angepinnte Fragen in die Themenkarte und lässt Archiv weg', async () => {
+    it('lässt angepinnte Fragen aus der Themenkarte und Archiv aus der Reibung', async () => {
       const fixture = setup();
       fixture.detectChanges();
       await fixture.whenStable();
@@ -27393,7 +27772,7 @@ describe('SessionHostComponent', { timeout: 60_000 }, () => {
       const topics = component.moderationCompassCards().find((card) => card.kind === 'topics');
       expect(
         topics?.sources.some((source) => source.label.includes('Bitte Kapitel 4 erklären')),
-      ).toBe(true);
+      ).toBeFalsy();
       expect(
         component
           .moderationCompassCards()

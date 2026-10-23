@@ -1,6 +1,6 @@
 # Einstieg: Werkzeuge und Technologien (für Studierende ohne Vorerfahrung)
 
-**Stand:** 2026-08-16
+**Stand:** 2026-10-18
 
 **Zielgruppe:** Du kannst **grundlegend programmieren** (z. B. Variablen, Schleifen, Funktionen in einer Hochschulsprache), kennst aber **noch nicht** die **Entwicklungswerkzeuge** und **Projekttechnologien** von arsnova.eu.
 
@@ -25,7 +25,7 @@ Welche **weiteren** Dokumente für deine Veranstaltung Pflicht sind, sagt dir di
 
 **Zum Veranstaltungsstart:** Die Lehrperson ergänzt den Einstieg durch eine **Greenfield-Demo** zu **Story 1.7a**. Das hilft beim Überblick über Repo, Werkzeuge und Arbeitsweise, ersetzt aber **nicht** das praktische Setup.
 
-**Wenn du nur den ersten lauffähigen Stand brauchst:** `cp .env.example .env` → `npm ci` → `npm run setup:dev` → `npm run dev` → Browser auf **`http://localhost:4200`**. Das ist für Einsteiger der einfachste Start. **Gefüllte Session** (Freitext + Q&A, ~500 Einträge): auf macOS `npm run spacy:macos-dev`, sonst die Seeds in [`docs/onboarding.md`](../onboarding.md#volle-lokale-session-mit-hoher-befüllung).
+**Wenn du nur den ersten lauffähigen Stand brauchst:** `cp .env.example .env` → `npm ci` → `npm run setup:dev` → `npm run dev` → Browser auf **`http://localhost:4200`**. Das ist für Einsteiger der einfachste Start. Die lokale Text-KI ist **kein** Pflichtschritt; ohne Modell, Download oder SSH-Schlüssel läuft die App trotzdem. **Gefüllte Session** (Freitext + Q&A, ~500 Einträge): auf macOS `npm run spacy:macos-dev`, sonst die Seeds in [`docs/onboarding.md`](../onboarding.md#volle-lokale-session-mit-hoher-befüllung). **Optionale Text-KI** (Qwen3-4B in Docker): [`docs/onboarding.md`](../onboarding.md#optional-lokale-text-ki-qwen3-4b).
 
 **Wenn du Windows nutzt:** Für dieses Repo bitte direkt **WSL2 mit Ubuntu** verwenden. Klone das Repo in WSL (z. B. `~/projects/arsnova.eu`) und führe die Befehle dort aus. **Nicht** PowerShell, **nicht** Git Bash und möglichst **nicht** unter `/mnt/c/...` arbeiten.
 
@@ -55,8 +55,8 @@ Welche **weiteren** Dokumente für deine Veranstaltung Pflicht sind, sagt dir di
 
 ### Docker (nur Grundlagen)
 
-- **Was:** Läuft **PostgreSQL** und **Redis** lokal in Containern, ohne sie „von Hand“ zu installieren.
-- **Im Projekt:** `docker compose up -d postgres redis` (siehe `onboarding.md`).
+- **Was:** Läuft **PostgreSQL** und **Redis** lokal in Containern, ohne sie „von Hand“ zu installieren. Optional startest du darüber auch spaCy oder die lokale Text-KI.
+- **Im Projekt:** `docker compose up -d postgres redis` (siehe `onboarding.md`). Die Text-KI ist **kein** Pflichtstart; wer lokal mit Qwen3-4B experimentieren will, folgt [onboarding.md § Text-KI](../onboarding.md#optional-lokale-text-ki-qwen3-4b).
 - **Einstieg:** Du musst Docker nicht programmieren — nur installieren und den Befehl aus der Anleitung ausführen. [Docker — Get Started](https://docs.docker.com/get-started/) (Englisch).
 
 ### Windows + WSL2 (für dieses Repo der Standardweg)
@@ -69,7 +69,7 @@ Welche **weiteren** Dokumente für deine Veranstaltung Pflicht sind, sagt dir di
 ### Node.js und npm
 
 - **Was:** Node.js führt JavaScript/TypeScript-Werkzeuge aus; npm installiert Abhängigkeiten und startet Skripte.
-- **Im Projekt:** Für den Einstieg **Node 24.18.0 LTS** aus `.nvmrc` nutzen; **Node 22.22.1+ LTS** bleibt unterstützt. Die CI baut mit Node 22 und 24; `package.json` beschreibt die vollständige Engine-Regel.
+- **Im Projekt:** Für den Einstieg **Node 24.18.0 LTS** aus `.nvmrc` nutzen; **Node 22.22.3+ LTS** bleibt unterstützt. Die CI baut mit Node 22 und 24; `package.json` beschreibt die vollständige Engine-Regel.
 - **Merksatz:** Wenn `npm run dev` sofort scheitert, zuerst `node -v` prüfen.
 
 ---
@@ -81,7 +81,7 @@ Welche **weiteren** Dokumente für deine Veranstaltung Pflicht sind, sagt dir di
 | **TypeScript**                | Hauptsprache für Backend und Frontend; **Typen** helfen, Fehler früh zu finden.                                                     | [TypeScript Handbook](https://www.typescriptlang.org/docs/handbook/intro.html) (Englisch), Kapitel „The Basics“.                                              |
 | **Node.js / npm**             | Laufzeit und Werkzeugkette; **npm** installiert Bibliotheken und startet Scripts (`npm run dev`).                                   | Im Repo: `.nvmrc`, Root-`package.json`, [`docs/onboarding.md`](../onboarding.md) Abschnitt „Voraussetzungen“.                                                 |
 | **npm Workspaces / Monorepo** | Mehrere Pakete (**backend**, **frontend**, **shared-types**) in **einem** Repo.                                                     | [`docs/onboarding.md`](../onboarding.md) Abschnitt „Projektstruktur“.                                                                                         |
-| **Angular 21.2.x**            | **Frontend**-Framework: Standalone Components, Routing, Signals und UI mit **Angular Material 3**.                                  | [angular.dev — Tutorials](https://angular.dev/tutorials) (Englisch); im Kurs reicht zuerst: Dateien unter `apps/frontend/src/app/features/` finden und lesen. |
+| **Angular 22.2.x**            | **Frontend**-Framework: Standalone Components, Routing, Signals und UI mit **Angular Material 3**.                                  | [angular.dev — Tutorials](https://angular.dev/tutorials) (Englisch); im Kurs reicht zuerst: Dateien unter `apps/frontend/src/app/features/` finden und lesen. |
 | **tRPC v11**                  | **API** zwischen Browser und Server: typisierte Prozeduren und WebSocket-Subscriptions statt klassischer REST-Endpunkte.            | [tRPC — Einführung](https://trpc.io/docs) (Englisch); im Repo: `apps/backend/src/routers/`, Client in `trpc.client.ts`.                                       |
 | **Zod v4**                    | **Validierung** und Typen für API-Eingaben/-Ausgaben in `libs/shared-types`; Schemas werden an tRPC-Inputs/-Outputs gebunden.       | [Zod](https://zod.dev) (Englisch); Regel im Projekt: Schemas **zuerst** in shared-types.                                                                      |
 | **Prisma 7.4.x**              | **Datenbankzugriff** und Schema in `prisma/schema.prisma` (Tabellen, Beziehungen).                                                  | [Prisma — Getting Started](https://www.prisma.io/docs/getting-started) (Englisch); lokal: `npm run prisma:migrate`, `npm run prisma:generate`.                |

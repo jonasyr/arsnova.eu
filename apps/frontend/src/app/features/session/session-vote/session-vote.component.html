@@ -157,7 +157,7 @@
         aria-labelledby="bonus-gate-bonus-heading"
       >
         <h2 class="vote-bonus-card__title" id="bonus-gate-bonus-heading">
-          <mat-icon aria-hidden="true">emoji_events</mat-icon>
+          <mat-icon aria-hidden="true">trophy</mat-icon>
           <span>{{ vpc.voteBonusTitle(isPlayfulPreset()) }}</span>
         </h2>
         <p class="vote-bonus-card__code">{{ gateToken }}</p>
@@ -181,7 +181,7 @@
         [class.vote-feedback-card--serious]="!isPlayfulPreset()"
       >
         <h2 class="vote-feedback-card__title" id="session-end-feedback-heading">
-          <mat-icon class="vote-feedback-card__title-icon" aria-hidden="true">feedback</mat-icon>
+          <mat-icon class="vote-feedback-card__title-icon" aria-hidden="true">rate_review</mat-icon>
           <span class="vote-feedback-card__title-text">{{
             vpc.voteFeedbackTitle(isPlayfulPreset())
           }}</span>
@@ -641,7 +641,7 @@
         </div>
       } @else if (isActive() && isStandaloneQaSession()) {
         <div class="vote-lobby vote-lobby--active">
-          <mat-icon class="vote-lobby__icon" aria-hidden="true">chat_bubble_outline</mat-icon>
+          <mat-icon class="vote-lobby__icon" aria-hidden="true">chat_bubble</mat-icon>
           <p class="vote-lobby__text">{{ vpc.voteQaActiveTitle(isPlayfulPreset()) }}</p>
           <p class="vote-lobby__hint">{{ vpc.voteQaActiveHint(isPlayfulPreset()) }}</p>
         </div>
@@ -974,7 +974,7 @@
           @if (bonusToken(); as token) {
             <section class="vote-bonus-card" aria-labelledby="bonus-heading">
               <h2 class="vote-bonus-card__title" id="bonus-heading">
-                <mat-icon aria-hidden="true">emoji_events</mat-icon>
+                <mat-icon aria-hidden="true">trophy</mat-icon>
                 <span>{{ vpc.voteBonusTitle(isPlayfulPreset()) }}</span>
               </h2>
               <p class="vote-bonus-card__code">{{ token }}</p>
@@ -992,7 +992,7 @@
             >
               <h2 class="vote-feedback-card__title" id="feedback-heading">
                 <mat-icon class="vote-feedback-card__title-icon" aria-hidden="true"
-                  >feedback</mat-icon
+                  >rate_review</mat-icon
                 >
                 <span class="vote-feedback-card__title-text">{{
                   vpc.voteFeedbackTitle(isPlayfulPreset())
@@ -2588,13 +2588,54 @@
       >
         <div class="session-channel-card__header">
           <span class="session-channel-card__header-lead-icon" aria-hidden="true">
-            <mat-icon>chat_bubble_outline</mat-icon>
+            <mat-icon>chat_bubble</mat-icon>
           </span>
           <div class="session-channel-card__header-main">
             <p class="session-channel-card__eyebrow" i18n="@@sessionTabs.forumEyebrow">Forum</p>
-            <h2 class="session-channel-card__title" id="vote-qa-heading">{{ qaHeading() }}</h2>
+            <h2 class="session-channel-card__title" id="vote-qa-heading" tabindex="-1">
+              {{ qaHeading() }}
+            </h2>
           </div>
+          @if (qaForumAssignments().length > 0) {
+            <button
+              mat-stroked-button
+              type="button"
+              class="session-vote__qa-assignment-toggle"
+              data-testid="vote-qa-assignment-toggle"
+              [attr.aria-expanded]="qaAssignmentExpanded()"
+              aria-controls="vote-qa-assignment-panel"
+              (click)="toggleQaAssignmentExpanded()"
+            >
+              <mat-icon aria-hidden="true">campaign</mat-icon>
+              <span i18n="@@sessionVote.qaAssignmentButton">Auftrag</span>
+            </button>
+          }
         </div>
+
+        @if (qaForumAssignments().length > 0 && qaAssignmentExpanded()) {
+          <section
+            id="vote-qa-assignment-panel"
+            class="session-vote__qa-assignment-panel"
+            data-testid="vote-qa-assignment-panel"
+            aria-labelledby="vote-qa-assignment-heading"
+          >
+            <h3
+              id="vote-qa-assignment-heading"
+              class="session-vote__qa-assignment-title"
+              i18n="@@sessionVote.qaAssignmentHeading"
+            >
+              Dein Auftrag in diesem Forum
+            </h3>
+            <ul class="session-vote__qa-assignment-list">
+              @for (assignment of qaForumAssignments(); track $index) {
+                <li
+                  class="session-vote__qa-assignment-text markdown-body"
+                  [innerHTML]="renderQaAssignmentMarkdown(assignment)"
+                ></li>
+              }
+            </ul>
+          </section>
+        }
 
         @if (qaDeadlineAbsoluteLabel(); as absoluteDeadline) {
           <div
@@ -2757,93 +2798,98 @@
           }
         }
         @if (isQaChannelOpen()) {
-          <details class="session-qa-tools" (toggle)="onQaToolsToggle($any($event.currentTarget))">
-            <summary id="qa-tools-summary" i18n="@@participantQa.findSort">
-              Fragen finden &amp; sortieren
-            </summary>
-            <div class="session-qa-search-row">
-              <mat-form-field
-                class="session-qa-search"
-                appearance="outline"
-                subscriptSizing="dynamic"
-              >
-                <mat-label i18n="@@sessionQa.searchLabel">Fragen durchsuchen</mat-label>
-                <input
-                  matInput
-                  type="search"
-                  maxlength="100"
-                  [value]="qaSearchDraft()"
-                  (input)="onQaSearchInput($any($event.target).value)"
-                  i18n-aria-label="@@sessionQa.searchAria"
-                  aria-label="Q&A-Fragen durchsuchen"
-                />
-              </mat-form-field>
-              @if (qaSearchDraft()) {
-                <button
-                  mat-icon-button
-                  type="button"
-                  (click)="clearQaSearch()"
-                  i18n-aria-label="@@sessionQa.searchClearAria"
-                  aria-label="Q&A-Suche leeren"
-                >
-                  <mat-icon>close</mat-icon>
-                </button>
-              }
-            </div>
-
-            <mat-button-toggle-group
-              class="session-qa-sort-toggle"
-              [value]="qaSortMode()"
-              (valueChange)="setQaSortMode($any($event))"
-              hideSingleSelectionIndicator
-              aria-label="Q&A-Sortierung"
-              i18n-aria-label="@@sessionQa.sortAria"
+          @if (showQaFindSortTools()) {
+            <details
+              class="session-qa-tools"
+              (toggle)="onQaToolsToggle($any($event.currentTarget))"
             >
-              <mat-button-toggle value="TOP" i18n="@@sessionQa.sortTop"
-                >Meist unterstützt</mat-button-toggle
+              <summary id="qa-tools-summary" i18n="@@participantQa.findSort">
+                Fragen finden &amp; sortieren
+              </summary>
+              <div class="session-qa-search-row">
+                <mat-form-field
+                  class="session-qa-search"
+                  appearance="outline"
+                  subscriptSizing="dynamic"
+                >
+                  <mat-label i18n="@@sessionQa.searchLabel">Fragen durchsuchen</mat-label>
+                  <input
+                    matInput
+                    type="search"
+                    maxlength="100"
+                    [value]="qaSearchDraft()"
+                    (input)="onQaSearchInput($any($event.target).value)"
+                    i18n-aria-label="@@sessionQa.searchAria"
+                    aria-label="Q&A-Fragen durchsuchen"
+                  />
+                </mat-form-field>
+                @if (qaSearchDraft()) {
+                  <button
+                    mat-icon-button
+                    type="button"
+                    (click)="clearQaSearch()"
+                    i18n-aria-label="@@sessionQa.searchClearAria"
+                    aria-label="Q&A-Suche leeren"
+                  >
+                    <mat-icon>close</mat-icon>
+                  </button>
+                }
+              </div>
+
+              <mat-button-toggle-group
+                class="session-qa-sort-toggle"
+                [value]="qaSortMode()"
+                (valueChange)="setQaSortMode($any($event))"
+                hideSingleSelectionIndicator
+                aria-label="Q&A-Sortierung"
+                i18n-aria-label="@@sessionQa.sortAria"
               >
-              <mat-button-toggle value="BEST">
-                <span class="session-qa-sort-toggle__label">
-                  <span i18n="@@sessionQa.sortBest">Beste Fragen</span>
-                  <span
-                    class="session-qa-sort-help"
-                    role="button"
-                    tabindex="0"
-                    data-testid="qa-sort-help-best"
-                    i18n-aria-label="@@sessionQa.sortHelpBestAria"
-                    aria-label="Hilfe zu »Beste Fragen«"
-                    (click)="openQaSortHelp($event, 'BEST')"
-                    (keydown.enter)="openQaSortHelp($event, 'BEST')"
-                    (keydown.space)="openQaSortHelp($event, 'BEST')"
-                    (mousedown)="$event.stopPropagation()"
-                  >
-                    <mat-icon aria-hidden="true">help_outline</mat-icon>
+                <mat-button-toggle value="CONTROVERSIAL">
+                  <span class="session-qa-sort-toggle__label">
+                    <span i18n="@@sessionQa.sortControversial">Kontroverse</span>
+                    <span
+                      class="session-qa-sort-help"
+                      role="button"
+                      tabindex="0"
+                      data-testid="qa-sort-help-controversial"
+                      i18n-aria-label="@@sessionQa.sortHelpControversialAria"
+                      aria-label="Hilfe zu »Kontroverse«"
+                      (click)="openQaSortHelp($event, 'CONTROVERSIAL')"
+                      (keydown.enter)="openQaSortHelp($event, 'CONTROVERSIAL')"
+                      (keydown.space)="openQaSortHelp($event, 'CONTROVERSIAL')"
+                      (mousedown)="$event.stopPropagation()"
+                    >
+                      <mat-icon aria-hidden="true">help</mat-icon>
+                    </span>
                   </span>
-                </span>
-              </mat-button-toggle>
-              <mat-button-toggle value="CONTROVERSIAL">
-                <span class="session-qa-sort-toggle__label">
-                  <span i18n="@@sessionQa.sortControversial">Umstritten</span>
-                  <span
-                    class="session-qa-sort-help"
-                    role="button"
-                    tabindex="0"
-                    data-testid="qa-sort-help-controversial"
-                    i18n-aria-label="@@sessionQa.sortHelpControversialAria"
-                    aria-label="Hilfe zu »Umstritten«"
-                    (click)="openQaSortHelp($event, 'CONTROVERSIAL')"
-                    (keydown.enter)="openQaSortHelp($event, 'CONTROVERSIAL')"
-                    (keydown.space)="openQaSortHelp($event, 'CONTROVERSIAL')"
-                    (mousedown)="$event.stopPropagation()"
-                  >
-                    <mat-icon aria-hidden="true">help_outline</mat-icon>
+                </mat-button-toggle>
+                <mat-button-toggle value="BEST">
+                  <span class="session-qa-sort-toggle__label">
+                    <span i18n="@@sessionQa.sortBest">Beste Fragen</span>
+                    <span
+                      class="session-qa-sort-help"
+                      role="button"
+                      tabindex="0"
+                      data-testid="qa-sort-help-best"
+                      i18n-aria-label="@@sessionQa.sortHelpBestAria"
+                      aria-label="Hilfe zu »Beste Fragen«"
+                      (click)="openQaSortHelp($event, 'BEST')"
+                      (keydown.enter)="openQaSortHelp($event, 'BEST')"
+                      (keydown.space)="openQaSortHelp($event, 'BEST')"
+                      (mousedown)="$event.stopPropagation()"
+                    >
+                      <mat-icon aria-hidden="true">help</mat-icon>
+                    </span>
                   </span>
-                </span>
-              </mat-button-toggle>
-              <mat-button-toggle value="TIME" i18n="@@sessionQa.sortTime">Zeit</mat-button-toggle>
-            </mat-button-toggle-group>
-            <p class="session-qa-sort-hint">{{ qaSortHint() }}</p>
-          </details>
+                </mat-button-toggle>
+                <mat-button-toggle value="TOP" i18n="@@sessionQa.sortTop"
+                  >Stimmensaldo</mat-button-toggle
+                >
+                <mat-button-toggle value="TIME" i18n="@@sessionQa.sortTime">Zeit</mat-button-toggle>
+              </mat-button-toggle-group>
+              <p class="session-qa-sort-hint">{{ qaSortHint() }}</p>
+            </details>
+          }
 
           @if (visibleQaQuestions().length === 0 && qaSearch()) {
             <div
@@ -2859,9 +2905,7 @@
             </div>
           } @else if (visibleQaQuestions().length === 0) {
             <div class="session-qa-empty" role="status" data-testid="vote-qa-empty">
-              <mat-icon class="session-qa-empty__icon" aria-hidden="true"
-                >chat_bubble_outline</mat-icon
-              >
+              <mat-icon class="session-qa-empty__icon" aria-hidden="true">chat_bubble</mat-icon>
               <p class="session-qa-empty__text">{{ vpc.voteQaEmpty(isPlayfulPreset()) }}</p>
               @if (qaEmptyGuidanceLabel(); as emptyGuidance) {
                 <p class="session-qa-empty__hint">{{ emptyGuidance }}</p>
@@ -3110,7 +3154,7 @@
                           i18n-aria-label="@@sessionQa.deleteOwnAria"
                           aria-label="Frage löschen"
                         >
-                          <mat-icon aria-hidden="true">delete_outline</mat-icon>
+                          <mat-icon aria-hidden="true">delete</mat-icon>
                         </button>
                       }
                     </div>

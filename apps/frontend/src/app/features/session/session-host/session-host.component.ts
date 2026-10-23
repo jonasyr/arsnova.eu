@@ -46,7 +46,7 @@ import {
   MatCardTitle,
 } from '@angular/material/card';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
-import { MatFormField, MatLabel } from '@angular/material/form-field';
+import { MatFormField, MatHint, MatLabel } from '@angular/material/form-field';
 import { MatIcon } from '@angular/material/icon';
 import { MatInput } from '@angular/material/input';
 import { MatMenu, MatMenuItem, MatMenuTrigger } from '@angular/material/menu';
@@ -186,6 +186,7 @@ import {
   SessionStatusUpdate,
   TeamDTO,
   TeamLeaderboardEntryDTO,
+  FreetextWordCloudPresenterProjectionDTO,
   QaWordCloudPresenterProjectionDTO,
   WordCloudAnalysisEntryDTO,
   WordCloudAnalysisLocale,
@@ -214,6 +215,7 @@ import {
 import {
   buildModerationCompassCards,
   collectModerationQuizFacts,
+  moderationQuizFactEvidenceRole,
   collectQaNlpCategorySources,
   compassQuestionStem,
   compassTermsFromAnalysisEntries,
@@ -258,7 +260,10 @@ import {
 } from '../../../core/export-filename.util';
 import { stripMarkdownToPlainText } from '../../../core/markdown-plain-text.util';
 import { localizeKnownServerError } from '../../../core/localize-known-server-message';
-import { SessionResultsExportService } from '../../../core/session-results-export.service';
+import {
+  SessionResultsExportService,
+  type SessionResultsPdfDisposition,
+} from '../../../core/session-results-export.service';
 import {
   replaceEmojiShortcodes,
   edgeEmojiMarkerPosition,
@@ -670,6 +675,7 @@ function musicTracksForPhase(
     MatCardSubtitle,
     MatCardTitle,
     MatFormField,
+    MatHint,
     MatIcon,
     MatInput,
     MatLabel,
@@ -817,6 +823,10 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   );
   readonly qaSelectedAuthorNickname = signal<string | null>(null);
   private readonly qaUnfilteredChromeQuestions = signal<QaQuestionDTO[] | null>(null);
+  private readonly qaCompassInventory = signal<QaQuestionDTO[] | null>(null);
+  /** True, wenn der Bestand über die sichtbare Listenseite hinaus geladen wurde. */
+  private readonly qaCompassInventoryBeyondPage = signal(false);
+  private compassInventoryRequest = 0;
   readonly qaInfo = signal<string | null>(null);
   readonly qaPendingQuestionIds = signal<Set<string>>(new Set());
   readonly qaReleasePendingInProgress = signal(false);
@@ -873,6 +883,8 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   private currentQuestionRefreshRunId = 0;
   private hostVoteProgressRefreshRunId = 0;
   private sessionLifecycleRefreshRunId = 0;
+  private sessionInfoRefreshRunId = 0;
+  private quickFeedbackRefreshRunId = 0;
   private participantBaselineReady = false;
   private knownParticipantIds = new Set<string>();
   private foyerArrivalSequence = 0;
@@ -1102,6 +1114,8 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   private readonly wordCloudSemanticWaitMinuteResponsesHint = $localize`:@@sessionQa.wordCloudSemanticWaitMinuteFreetext:Bei vielen Antworten kann das eine Minute dauern.`;
   readonly qaWordCloudAnalysisVariant = signal<WordCloudAnalysisVariant>('THEME');
   readonly qaWordCloudDialogOpen = signal(false);
+  /** False, wenn der Kompass die Wolke nur lokal öffnet. */
+  private readonly qaWordCloudProjectsToPresenter = signal(false);
   private qaWordCloudDialogRef: { close?: (result?: unknown) => void } | null = null;
   private quizPickerDialogRef: MatDialogRef<
     SessionQuizPickerDialogComponent,
@@ -1141,6 +1155,9 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   private qaWordCloudLemmaAnalysisRunId = 0;
   private freetextWordCloudLemmaAnalysisRunId = 0;
   private freetextWordCloudSemanticAnalysisRunId = 0;
+  private wordCloudHttpAbortController = new AbortController();
+  private lastFreetextWordCloudProjectionKey: string | null = null;
+  private freetextProjectionScope: string | null = null;
   private presenterProjectionSyncQueue: Promise<void> = Promise.resolve();
   private lastQaWordCloudProjectionKey: string | null = null;
   private lastQaPresenterStageViewKey: string | null = null;
@@ -1554,7 +1571,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       case 'pending':
         return $localize`:@@sessionQa.wordCloudSmoothPending:Analyse läuft`;
       case 'active':
-        return $localize`:@@sessionQa.wordCloudSmoothActive:Glättung ist an`;
+        return $localize`:@@sessionQa.wordCloudSmoothActive:Wort-Glättung ist an`;
       case 'stale':
         return $localize`:@@sessionQa.wordCloudSmoothRetry:Neu analysieren`;
       default:
@@ -1571,12 +1588,12 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     }
 
     if (this.freetextWordCloudSmoothingStatus() === 'stale') {
-      return $localize`:@@sessionHost.wordCloudSmoothStale:Neue Antworten seit letzter Glättung`;
+      return $localize`:@@sessionHost.wordCloudSmoothStale:Neue Antworten seit letzter Wort-Glättung`;
     }
 
     const reason = this.freetextWordCloudLemmaFallbackReason();
     if (reason === 'TIMEOUT' || reason === 'INVALID_RESPONSE') {
-      return $localize`:@@sessionQa.wordCloudSmoothFailed:Glättung fehlgeschlagen`;
+      return $localize`:@@sessionQa.wordCloudSmoothFailed:Wort-Glättung fehlgeschlagen`;
     }
 
     if (
@@ -1585,7 +1602,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       reason === 'LOCALE_UNSUPPORTED' ||
       reason === 'MODE_UNSUPPORTED'
     ) {
-      return $localize`:@@sessionQa.wordCloudSmoothUnavailable:Glättung nicht verfügbar`;
+      return $localize`:@@sessionQa.wordCloudSmoothUnavailable:Wort-Glättung nicht verfügbar`;
     }
 
     return null;
@@ -1606,7 +1623,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       case 'stale':
         return 'refresh';
       default:
-        return 'auto_fix_high';
+        return 'wand_stars';
     }
   });
   readonly displayedWordCloudInfo = computed(() =>
@@ -2116,16 +2133,18 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     return [...ordered.slice(heroIndex), ...ordered.slice(0, heroIndex)];
   });
   readonly liveQaWordCloudQuestions = computed(() => {
-    const visibleQuestions = (this.qaUnfilteredChromeQuestions() ?? this.qaQuestions()).filter(
+    // Projektion und Host-Wolke bleiben bei freigegebenen Beiträgen.
+    // Ungeprüfte Fragen gehören in den Kompass-Bestand, nicht in die Wortwolke.
+    if (this.qaShowPendingOnly() || this.qaShowArchivedOnly()) {
+      return [];
+    }
+    const source = this.qaUnfilteredChromeQuestions() ?? this.qaQuestions();
+    const visibleQuestions = source.filter(
       (question) => question.status === 'PINNED' || question.status === 'ACTIVE',
     );
     return this.qaShowPinnedOnly()
       ? visibleQuestions.filter((question) => question.status === 'PINNED')
-      : this.qaShowPendingOnly()
-        ? visibleQuestions.filter((question) => question.status === 'PENDING')
-        : this.qaShowArchivedOnly()
-          ? []
-          : visibleQuestions;
+      : visibleQuestions;
   });
   readonly qaWordCloudQuestions = computed(() =>
     this.qaWordCloudFrozen()
@@ -2159,11 +2178,11 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       case 'BEST':
         return $localize`:@@sessionQa.wordCloudMetricBest:beste Fragen`;
       case 'CONTROVERSIAL':
-        return $localize`:@@sessionQa.wordCloudMetricControversial:Kontroverse`;
+        return $localize`:@@sessionQa.sortControversial:Kontroverse`;
       case 'TIME':
-        return $localize`:@@sessionQa.wordCloudMetricTime:Häufigkeit`;
+        return $localize`:@@sessionQa.wordCloudMetricTime:Vorkommen in Fragen`;
       default:
-        return $localize`:@@sessionQa.wordCloudMetricTop:positive Stimmen`;
+        return $localize`:@@sessionQa.sortTop:Stimmensaldo`;
     }
   });
   readonly qaWordCloudTitle = computed(() =>
@@ -2206,11 +2225,11 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       case 'BEST':
         return $localize`:@@sessionQa.wordCloudHintBest:Große Wörter und Phrasen kommen aus Fragen mit viel Zustimmung und ausreichend Stimmen.`;
       case 'CONTROVERSIAL':
-        return $localize`:@@sessionQa.wordCloudHintControversial:Große Wörter und Phrasen kommen aus Fragen mit gegensätzlichen Reaktionen. Darüberfahren zeigt die zugehörigen Fragen.`;
+        return $localize`:@@sessionQa.wordCloudHintControversial:Große Wörter und Phrasen kommen aus Fragen mit hoher Kontroverse: Stimmen dafür und dagegen sind möglichst ausgeglichen. Darüberfahren zeigt die zugehörigen Fragen.`;
       case 'TIME':
-        return $localize`:@@sessionQa.wordCloudHintTime:Jede sichtbare Frage zählt gleich. Die Größe folgt der Häufigkeit, nicht den Stimmen.`;
+        return $localize`:@@sessionQa.wordCloudHintTime:Ein Wort wird größer, je mehr sichtbare Fragen es enthalten. In einer Frage zählt es nur einmal.`;
       default:
-        return $localize`:@@sessionQa.wordCloudHintTop:Große Wörter und Phrasen kommen aus Fragen mit vielen positiven Stimmen.`;
+        return $localize`:@@sessionQa.wordCloudHintTop:Große Einträge stammen aus Fragen mit hohem Stimmensaldo (Stimmen dafür minus Stimmen dagegen).`;
     }
   });
   readonly qaWordCloudWeightedResponses = computed(() =>
@@ -2390,7 +2409,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       case 'pending':
         return $localize`:@@sessionQa.wordCloudSmoothPending:Analyse läuft`;
       case 'active':
-        return $localize`:@@sessionQa.wordCloudSmoothActive:Glättung ist an`;
+        return $localize`:@@sessionQa.wordCloudSmoothActive:Wort-Glättung ist an`;
       case 'stale':
         return $localize`:@@sessionQa.wordCloudSmoothRetry:Neu analysieren`;
       default:
@@ -2417,12 +2436,12 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     }
 
     if (this.qaWordCloudSmoothingStatus() === 'stale') {
-      return $localize`:@@sessionQa.wordCloudSmoothStale:Neue Fragen seit letzter Glättung`;
+      return $localize`:@@sessionQa.wordCloudSmoothStale:Neue Fragen seit letzter Wort-Glättung`;
     }
 
     const reason = this.qaWordCloudLemmaFallbackReason();
     if (reason === 'TIMEOUT' || reason === 'INVALID_RESPONSE') {
-      return $localize`:@@sessionQa.wordCloudSmoothFailed:Glättung fehlgeschlagen`;
+      return $localize`:@@sessionQa.wordCloudSmoothFailed:Wort-Glättung fehlgeschlagen`;
     }
 
     if (
@@ -2431,7 +2450,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       reason === 'LOCALE_UNSUPPORTED' ||
       reason === 'MODE_UNSUPPORTED'
     ) {
-      return $localize`:@@sessionQa.wordCloudSmoothUnavailable:Glättung nicht verfügbar`;
+      return $localize`:@@sessionQa.wordCloudSmoothUnavailable:Wort-Glättung nicht verfügbar`;
     }
 
     return null;
@@ -2492,11 +2511,11 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       case 'BEST':
         return $localize`:@@sessionQa.sortHintBest:Zeigt Fragen mit viel Zustimmung und genug Stimmen zuerst. Hervorgehobene Fragen erscheinen zuerst und sind markiert.`;
       case 'CONTROVERSIAL':
-        return $localize`:@@sessionQa.sortHintControversial:Zeigt Fragen mit gemischter Reaktion zuerst. Hervorgehobene Fragen erscheinen zuerst und sind markiert.`;
+        return $localize`:@@sessionQa.sortHintControversial:Zeigt zuerst die Fragen mit der höchsten Kontroverse: Stimmen dafür und dagegen sind möglichst ausgeglichen. Hervorgehobene Fragen erscheinen zuerst und sind markiert.`;
       case 'TIME':
         return $localize`:@@sessionQa.sortHintTime:Zeigt die neuesten Fragen zuerst. Hervorgehobene Fragen erscheinen zuerst und sind markiert.`;
       default:
-        return $localize`:@@sessionQa.sortHintTop:Zeigt Fragen mit den meisten positiven Stimmen zuerst. Hervorgehobene Fragen erscheinen zuerst und sind markiert.`;
+        return $localize`:@@sessionQa.sortHintTop:Zeigt Fragen mit dem höchsten Stimmensaldo zuerst. Hervorgehobene Fragen erscheinen zuerst und sind markiert.`;
     }
   });
   readonly qaWordCloudOpenLabel = computed(
@@ -2621,10 +2640,17 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     const age = this.relativeTime(createdAt);
     return $localize`:@@sessionQa.oldestPendingAge:Älteste ungeprüfte Frage: ${age}:age:`;
   }
-  readonly openQaWordCloudDialog = async (focusedTerm: string | null = null): Promise<void> => {
+  readonly openQaWordCloudDialog = async (
+    focusedTerm: string | null = null,
+    options?: { readonly projectToPresenter?: boolean },
+  ): Promise<void> => {
+    const projectsPresenter = options?.projectToPresenter !== false;
     this.moderationCompassFocusedTerm.set(focusedTerm);
+    this.qaWordCloudProjectsToPresenter.set(projectsPresenter);
     this.qaWordCloudDialogOpen.set(true);
-    void this.activatePresenterSurface('qaWordCloud', 'qa');
+    if (projectsPresenter) {
+      void this.activatePresenterSurface('qaWordCloud', 'qa');
+    }
     const request = this.qaWordCloudAnalysisRequest();
     if (request) {
       if (request.mode === 'SEMANTIC') {
@@ -2665,12 +2691,16 @@ export class SessionHostComponent implements OnInit, OnDestroy {
           eligibleQuestionCount: () =>
             this.qaWordCloudCoverage()?.eligibleQuestionCount ?? this.qaListTotalCount(),
           analysisModelVersion: () => this.qaWordCloudThemeAnalysisResult()?.modelVersion ?? null,
+          labelModelId: () => this.qaWordCloudThemeAnalysisResult()?.labelModelId ?? null,
+          labelModelVersion: () => this.qaWordCloudThemeAnalysisResult()?.labelModelVersion ?? null,
           analysisVariant: () => this.qaWordCloudEffectiveAnalysisVariant(),
           setAnalysisVariant: (variant: WordCloudAnalysisVariant) =>
             this.setQaWordCloudAnalysisVariant(variant),
           themeModeAvailable: () => this.qaWordCloudThemeModeAvailable(),
           themeFallbackHint: () => this.qaWordCloudThemeFallbackHint(),
           themeWaitHint: () => this.qaWordCloudSemanticWaitHint(),
+          hasPreparedThemes: () =>
+            isSemanticTopicCloudResult(this.qaWordCloudThemeAnalysisResult()),
           sortMode: () => this.qaSortMode(),
           setSortMode: (mode: QaQuestionSortMode) => this.setQaSortMode(mode),
           frozen: () => this.qaWordCloudFrozen(),
@@ -2704,7 +2734,10 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       dialogRef.afterClosed().subscribe((result) => {
         this.qaWordCloudDialogRef = null;
         this.qaWordCloudDialogOpen.set(false);
-        void this.syncPresenterSurface('default');
+        this.qaWordCloudProjectsToPresenter.set(false);
+        if (projectsPresenter) {
+          void this.syncPresenterSurface('default');
+        }
         this.clearWordCloudOverlayTop();
         this.qaWordCloudFrozen.set(false);
         this.frozenQaWordCloudQuestions.set(null);
@@ -2716,7 +2749,10 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     } catch (error) {
       this.qaWordCloudDialogRef = null;
       this.qaWordCloudDialogOpen.set(false);
-      void this.syncPresenterSurface('default');
+      this.qaWordCloudProjectsToPresenter.set(false);
+      if (projectsPresenter) {
+        void this.syncPresenterSurface('default');
+      }
       this.clearWordCloudOverlayTop();
       this.qaWordCloudFrozen.set(false);
       this.frozenQaWordCloudQuestions.set(null);
@@ -2725,7 +2761,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   };
   readonly moderationCompassCards = computed(() =>
     buildModerationCompassCards({
-      qaQuestions: this.qaChromeForumQuestions().map((question) => ({
+      qaQuestions: this.moderationCompassInventoryQuestions().map((question) => ({
         id: question.id,
         text: this.moderationCompassQaSourceText(question),
         status: question.status,
@@ -2744,9 +2780,9 @@ export class SessionHostComponent implements OnInit, OnDestroy {
           this.toModerationCompassTerms(this.displayedFreetextWordCloudTerms())),
         ...this.aggregatedFreetextCompassTerms(),
       ]),
-      extraTopicSources: [...this.moderationCompassPinnedSources()],
+      extraTopicSources: [],
       nlpTopicSources: collectQaNlpCategorySources(
-        this.qaChromeForumQuestions().map((question) => ({
+        this.moderationCompassInventoryQuestions().map((question) => ({
           id: question.id,
           text: this.moderationCompassQaSourceText(question),
           status: question.status,
@@ -2775,10 +2811,20 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   readonly showModerationCompass = computed(
     () => this.activeChannel() !== 'quickFeedback' || this.channels().quiz || this.channels().qa,
   );
+  /** Die Quiz-Gesamtauswertung zeigt den Kompass nicht. */
+  readonly showModerationCompassButton = computed(
+    () =>
+      this.showModerationCompass() &&
+      !(this.activeChannel() === 'quiz' && this.effectiveStatus() === 'FINISHED'),
+  );
   readonly showHostModerationStack = computed(
     () => this.moderationCompassReturn() !== null || this.showModerationCompass(),
   );
-  readonly moderationCompassReturn = signal<{ readonly channel: SessionChannelTab } | null>(null);
+  readonly moderationCompassReturn = signal<{
+    readonly channel: SessionChannelTab;
+    /** False, wenn der Sprung die Präsentation nicht mitwechseln durfte. */
+    readonly present?: boolean;
+  } | null>(null);
   readonly moderationCompassFocusedTerm = signal<string | null>(null);
   readonly moderationCompassButtonAria = computed(() => {
     if (!this.moderationCompassHasSignals()) {
@@ -2790,6 +2836,13 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     this.moderationCompassReturn.set(null);
     this.clearQaCompassFocus();
     this.moderationCompassFocusedTerm.set(null);
+    if (
+      this.qaListCriteriaActive() ||
+      this.qaListPageIndex() > 0 ||
+      this.qaListTotalCount() > this.qaQuestions().length
+    ) {
+      await this.refreshCompassInventory();
+    }
     await this.refreshQaSummaryRuntime();
     const { ModerationCompassDialogComponent } =
       await import('./moderation-compass-dialog.component');
@@ -2798,14 +2851,12 @@ export class SessionHostComponent implements OnInit, OnDestroy {
         cards: () => this.moderationCompassCards(),
         analysisMode: resolveModerationCompassAnalysisMode({
           enabled: this.qaNlpEnabled(),
-          statuses: this.qaQuestions().map((question) => question.nlp?.status),
+          statuses: this.moderationCompassInventoryQuestions().map(
+            (question) => question.nlp?.status,
+          ),
         }),
-        onSourceActivate: (
-          source: ModerationCompassSource,
-          cardKind: ModerationCompassCardKind,
-        ) => {
-          void this.followModerationCompassSource(source, cardKind);
-        },
+        onSourceActivate: (source: ModerationCompassSource, cardKind: ModerationCompassCardKind) =>
+          this.followModerationCompassSource(source, cardKind),
         summaryEnabled: () => this.qaSummaryEnabled(),
         summaryVisibleQuestionCount: () => this.qaSummaryVisibleQuestionCount(),
         summary: () => this.qaSummaryRuntime(),
@@ -2837,6 +2888,12 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     });
   };
 
+  learningObjectivesControlAriaLabel(): string {
+    return this.activeChannel() === 'qa'
+      ? $localize`:@@sessionHost.qaAssignmentAria:Auftrag für das Q&A-Forum öffnen`
+      : $localize`:@@sessionHost.learningObjectivesAria:Lernziele für diese Session öffnen`;
+  }
+
   readonly openLearningObjectivesDialog = async (): Promise<void> => {
     const { SessionLearningObjectivesDialogComponent } =
       await import('./session-learning-objectives-dialog.component');
@@ -2844,6 +2901,13 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       data: {
         code: this.code.toUpperCase(),
         hasQuiz: () => this.channels().quiz,
+        mode: () => (this.activeChannel() === 'qa' ? 'qa' : 'quiz'),
+        focusedQuestionId: () =>
+          this.activeChannel() === 'quiz'
+            ? (this.displayedCurrentQuestionForHost()?.questionId ?? null)
+            : null,
+        focusedQuestionEligibleForDerivation: () =>
+          isScoredQuestionType(this.displayedCurrentQuestionForHost()?.type),
       },
       autoFocus: 'dialog',
       restoreFocus: true,
@@ -2855,7 +2919,82 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     });
   };
 
+  private moderationCompassInventoryQuestions(): QaQuestionDTO[] {
+    const inventory = this.qaCompassInventory();
+    if (inventory) {
+      return inventory.filter((question) => question.status !== 'DELETED');
+    }
+    return this.qaChromeForumQuestions();
+  }
+
+  private qaListCriteriaActive(): boolean {
+    return (
+      this.qaShowPinnedOnly() ||
+      this.qaShowPendingOnly() ||
+      this.qaShowArchivedOnly() ||
+      this.qaSearch().trim().length > 0 ||
+      this.qaSelectedAuthorNickname() !== null
+    );
+  }
+
+  private compassTermsFromInventory(): ModerationCompassTerm[] {
+    const documents: WordCloudTermDocument[] = this.moderationCompassInventoryQuestions()
+      .filter((question) => question.status === 'ACTIVE' || question.status === 'PINNED')
+      .map((question) => ({
+        id: question.id,
+        title: question.text,
+        weight: this.qaWordCloudQuestionWeight(question),
+      }));
+    return this.toModerationCompassTerms(
+      this.wordCloudTermExtractor.extractTerms(documents, {
+        locale: this.qaWordCloudTermLocale(),
+        maxEntries: QA_WORD_CLOUD_MAX_OUTPUT_ENTRIES,
+        maxNgramLength: isWordCloudPhraseAnalysisVariant(this.qaWordCloudEffectiveAnalysisVariant())
+          ? WORD_CLOUD_PHRASE_MAX_NGRAM_LENGTH
+          : 1,
+      }),
+      { sortMode: this.qaSortMode(), analysisVariant: 'LEXICAL' },
+    );
+  }
+
+  private async refreshCompassInventory(): Promise<void> {
+    const sessionId = this.session()?.id;
+    if (!sessionId || !this.channels().qa) {
+      return;
+    }
+    const request = ++this.compassInventoryRequest;
+    const pageSize: QaListPageSize =
+      QA_LIST_PAGE_SIZE_OPTIONS[QA_LIST_PAGE_SIZE_OPTIONS.length - 1] ?? QA_LIST_DEFAULT_PAGE_SIZE;
+    try {
+      const snapshot = await trpc.qa.list.query({
+        sessionId,
+        moderatorView: true,
+        sort: this.qaSortMode(),
+        pageSize,
+        statuses: ['PENDING', 'ACTIVE', 'PINNED', 'ARCHIVED'],
+      });
+      if (request !== this.compassInventoryRequest) {
+        return;
+      }
+      if (Array.isArray(snapshot) || snapshot.state !== 'ACTIVE') {
+        return;
+      }
+      this.qaCompassInventoryBeyondPage.set(true);
+      this.qaCompassInventory.set(
+        snapshot.questions.filter((question) => question.status !== 'DELETED'),
+      );
+    } catch {
+      // Letzten ungefilterten Bestand behalten.
+    }
+  }
+
   private moderationCompassQaTerms(): ModerationCompassTerm[] {
+    if (
+      this.qaCompassInventory() !== null &&
+      (this.qaListCriteriaActive() || this.qaCompassInventoryBeyondPage())
+    ) {
+      return this.compassTermsFromInventory();
+    }
     const sortMode = this.qaSortMode();
     const lemmaEntries =
       this.qaWordCloudLemmaSnapshotVisible() && !this.qaWordCloudLemmaStale()
@@ -2926,13 +3065,22 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     source: ModerationCompassSource,
     cardKind: ModerationCompassCardKind | undefined = this.findCompassCardKind(source),
     returnChannel = this.activeChannel(),
-  ): Promise<void> {
+  ): Promise<boolean | void> {
     const target = source.target;
     if (!target) {
-      return;
+      return false;
     }
     if (!this.isChannelEnabled(target.channel)) {
-      return;
+      return false;
+    }
+    if (target.channel === 'quiz' && target.questionId && !target.surface) {
+      const currentQuestionId = this.displayedCurrentQuestionForHost()?.questionId ?? null;
+      if (currentQuestionId !== target.questionId) {
+        const confirmed = await this.confirmCompassResultJump();
+        if (!confirmed) {
+          return false;
+        }
+      }
     }
     const focusHint = this.resolveCompassFocusHint(source, cardKind);
     if (target.channel === 'qa') {
@@ -2940,8 +3088,10 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       // (Suche/Autor). Filter und Suche lösen, damit Sprung und Fokus-Label greifen.
       await this.clearQaListCriteriaForCompassJump();
     }
-    await this.selectChannel(target.channel);
-    if (target.channel === 'quiz' && target.questionId) {
+    await this.selectChannel(target.channel, {
+      present: target.surface === 'word-cloud' ? false : undefined,
+    });
+    if (target.channel === 'quiz' && target.questionId && !target.surface) {
       const currentQuestionId = this.displayedCurrentQuestionForHost()?.questionId ?? null;
       if (currentQuestionId !== target.questionId) {
         try {
@@ -2961,7 +3111,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
             () => void this.followModerationCompassSource(source, cardKind, returnChannel),
             error,
           );
-          return;
+          return false;
         }
       }
     }
@@ -2981,12 +3131,12 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       this.applyQaCompassFocus(cloudFocusedIds, 'compass', focusHint);
       this.releaseQaChromeAfterCompassJump();
       if (target.channel === 'qa') {
-        await this.openQaWordCloudDialog(target.termLabel ?? null);
+        await this.openQaWordCloudDialog(target.termLabel ?? null, { projectToPresenter: false });
       } else {
         this.wordCloudExpanded.set(true);
         this.maximizeFreetextWordCloud();
       }
-      this.moderationCompassReturn.set({ channel: returnChannel });
+      this.moderationCompassReturn.set({ channel: returnChannel, present: false });
       return;
     }
     if (target.channel === 'qa') {
@@ -3003,6 +3153,26 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       this.clearQaCompassFocus();
     }
     this.moderationCompassReturn.set({ channel: returnChannel });
+    return true;
+  }
+
+  private async confirmCompassResultJump(): Promise<boolean> {
+    const dialogRef = this.dialog.open(ConfirmLeaveDialogComponent, {
+      data: {
+        title: $localize`:@@sessionHost.moderationQuizJumpTitle:Ergebnis für alle zeigen?`,
+        message: $localize`:@@sessionHost.moderationQuizJumpMessage:Die laufende Ansicht wechselt für den Raum auf dieses frühere Ergebnis.`,
+        consequences: [
+          $localize`:@@sessionHost.moderationQuizJumpConsequence:Teilnehmende und Präsentation sehen diese Frage im Ergebnis.`,
+        ],
+        confirmLabel: $localize`:@@sessionHost.moderationQuizJumpConfirm:Ergebnis zeigen`,
+        cancelLabel: $localize`:@@sessionHost.moderationQuizJumpCancel:Abbrechen`,
+      } satisfies ConfirmLeaveDialogData,
+      width: 'min(26rem, calc(100vw - 1.5rem))',
+      maxWidth: '100vw',
+      autoFocus: 'dialog',
+      restoreFocus: true,
+    });
+    return (await firstValueFrom(dialogRef.afterClosed())) === true;
   }
 
   /** Suche/Autor/Statusfilter für einen Kompass-Sprung zurücksetzen (ohne Listen-Scroll). */
@@ -3079,6 +3249,8 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     switch (cardKind) {
       case 'clarification':
         return $localize`:@@sessionHost.moderationCardClarification:Noch klären`;
+      case 'survey':
+        return $localize`:@@sessionHost.moderationCardSurvey:Antwortverteilung`;
       case 'friction':
         return $localize`:@@sessionHost.moderationCardFriction:Umstrittene Fragen`;
       case 'topics':
@@ -3320,7 +3492,8 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   }
 
   async returnToModerationCompass(): Promise<void> {
-    const returnChannel = this.moderationCompassReturn()?.channel ?? null;
+    const returnState = this.moderationCompassReturn();
+    const returnChannel = returnState?.channel ?? null;
     this.moderationCompassReturn.set(null);
     this.clearQaCompassFocus();
     this.moderationCompassFocusedTerm.set(null);
@@ -3329,7 +3502,10 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       this.isChannelEnabled(returnChannel) &&
       this.activeChannel() !== returnChannel
     ) {
-      await this.selectChannel(returnChannel);
+      await this.selectChannel(
+        returnChannel,
+        returnState?.present === false ? { present: false } : undefined,
+      );
     }
     const trigger = this.moderationCompassButtonRef?.nativeElement;
     if (trigger) {
@@ -3408,25 +3584,6 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       }));
   }
 
-  private moderationCompassPinnedSources(): ModerationCompassSource[] {
-    return this.qaForumQuestions()
-      .filter((question) => question.status === 'PINNED')
-      .slice(0, 2)
-      .flatMap((question) => {
-        const label = truncateCompassLabel(question.text);
-        return label
-          ? [
-              {
-                kind: 'qa-question' as const,
-                label: $localize`:@@sessionHost.moderationPinned:Hervorgehoben: ${label}:question:`,
-                focusHint: $localize`:@@sessionHost.moderationFocusPinned:Hervorgehoben`,
-                target: { channel: 'qa' as const, questionId: question.id },
-              },
-            ]
-          : [];
-      });
-  }
-
   private moderationCompassQaSourceText(question: {
     text: string;
     isControversial?: boolean;
@@ -3447,7 +3604,16 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     const tempo = this.quickFeedbackTempoIndicator();
     const result = this.quickFeedbackResult();
     if (result?.type === 'TEMPO' || !result) {
-      return tempo ? { label: tempo.label, tone: tempo.tone, variant: 'tempo' } : null;
+      if (!tempo) {
+        return null;
+      }
+      const status = result?.type === 'TEMPO' ? result.tempoTrend?.status : undefined;
+      return {
+        label: tempo.label,
+        tone: tempo.tone,
+        variant: 'tempo' as const,
+        ...(status && status !== 'NEUTRAL' ? { tempoStatus: status } : {}),
+      };
     }
     const decision = collectModerationFeedbackDecision({
       type: result.type,
@@ -3534,8 +3700,13 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     question: HostCurrentQuestionDTO,
   ): ModerationCompassSource[] {
     return collectModerationQuizFacts(question)
-      .map((fact) => this.localizeModerationQuizFact(fact, question))
-      .filter((source): source is ModerationCompassSource => source !== null)
+      .flatMap((fact) => {
+        const source = this.localizeModerationQuizFact(fact, question);
+        if (!source) {
+          return [];
+        }
+        return [{ ...source, evidenceRole: moderationQuizFactEvidenceRole(fact, question) }];
+      })
       .slice(0, 3);
   }
 
@@ -3829,6 +4000,31 @@ export class SessionHostComponent implements OnInit, OnDestroy {
 
   constructor() {
     effect(() => {
+      const questions = this.qaQuestions();
+      const filtered = this.qaListCriteriaActive();
+      const pageIndex = this.qaListPageIndex();
+      const total = this.qaListTotalCount();
+      if (filtered) {
+        const missing = untracked(() => this.qaCompassInventory() === null);
+        if (missing) {
+          untracked(() => {
+            void this.refreshCompassInventory();
+          });
+        }
+        return;
+      }
+      if (pageIndex > 0 || (questions.length > 0 && total > questions.length)) {
+        untracked(() => {
+          void this.refreshCompassInventory();
+        });
+        return;
+      }
+      untracked(() => {
+        this.qaCompassInventoryBeyondPage.set(false);
+        this.qaCompassInventory.set(questions.filter((question) => question.status !== 'DELETED'));
+      });
+    });
+    effect(() => {
       if (this.activeChannel() !== 'qa' || !this.projectionNavigationIsQaQuestions()) {
         this.projectionControlsVisible.set(false);
         return;
@@ -3915,10 +4111,8 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     effect(() => {
       // Presenter-Index → Listen-Cursor, solange die Bühnenfrage in der Liste liegt
       // und der Cursor nicht auf einer rein listenbasierten Frage (Pending/Archiv) steht.
-      if (!this.projectionNavigationIsQaQuestions()) {
-        return;
-      }
-      if (this.session()?.presenterSurface === 'ended') {
+      // Nach Session-Ende bleibt der Host-Cursor in der Liste; die leere Bühne zieht ihn nicht zurück.
+      if (!this.projectionFollowsLiveStage()) {
         return;
       }
       const navigable = this.qaNavigableStageQuestions();
@@ -3995,8 +4189,9 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     });
     effect(() => {
       const dialogOpen = this.qaWordCloudDialogOpen();
+      const projectsPresenter = this.qaWordCloudProjectsToPresenter();
       const surface = this.session()?.presenterSurface;
-      if (!dialogOpen) {
+      if (!dialogOpen || !projectsPresenter) {
         if (surface !== 'qaWordCloud') {
           this.lastQaWordCloudProjectionKey = null;
         }
@@ -4005,6 +4200,28 @@ export class SessionHostComponent implements OnInit, OnDestroy {
 
       const projection = this.buildQaWordCloudPresenterProjection();
       untracked(() => this.publishQaWordCloudProjection(projection));
+    });
+    effect(() => {
+      if (!this.code) {
+        return;
+      }
+      const scope = [
+        this.session()?.id ?? '',
+        this.session()?.preferredChannel ?? '',
+        this.session()?.presenterSurface ?? '',
+        this.displayedCurrentQuestionForHost()?.questionId ?? '',
+        String(Math.floor(Date.parse(this.session()?.serverTime ?? '') / 60_000)),
+      ].join('|');
+      const projection = this.buildFreetextWordCloudPresenterProjection();
+      untracked(() => {
+        if (scope !== this.freetextProjectionScope) {
+          this.freetextProjectionScope = scope;
+          this.lastFreetextWordCloudProjectionKey = null;
+        }
+        if (projection) {
+          this.publishFreetextWordCloudProjection(projection);
+        }
+      });
     });
     effect(() => {
       const request = this.freetextWordCloudSemanticAnalysisRequest();
@@ -4107,9 +4324,14 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     });
     effect(() => {
       const status = this.effectiveStatus();
-      if (status === 'FINISHED' || status === 'RESULTS') {
-        void this.loadLeaderboard();
+      if (status !== 'FINISHED' && status !== 'RESULTS') {
+        return;
       }
+      // loadLeaderboard liest und setzt leaderboardLoading synchron.
+      // Ohne untracked startet jeder Ladewechsel den Effect sofort neu.
+      untracked(() => {
+        void this.loadLeaderboard();
+      });
     });
     effect(() => {
       const finished = this.effectiveStatus() === 'FINISHED';
@@ -4346,6 +4568,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
 
     this.freetextWordCloudMode.set(nextMode);
     if (nextMode === 'SEMANTIC') {
+      this.ensureFreetextWordCloudSemanticAnalysis();
       const shouldRefreshLemmaSmoothing = untracked(
         () =>
           this.freetextWordCloudLemmaPreferred() &&
@@ -4353,9 +4576,8 @@ export class SessionHostComponent implements OnInit, OnDestroy {
           this.buildFreetextWordCloudLemmaItems().length > 0,
       );
       if (shouldRefreshLemmaSmoothing) {
-        await this.requestFreetextWordCloudLemmaSmoothing();
+        void this.requestFreetextWordCloudLemmaSmoothing();
       }
-      this.ensureFreetextWordCloudSemanticAnalysis();
       return;
     }
 
@@ -5173,12 +5395,13 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   private async reloadSessionInfo(
     options: { isCurrent?: () => boolean } = {},
   ): Promise<SessionInfoDTO> {
+    const runId = ++this.sessionInfoRefreshRunId;
     const requestedAt = Date.now();
     const session = await trpc.session.getInfoForReconnect.query({
       code: this.code.toUpperCase(),
       anonymousClientId: getAnonymousClientId(),
     });
-    if (options.isCurrent && !options.isCurrent()) {
+    if (runId !== this.sessionInfoRefreshRunId || (options.isCurrent && !options.isCurrent())) {
       return session;
     }
     recordServerTimeSample(session.serverTime, requestedAt);
@@ -5666,6 +5889,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
             data.presenterPage ||
             data.presenterSurface
           ) {
+            this.sessionInfoRefreshRunId += 1;
             this.session.update((current) =>
               current
                 ? {
@@ -6046,9 +6270,11 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     this.clearFreetextWordCloudSemanticAnalysisTimer();
     this.clearQaWordCloudSemanticWaitHint();
     this.clearFreetextWordCloudSemanticWaitHint();
+    this.qaWordCloudThemeAnalysisRunId += 1;
     this.qaWordCloudLemmaAnalysisRunId += 1;
     this.freetextWordCloudLemmaAnalysisRunId += 1;
     this.freetextWordCloudSemanticAnalysisRunId += 1;
+    this.wordCloudHttpAbortController.abort();
     this.clearHostQuestionDetailsRetry();
     this.clearQuizAttachSessionInfoRetry();
     this.clearHostRealtimeSubscriptionRetry();
@@ -6213,6 +6439,18 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     return session.preferredChannel === 'qa';
   });
   /**
+   * Live-Bühne nur während der Session.
+   * Nach Session-Ende liefert `presentProjection` keine Fragen (`SESSION_ENDED`).
+   * Der Host-Navigator folgt dann der geladenen Liste und zieht den Presenter nicht mit.
+   */
+  private projectionFollowsLiveStage(): boolean {
+    return (
+      this.projectionNavigationIsQaQuestions() &&
+      this.session()?.presenterSurface !== 'ended' &&
+      this.effectiveStatus() !== 'FINISHED'
+    );
+  }
+  /**
    * Bühnenreihenfolge wie `qa.presentProjection`: PINNED vor ACTIVE, Host-Sortierung
    * und derselbe präsentierbare Such-/Pin-/Autor-Filter. Presenter und absolute
    * `presenterPage.index` beziehen sich auf diese Liste.
@@ -6248,11 +6486,11 @@ export class SessionHostComponent implements OnInit, OnDestroy {
    * Host-Navigator-Schritte.
    * Live-Projektion: nur ACTIVE|PINNED (Beamer-Bühne) in Listenreihenfolge —
    * Pending/Archiv dürfen Hero und »Aktuell in der Präsentation« nicht beanspruchen.
-   * Nach Projektionsende (`ended`): volle gefilterte Liste (z. B. Archiv-Durchsicht).
+   * Nach Projektionsende (`ended`) und nach Session-Ende: volle gefilterte Liste.
    */
   readonly qaNavigableStageQuestions = computed(() => {
     const filtered = this.qaFilteredQuestions();
-    if (this.projectionNavigationIsQaQuestions() && this.session()?.presenterSurface !== 'ended') {
+    if (this.projectionFollowsLiveStage()) {
       return filtered.filter(
         (question) => question.status === 'PINNED' || question.status === 'ACTIVE',
       );
@@ -6537,7 +6775,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       if (!nextQuestion) {
         return;
       }
-      const liveProjection = this.session()?.presenterSurface !== 'ended';
+      const liveProjection = this.projectionFollowsLiveStage();
       const stage = this.qaProjectionStageQuestions();
       const stageIndex = stage.findIndex((question) => question.id === nextQuestion.id);
       // Live: Cursor/Hero nur auf Bühnenfragen — sonst Host/Beamer-Widerspruch.
@@ -6968,7 +7206,25 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     clearFeedbackHostToken(this.code);
   }
 
+  private abortInflightWordCloudHttpRequests(): void {
+    this.clearQaWordCloudThemeAnalysisTimer();
+    this.clearFreetextWordCloudSemanticAnalysisTimer();
+    this.clearQaWordCloudSemanticWaitHint();
+    this.clearFreetextWordCloudSemanticWaitHint();
+    this.qaWordCloudThemeAnalysisRunId += 1;
+    this.qaWordCloudLemmaAnalysisRunId += 1;
+    this.freetextWordCloudLemmaAnalysisRunId += 1;
+    this.freetextWordCloudSemanticAnalysisRunId += 1;
+    this.qaWordCloudThemeAnalysisPending.set(false);
+    this.qaWordCloudLemmaPending.set(false);
+    this.freetextWordCloudLemmaPending.set(false);
+    this.freetextWordCloudSemanticAnalysisPending.set(false);
+    this.wordCloudHttpAbortController.abort();
+    this.wordCloudHttpAbortController = new AbortController();
+  }
+
   private markSessionUnavailable(options?: { keepHostToken?: boolean }): void {
+    this.abortInflightWordCloudHttpRequests();
     this.keepHostTokenOnDeactivate = options?.keepHostToken === true;
     this.sessionUnavailable.set(true);
     this.stopCountdown();
@@ -6985,6 +7241,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   }
 
   private markSessionFinishedLocally(): void {
+    this.abortInflightWordCloudHttpRequests();
     this.stopCountdown();
     this.countdownSeconds.set(null);
     this.syncCurrentQuestionForHost(null);
@@ -7250,13 +7507,12 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * CanDeactivate-Guard-Hook: zeigt einen Bestätigungsdialog,
-   * wenn die Session noch läuft.
+   * Globales Sessionende aus Menü oder Anker. Der Eintrag bleibt nach
+   * Quiz-FINISHED sichtbar, solange Host-Chrome lebt (z. B. unkonfiguriertes
+   * Q&A oder Nachbereitung). Ohne Dialog wäre das ein stiller No-Op.
    */
   async onSessionEndAnchorClick(event?: Event): Promise<void> {
-    const canEndGlobalSession =
-      this.isSessionActive() ||
-      (this.effectiveStatus() === 'FINISHED' && this.keepQaOpenOnHostLeave());
+    const canEndGlobalSession = this.isSessionActive() || this.effectiveStatus() === 'FINISHED';
     if (!canEndGlobalSession || this.sessionEndPending()) {
       return;
     }
@@ -10509,13 +10765,13 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   qaStatusIcon(status: QaQuestionDTO['status']): string {
     switch (status) {
       case 'PINNED':
-        return 'push_pin';
+        return 'keep';
       case 'PENDING':
         return 'hourglass_top';
       case 'ARCHIVED':
-        return 'check_circle_outline';
+        return 'check_circle';
       case 'DELETED':
-        return 'delete_outline';
+        return 'delete';
       default:
         return 'circle';
     }
@@ -10708,17 +10964,15 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   ): string {
     switch (action) {
       case 'APPROVE':
-        // `unarchive` fehlt im selbst gehosteten Icon-Subset → `outbox`.
-        return status === 'ARCHIVED' ? 'outbox' : 'check';
+        return status === 'ARCHIVED' ? 'unarchive' : 'check';
       case 'PIN':
-        return 'push_pin';
+        return 'keep';
       case 'UNPIN':
-        // `keep_off` fehlt im Subset; `undo` = Hervorhebung zurücknehmen.
-        return 'undo';
+        return 'keep_off';
       case 'ARCHIVE':
         return 'archive';
       case 'DELETE':
-        return status === 'DELETED' ? 'delete' : 'delete_outline';
+        return status === 'DELETED' ? 'delete_forever' : 'delete';
     }
   }
 
@@ -10923,11 +11177,11 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   qaSortModeLabel(mode: QaQuestionSortMode = this.qaSortMode()): string {
     switch (mode) {
       case 'TOP':
-        return $localize`:@@sessionQa.sortTop:Meist unterstützt`;
+        return $localize`:@@sessionQa.sortTop:Stimmensaldo`;
       case 'BEST':
         return $localize`:@@sessionQa.sortBest:Beste Fragen`;
       case 'CONTROVERSIAL':
-        return $localize`:@@sessionQa.sortControversial:Umstritten`;
+        return $localize`:@@sessionQa.sortControversial:Kontroverse`;
       case 'TIME':
         return $localize`:@@sessionQa.sortTime:Zeit`;
     }
@@ -10949,15 +11203,33 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     this.qaSortMode.set(mode);
     this.publishQaPresenterSortMode(mode);
     this.ensureQaSubscription();
+
+    // Wenn die Q&A-Wortwolke im Themenmodus geöffnet ist, sofort den Backend-Reweight-Aufruf
+    // anstoßen (analyzeQa lädt den kanonischen Korpus selbst aus der DB), statt erst auf
+    // refreshQaQuestionsAndResetHero() zu warten.
+    const startedImmediateSemanticSort = untracked(() => {
+      if (this.qaWordCloudEffectiveAnalysisVariant() !== 'SEMANTIC') {
+        return false;
+      }
+      const request = this.buildQaWordCloudAnalysisRequest();
+      if (!request) {
+        return false;
+      }
+      this.queueQaWordCloudSemanticAnalysis(request);
+      return true;
+    });
+
     await this.refreshQaQuestionsAndResetHero();
     if (options?.scrollToTop !== false) {
       this.scrollHostQaAfterListCriteriaChange();
     }
 
     if (untracked(() => this.qaWordCloudEffectiveAnalysisVariant() === 'SEMANTIC')) {
-      const request = this.buildQaWordCloudAnalysisRequest();
-      if (request) {
-        this.queueQaWordCloudSemanticAnalysis(request);
+      if (!startedImmediateSemanticSort) {
+        const request = this.buildQaWordCloudAnalysisRequest();
+        if (request) {
+          this.queueQaWordCloudSemanticAnalysis(request);
+        }
       }
       return;
     }
@@ -11094,7 +11366,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     }
   }
 
-  async selectChannel(channel: string): Promise<void> {
+  async selectChannel(channel: string, options?: { readonly present?: boolean }): Promise<void> {
     if (channel === 'quiz' || channel === 'qa' || channel === 'quickFeedback') {
       if (!this.isChannelEnabled(channel) || this.channelNavigationBusy()) return;
       // Eine bewusste Auswahl darf nicht von einem noch ausstehenden Initial-Snapshot überschrieben werden.
@@ -11140,7 +11412,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       if (channel === 'quiz') {
         await this.startQuizSelectionFlowIfPending();
       }
-      if (this.effectiveStatus() !== 'FINISHED') {
+      if (this.effectiveStatus() !== 'FINISHED' && options?.present !== false) {
         await this.reconcilePresentedChannel();
       }
     }
@@ -11148,6 +11420,11 @@ export class SessionHostComponent implements OnInit, OnDestroy {
 
   async onChannelToggleChange(channel: string, group: MatButtonToggleGroup): Promise<void> {
     if (this.channelToggleSyncing) {
+      return;
+    }
+    // Programmatische Host-Wechsel, etwa aus dem Kompass, setzen den Toggle nach.
+    // Das darf die Präsentation nicht erneut synchronisieren.
+    if (channel === this.activeChannel()) {
       return;
     }
     await this.selectChannel(channel);
@@ -11532,7 +11809,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     if (!session || !this.code) {
       return;
     }
-    if (this.effectiveStatus() === 'FINISHED' && !this.qaChannelNeedsConfiguration()) {
+    if (this.postProcessingEnded()) {
       return;
     }
     if (getStagedHostRecoveryCard(this.code) && !this.qaChannelNeedsConfiguration()) {
@@ -11832,6 +12109,62 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     return sanitized;
   }
 
+  private buildFreetextWordCloudPresenterProjection(): FreetextWordCloudPresenterProjectionDTO | null {
+    const questionId = this.displayedCurrentQuestionForHost()?.questionId;
+    if (!questionId) {
+      return null;
+    }
+    const analysis = this.displayedFreetextAnalysisEntries();
+    const entries =
+      analysis && analysis.length > 0
+        ? analysis.map((entry) => ({
+            key: entry.key.slice(0, 128),
+            label: entry.label.slice(0, 120),
+            count: entry.count,
+            ...(entry.labelOrigin ? { labelOrigin: entry.labelOrigin } : {}),
+          }))
+        : (this.displayedFreetextVisibleTerms() ?? []).map((term) => ({
+            key: term.key.slice(0, 128),
+            label: term.label.slice(0, 120),
+            count: Math.max(0, term.documentFrequency),
+          }));
+    return {
+      mode:
+        this.freetextWordCloudMode() === 'WORDS'
+          ? 'LEXICAL'
+          : this.freetextWordCloudMode() === 'SEMANTIC'
+            ? 'SEMANTIC'
+            : 'THEME',
+      locale: this.qaWordCloudAnalysisLocale(),
+      questionId,
+      smoothingActive: this.freetextWordCloudLemmaSnapshotVisible(),
+      entries: entries.slice(0, 80),
+    };
+  }
+
+  private publishFreetextWordCloudProjection(
+    projection: FreetextWordCloudPresenterProjectionDTO,
+  ): void {
+    if (!this.code) {
+      return;
+    }
+    const key = JSON.stringify(projection);
+    if (key === this.lastFreetextWordCloudProjectionKey) {
+      return;
+    }
+    this.lastFreetextWordCloudProjectionKey = key;
+    void this.enqueuePresenterProjectionSync(async () => {
+      try {
+        await trpc.session.setFreetextWordCloudProjection.mutate({
+          code: this.code.toUpperCase(),
+          projection,
+        });
+      } catch {
+        this.lastFreetextWordCloudProjectionKey = null;
+      }
+    });
+  }
+
   private publishQaWordCloudProjection(projection: QaWordCloudPresenterProjectionDTO): void {
     if (!this.code) {
       return;
@@ -12123,6 +12456,9 @@ export class SessionHostComponent implements OnInit, OnDestroy {
         this.closeHostPostProcessing();
         return;
       }
+    }
+    if (this.qaListCriteriaActive() || this.qaListPageIndex() > 0) {
+      void this.refreshCompassInventory();
     }
     void this.refreshQaQuestions({ silent: true, preservePaging: true });
   }
@@ -12683,6 +13019,8 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     const wasAlreadyEnded = this.postProcessingEnded();
     this.postProcessingEnded.set(true);
     this.qaQuestions.set([]);
+    this.qaCompassInventory.set(null);
+    this.qaCompassInventoryBeyondPage.set(false);
     this.qaPresenterStageRefreshGeneration += 1;
     this.qaPresenterStageOrderedQuestions.set(null);
     this.clearQaPresenterStageSortState();
@@ -13419,6 +13757,9 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     options: { readonly keepPrevious?: boolean } = {},
   ): Promise<void> {
     const runId = ++this.qaWordCloudThemeAnalysisRunId;
+    const hadPreviousSemanticCloud =
+      request.mode === 'SEMANTIC' &&
+      isSemanticTopicCloudResult(this.qaWordCloudThemeAnalysisResult());
     if (!options.keepPrevious) {
       this.qaWordCloudThemeAnalysisResult.set(null);
     }
@@ -13436,9 +13777,15 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       }
 
       if (request.mode === 'SEMANTIC') {
-        await holdSemanticPendingProgress(pendingStartedAt);
-        if (runId !== this.qaWordCloudThemeAnalysisRunId) {
-          return;
+        const elapsedMs = Date.now() - pendingStartedAt;
+        // Wenn bereits eine Themenwolke sichtbar ist und der Sortierwechsel
+        // aus dem Backend-Cluster-Cache schnell (< 250 ms) beantwortet wurde,
+        // sofort weich überblenden statt künstlich 1 s zu blockieren.
+        if (!hadPreviousSemanticCloud || elapsedMs >= 250) {
+          await holdSemanticPendingProgress(pendingStartedAt);
+          if (runId !== this.qaWordCloudThemeAnalysisRunId) {
+            return;
+          }
         }
       }
 
@@ -13524,7 +13871,8 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     if (!request) {
       return;
     }
-    // Laufende Analyse nicht mit neuem Korpus ersetzen — Abschluss gleicht Stale ab.
+    // Laufende Analyse nicht während aktiver Abstimmung mit neuem Korpus ersetzen —
+    // ist die Frage jedoch bereits bei RESULTS eingefroren, aktualisieren wir auf den finalen Stand.
     if (this.freetextWordCloudSemanticAnalysisPending()) {
       return;
     }
@@ -13533,6 +13881,9 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       return;
     }
     this.syncFreetextWordCloudSemanticStale(request);
+    if (this.effectiveStatus() === 'RESULTS' && this.freetextWordCloudSemanticStale()) {
+      this.queueFreetextWordCloudSemanticAnalysis(request);
+    }
   }
 
   refreshFreetextWordCloudThemes(): void {
@@ -13543,7 +13894,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     if (!request) {
       return;
     }
-    this.queueFreetextWordCloudSemanticAnalysis(request);
+    this.queueFreetextWordCloudSemanticAnalysis({ ...request, refresh: true });
   }
 
   private queueFreetextWordCloudSemanticAnalysis(request: AnalyzeWordCloudInput): void {
@@ -13577,7 +13928,9 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     const analyzedKey = wordCloudAnalysisRequestKey(request);
 
     try {
-      const result = await trpc.wordCloud.analyze.mutate(request);
+      const result = await trpc.wordCloud.analyze.mutate(request, {
+        signal: this.wordCloudHttpAbortController.signal,
+      });
       if (runId !== this.freetextWordCloudSemanticAnalysisRunId) {
         return;
       }
@@ -13590,7 +13943,9 @@ export class SessionHostComponent implements OnInit, OnDestroy {
       this.freetextWordCloudSemanticAnalysisResult.set(result);
       this.lastFreetextWordCloudSemanticAnalyzedKey = analyzedKey;
       // Korpus kann während der Anfrage gewachsen sein — dann bleibt die Analyse veraltet.
-      this.reconcileFreetextWordCloudSemanticStaleAfterAnalysis(analyzedKey);
+      this.reconcileFreetextWordCloudSemanticStaleAfterAnalysis(analyzedKey, {
+        allowAutoRefreshOnResults: true,
+      });
     } catch {
       if (runId !== this.freetextWordCloudSemanticAnalysisRunId) {
         return;
@@ -13618,13 +13973,23 @@ export class SessionHostComponent implements OnInit, OnDestroy {
   }
 
   /** Stale, wenn der aktuelle Korpus nicht der analysierten Anfrage entspricht. */
-  private reconcileFreetextWordCloudSemanticStaleAfterAnalysis(analyzedKey: string | null): void {
+  private reconcileFreetextWordCloudSemanticStaleAfterAnalysis(
+    analyzedKey: string | null,
+    options: { readonly allowAutoRefreshOnResults?: boolean } = {},
+  ): void {
     const current = this.buildFreetextWordCloudSemanticAnalysisRequest();
     if (!current || !analyzedKey) {
       this.freetextWordCloudSemanticStale.set(false);
       return;
     }
-    this.freetextWordCloudSemanticStale.set(wordCloudAnalysisRequestKey(current) !== analyzedKey);
+    const isStale = wordCloudAnalysisRequestKey(current) !== analyzedKey;
+    this.freetextWordCloudSemanticStale.set(isStale);
+    // Wenn während eines laufenden Analyse-Requests auf »Ergebnis anzeigen« (RESULTS)
+    // gewechselt wurde und kurz davor noch finale Antworten hereinkamen, einmalig den
+    // finalen eingefrorenen Stand automatisch nachziehen.
+    if (options.allowAutoRefreshOnResults && isStale && this.effectiveStatus() === 'RESULTS') {
+      this.queueFreetextWordCloudSemanticAnalysis(current);
+    }
   }
 
   private buildQaWordCloudLemmaAnalysisRequest(): AnalyzeWordCloudInput | null {
@@ -13764,11 +14129,17 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     };
     let lastError: unknown;
     for (let attempt = 0; attempt <= QA_WORD_CLOUD_ANALYZE_CONFLICT_RETRIES; attempt += 1) {
+      if (this.wordCloudHttpAbortController.signal.aborted) {
+        throw new DOMException('Aborted', 'AbortError');
+      }
       try {
-        return await trpc.wordCloud.analyzeQa.mutate(input);
+        return await trpc.wordCloud.analyzeQa.mutate(input, {
+          signal: this.wordCloudHttpAbortController.signal,
+        });
       } catch (error) {
         lastError = error;
         if (
+          this.wordCloudHttpAbortController.signal.aborted ||
           !this.isTrpcConflictError(error) ||
           attempt === QA_WORD_CLOUD_ANALYZE_CONFLICT_RETRIES
         ) {
@@ -13839,7 +14210,9 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     this.freetextWordCloudLemmaPending.set(true);
 
     try {
-      const result = await trpc.wordCloud.analyze.mutate(request);
+      const result = await trpc.wordCloud.analyze.mutate(request, {
+        signal: this.wordCloudHttpAbortController.signal,
+      });
       if (runId !== this.freetextWordCloudLemmaAnalysisRunId) {
         return;
       }
@@ -13875,16 +14248,20 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     options: { isCurrent?: () => boolean } = {},
   ): Promise<void> {
     if (!this.channels().quickFeedback || this.code.length !== 6) {
+      this.quickFeedbackRefreshRunId += 1;
       this.quickFeedbackResult.set(null);
       this.quickFeedbackSeenVoteCount.set(0);
       return;
     }
 
+    const runId = ++this.quickFeedbackRefreshRunId;
     try {
       const result = await trpc.quickFeedback.hostResults.query({
         sessionCode: this.code.toUpperCase(),
       });
-      if (options.isCurrent && !options.isCurrent()) return;
+      if (runId !== this.quickFeedbackRefreshRunId || (options.isCurrent && !options.isCurrent())) {
+        return;
+      }
       this.quickFeedbackResult.set(result);
     } catch {
       // Keep the last snapshot visible during transient polling failures.
@@ -14569,13 +14946,17 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     return $localize`:@@sessionHost.exportPdfPriorityHintPlural:${count}:count: Fragen zur Nachbesprechung empfohlen`;
   }
 
-  async exportSessionResultsPdf(profile: SessionResultsPdfProfile = 'visual'): Promise<void> {
+  async exportSessionResultsPdf(
+    profile: SessionResultsPdfProfile = 'visual',
+    disposition: SessionResultsPdfDisposition = 'download',
+  ): Promise<void> {
     if (!this.code || this.exportExporting()) return;
     this.exportStatus.set(null);
     this.exportExporting.set(true);
     try {
       const result = await this.sessionResultsExport.exportPdfFromSessionCode(this.code, {
         profile,
+        disposition,
         onLargeReportHint: (questionCount) => {
           this.exportStatus.set(
             $localize`:@@sessionHost.exportPdfGeneratingLarge:PDF wird erstellt (${questionCount} Fragen)…`,
@@ -14583,14 +14964,16 @@ export class SessionHostComponent implements OnInit, OnDestroy {
         },
       });
       this.exportStatus.set(
-        result === 'pdf-download'
-          ? $localize`:@@sessionHost.exportPdfDownloadDone:Ergebnis-PDF heruntergeladen.`
-          : $localize`:@@sessionHost.exportPdfPrintDone:Ergebnis-PDF zum Speichern geöffnet.`,
+        result === 'pdf-view'
+          ? $localize`:@@sessionHost.exportPdfViewDone:Nachbesprechungsplan geöffnet.`
+          : result === 'pdf-download'
+            ? $localize`:@@sessionHost.exportPdfDownloadDone:Ergebnis-PDF heruntergeladen.`
+            : $localize`:@@sessionHost.exportPdfPrintDone:Ergebnis-PDF zum Speichern geöffnet.`,
       );
       this.dismissHostSteeringCallout();
     } catch {
       this.openHostSteeringCalloutForExportFailure(
-        () => void this.exportSessionResultsPdf(profile),
+        () => void this.exportSessionResultsPdf(profile, disposition),
       );
     } finally {
       this.exportExporting.set(false);
@@ -14742,6 +15125,7 @@ export class SessionHostComponent implements OnInit, OnDestroy {
     try {
       this.stopCountdown();
       this.countdownSeconds.set(null);
+      this.abortInflightWordCloudHttpRequests();
       const result = await trpc.session.end.mutate({ code: this.code.toUpperCase() });
       this.statusUpdate.set(result);
       this.syncCurrentQuestionForHost(null);

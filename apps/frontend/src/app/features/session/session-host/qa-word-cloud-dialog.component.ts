@@ -31,11 +31,14 @@ export type QaWordCloudDialogData = {
   analyzedQuestionCount: () => number;
   eligibleQuestionCount: () => number;
   analysisModelVersion?: () => string | null;
+  labelModelId?: () => string | null;
+  labelModelVersion?: () => string | null;
   analysisVariant: () => WordCloudAnalysisVariant;
   setAnalysisVariant: (variant: WordCloudAnalysisVariant) => void | Promise<void>;
   themeModeAvailable: () => boolean;
   themeFallbackHint: () => string | null;
   themeWaitHint?: () => string | null;
+  hasPreparedThemes?: () => boolean;
   sortMode: () => QaQuestionSortMode;
   setSortMode: (mode: QaQuestionSortMode) => void | Promise<void>;
   frozen: () => boolean;
@@ -83,6 +86,8 @@ export class QaWordCloudDialogComponent {
   readonly tooltipMetricLabel = computed(() => this.data.tooltipMetricLabel());
   readonly analyzedQuestionCount = computed(() => this.data.analyzedQuestionCount());
   readonly analysisModelVersion = computed(() => this.data.analysisModelVersion?.() ?? null);
+  readonly labelModelId = computed(() => this.data.labelModelId?.() ?? null);
+  readonly labelModelVersion = computed(() => this.data.labelModelVersion?.() ?? null);
   readonly analysisVariant = computed(() => this.data.analysisVariant());
   readonly themeModeAvailable = computed(() => this.data.themeModeAvailable());
   readonly themeFallbackHint = computed(() => this.data.themeFallbackHint());
@@ -113,7 +118,7 @@ export class QaWordCloudDialogComponent {
       case 'stale':
         return 'refresh';
       default:
-        return 'auto_fix_high';
+        return 'wand_stars';
     }
   });
   readonly focusedTermLabel = computed(() => this.data.focusedTermLabel?.() ?? null);
@@ -123,8 +128,20 @@ export class QaWordCloudDialogComponent {
   readonly showThemeRefresh = computed(
     () => this.analysisVariant() === 'SEMANTIC' && this.smoothingStatus() === 'stale',
   );
+  readonly hasPreparedThemes = computed(
+    () => this.data.hasPreparedThemes?.() ?? (this.analysisEntries()?.length ?? 0) > 0,
+  );
   readonly themesPending = computed(
-    () => this.analysisVariant() === 'SEMANTIC' && this.smoothingStatus() === 'pending',
+    () =>
+      this.analysisVariant() === 'SEMANTIC' &&
+      this.smoothingStatus() === 'pending' &&
+      !this.hasPreparedThemes(),
+  );
+  readonly themesRefreshing = computed(
+    () =>
+      this.analysisVariant() === 'SEMANTIC' &&
+      this.smoothingStatus() === 'pending' &&
+      this.hasPreparedThemes(),
   );
   readonly themeProgressLabel = $localize`:@@sessionQa.wordCloudSemanticPendingLabel:Themen werden vorbereitet.`;
   readonly themeProgressFallback = $localize`:@@sessionQa.wordCloudSemanticPendingFallback:Es gelten Wörter und Phrasen.`;

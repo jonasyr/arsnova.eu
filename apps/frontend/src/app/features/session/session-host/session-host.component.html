@@ -602,11 +602,6 @@
         </section>
         @if (showHostModerationStack()) {
           <div class="session-host__moderation-stack">
-            @if (activeChannel() === 'quiz') {
-              <span class="session-host__tool-label" i18n="@@sessionHost.moderationArea"
-                >Moderation</span
-              >
-            }
             @if (moderationCompassReturn()) {
               <button
                 type="button"
@@ -624,7 +619,7 @@
                 >
               </button>
             }
-            @if (showModerationCompass()) {
+            @if (showModerationCompassButton()) {
               <button
                 #moderationCompassButton
                 type="button"
@@ -652,15 +647,24 @@
                 data-testid="host-learning-objectives"
                 (click)="openLearningObjectivesDialog()"
                 aria-haspopup="dialog"
-                i18n-aria-label="@@sessionHost.learningObjectivesAria"
-                aria-label="Lernziele für diese Session öffnen"
+                [attr.aria-label]="learningObjectivesControlAriaLabel()"
               >
-                <mat-icon aria-hidden="true">school</mat-icon>
-                <span
-                  class="session-host__moderation-control-label"
-                  i18n="@@sessionHost.learningObjectivesButton"
-                  >Ziele</span
-                >
+                <mat-icon aria-hidden="true">{{
+                  activeChannel() === 'qa' ? 'campaign' : 'school'
+                }}</mat-icon>
+                @if (activeChannel() === 'qa') {
+                  <span
+                    class="session-host__moderation-control-label"
+                    i18n="@@sessionHost.qaAssignmentButton"
+                    >Auftrag</span
+                  >
+                } @else {
+                  <span
+                    class="session-host__moderation-control-label"
+                    i18n="@@sessionHost.learningObjectivesButton"
+                    >Lernziel</span
+                  >
+                }
               </button>
             }
           </div>
@@ -917,7 +921,7 @@
                         class="session-host__export-pdf-btn"
                         matButton="filled"
                         type="button"
-                        (click)="exportSessionResultsPdf('visual')"
+                        (click)="exportSessionResultsPdf('visual', 'view')"
                         [disabled]="exportExporting()"
                         [disabledInteractive]="true"
                         [attr.aria-busy]="exportExporting()"
@@ -1533,7 +1537,7 @@
                 @if (feedbackSummary(); as fb) {
                   <section class="session-host__feedback-card" aria-labelledby="feedback-heading">
                     <h2 class="session-host__feedback-summary-title" id="feedback-heading">
-                      <mat-icon aria-hidden="true">feedback</mat-icon>
+                      <mat-icon aria-hidden="true">rate_review</mat-icon>
                       <span i18n>Feedback der Teilnehmenden</span>
                     </h2>
                     <div class="session-host__feedback-hero">
@@ -3156,12 +3160,12 @@
                                       <div class="session-host__round-comparison-bar-track">
                                         <div
                                           class="session-host__round-comparison-bar-fill session-host__round-comparison-bar-fill--r2"
-                                          [style.width.%]="r2?.votePercentage ?? 0"
+                                          [style.width.%]="r2.votePercentage"
                                         ></div>
                                       </div>
                                       <span
                                         class="session-host__round-comparison-bar-pct session-host__round-comparison-bar-pct--r2"
-                                        >{{ r2?.votePercentage ?? 0 }}&nbsp;%</span
+                                        >{{ r2.votePercentage }}&nbsp;%</span
                                       >
                                     </div>
                                   </div>
@@ -3558,7 +3562,7 @@
               ) {
                 <div class="session-host__interim-leaderboard">
                   <p class="session-host__interim-title">
-                    <mat-icon>emoji_events</mat-icon>
+                    <mat-icon>trophy</mat-icon>
                     <span i18n>Top 5</span>
                   </p>
                   <ol class="session-host__interim-list" role="list">
@@ -3773,7 +3777,7 @@
                           value="SEMANTIC"
                           (click)="setFreetextWordCloudMode('SEMANTIC')"
                           i18n="@@sessionHost.wordCloudAnalysisSemantic"
-                          >Themen</mat-button-toggle
+                          >Thema</mat-button-toggle
                         >
                       </mat-button-toggle-group>
                       <button
@@ -3831,68 +3835,92 @@
                         </button>
                       }
                     </div>
-                    @if (freetextWordCloudSemanticAnalysisPending()) {
-                      <div
-                        class="session-host__word-cloud-progress"
-                        role="status"
-                        aria-live="polite"
-                        aria-busy="true"
-                        [attr.aria-label]="freetextWordCloudSemanticProgressAria()"
-                      >
-                        <p
-                          class="session-host__word-cloud-progress-label"
-                          i18n="@@sessionQa.wordCloudSemanticPendingLabel"
-                        >
-                          Themen werden vorbereitet.
-                        </p>
-                        @if (freetextWordCloudSemanticWaitHint(); as waitHint) {
-                          <p class="session-host__word-cloud-progress-wait">{{ waitHint }}</p>
-                        }
-                        <mat-progress-bar
-                          class="session-host__word-cloud-progress-bar"
-                          mode="indeterminate"
-                        />
-                        <p
-                          class="session-host__word-cloud-progress-fallback"
-                          i18n="@@sessionQa.wordCloudSemanticPendingFallback"
-                        >
-                          Es gelten Wörter und Phrasen.
-                        </p>
-                      </div>
-                    } @else if (
-                      freetextWordCloudSemanticHint() && !freetextWordCloudShowThemeRefresh()
-                    ) {
-                      <p class="session-host__extra-note" role="status" aria-live="polite">
-                        {{ freetextWordCloudSemanticHint() }}
-                      </p>
-                    }
-                    @if (freetextWordCloudSmoothingHint()) {
-                      <p class="session-host__extra-note" role="status" aria-live="polite">
-                        {{ freetextWordCloudSmoothingHint() }}
-                      </p>
-                    }
                     @if (exportStatus()) {
                       <p class="session-host__export-status" role="status">{{ exportStatus() }}</p>
                     }
-                    <app-word-cloud
-                      #freetextWordCloud
-                      [responses]="displayedFreetextResponses()"
-                      [terms]="displayedFreetextVisibleTerms()"
-                      [analysisEntries]="displayedFreetextAnalysisEntries()"
-                      [selectionScopeKey]="displayedCurrentQuestionForHost()?.questionId ?? null"
-                      [eyebrow]="freetextWordCloudEyebrow"
-                      [description]="freetextWordCloudDescription()"
-                      [wordLabelSingular]="freetextWordCloudWordLabelSingular()"
-                      [wordLabelPlural]="freetextWordCloudWordLabelPlural()"
-                      [showConfidenceFilter]="freetextWordCloudMode() === 'SEMANTIC'"
-                      [weightingHint]="null"
-                      [presentationMode]="freetextWordCloudMaximized()"
-                      [showMaximizeAction]="!freetextWordCloudMaximized()"
-                      [showResponsesPanel]="!freetextWordCloudMaximized()"
-                      [maximizeActionHandler]="maximizeFreetextWordCloud"
-                      [showReleaseNote]="false"
-                      [focusedTermLabel]="moderationCompassFocusedTerm()"
-                    />
+                    <div class="session-host__word-cloud-stage">
+                      @if (
+                        freetextWordCloudSemanticAnalysisPending() ||
+                        freetextWordCloudSemanticHint() ||
+                        freetextWordCloudSmoothingHint()
+                      ) {
+                        <div
+                          class="session-host__word-cloud-status"
+                          [class.session-host__word-cloud-status--cover]="
+                            freetextWordCloudSemanticAnalysisPending()
+                          "
+                        >
+                          @if (freetextWordCloudSemanticAnalysisPending()) {
+                            <div
+                              class="session-host__word-cloud-progress"
+                              role="status"
+                              aria-live="polite"
+                              aria-busy="true"
+                              [attr.aria-label]="freetextWordCloudSemanticProgressAria()"
+                            >
+                              <p
+                                class="session-host__word-cloud-progress-label"
+                                i18n="@@sessionQa.wordCloudSemanticPendingLabel"
+                              >
+                                Themen werden vorbereitet.
+                              </p>
+                              @if (freetextWordCloudSemanticWaitHint(); as waitHint) {
+                                <p class="session-host__word-cloud-progress-wait">{{ waitHint }}</p>
+                              }
+                              <mat-progress-bar
+                                class="session-host__word-cloud-progress-bar"
+                                mode="indeterminate"
+                              />
+                              <p
+                                class="session-host__word-cloud-progress-fallback"
+                                i18n="@@sessionQa.wordCloudSemanticPendingFallback"
+                              >
+                                Es gelten Wörter und Phrasen.
+                              </p>
+                            </div>
+                          } @else if (
+                            freetextWordCloudSemanticHint() && !freetextWordCloudShowThemeRefresh()
+                          ) {
+                            <p class="session-host__extra-note" role="status" aria-live="polite">
+                              {{ freetextWordCloudSemanticHint() }}
+                            </p>
+                          }
+                          @if (freetextWordCloudSmoothingHint()) {
+                            <p class="session-host__extra-note" role="status" aria-live="polite">
+                              {{ freetextWordCloudSmoothingHint() }}
+                            </p>
+                          }
+                        </div>
+                      }
+                      <app-word-cloud
+                        #freetextWordCloud
+                        [responses]="displayedFreetextResponses()"
+                        [terms]="displayedFreetextVisibleTerms()"
+                        [analysisEntries]="displayedFreetextAnalysisEntries()"
+                        [selectionScopeKey]="displayedCurrentQuestionForHost()?.questionId ?? null"
+                        [eyebrow]="freetextWordCloudEyebrow"
+                        [description]="freetextWordCloudDescription()"
+                        [wordLabelSingular]="freetextWordCloudWordLabelSingular()"
+                        [wordLabelPlural]="freetextWordCloudWordLabelPlural()"
+                        [showConfidenceFilter]="freetextWordCloudMode() === 'SEMANTIC'"
+                        [weightingHint]="null"
+                        [presentationMode]="freetextWordCloudMaximized()"
+                        [showMaximizeAction]="!freetextWordCloudMaximized()"
+                        [showResponsesPanel]="!freetextWordCloudMaximized()"
+                        [maximizeActionHandler]="maximizeFreetextWordCloud"
+                        [showReleaseNote]="false"
+                        [focusedTermLabel]="moderationCompassFocusedTerm()"
+                        [analysisModelVersion]="
+                          freetextWordCloudSemanticAnalysisResult()?.modelVersion ?? null
+                        "
+                        [labelModelId]="
+                          freetextWordCloudSemanticAnalysisResult()?.labelModelId ?? null
+                        "
+                        [labelModelVersion]="
+                          freetextWordCloudSemanticAnalysisResult()?.labelModelVersion ?? null
+                        "
+                      />
+                    </div>
                   </div>
                 </details>
               }
@@ -3960,7 +3988,7 @@
               >
                 <div class="session-channel-card__header session-channel-card__header--qa-title">
                   <span class="session-channel-card__header-lead-icon" aria-hidden="true">
-                    <mat-icon>chat_bubble_outline</mat-icon>
+                    <mat-icon>chat_bubble</mat-icon>
                   </span>
                   <div class="session-host__qa-title-block">
                     <p class="session-channel-card__eyebrow">{{ channelLabel('qa') }}</p>
@@ -3994,9 +4022,6 @@
                           subscriptSizing="dynamic"
                           class="session-host__qa-title-field"
                         >
-                          <mat-label i18n="@@sessionHost.qaTitleFieldLabel"
-                            >Titel für Q&amp;A</mat-label
-                          >
                           <input
                             #qaTitleInput
                             matInput
@@ -4005,9 +4030,12 @@
                             [value]="qaTitleDraft()"
                             (input)="qaTitleDraft.set($any($event.target).value)"
                             (keydown)="onQaTitleInputKeydown($event)"
+                            i18n-aria-label="@@qaConfig.contentLegend"
+                            aria-label="Überschrift zum Forum"
                             i18n-placeholder="@@sessionTabs.qaTitleDefault"
                             placeholder="Fragen zur Veranstaltung..."
                           />
+                          <mat-hint align="end">{{ qaTitleDraft().length }}/200</mat-hint>
                         </mat-form-field>
                         <div class="session-host__qa-title-icon-actions">
                           <button
@@ -4054,16 +4082,15 @@
                         <span>{{ hostRead }}</span>
                       }
                     </span>
-                    @if (effectiveStatus() !== 'FINISHED') {
-                      <button
-                        mat-stroked-button
-                        type="button"
-                        (click)="openQaConfigurationDialog()"
-                      >
-                        <mat-icon aria-hidden="true">tune</mat-icon>
-                        <span i18n="@@sessionQa.changeDeadline">Q&A-Einstellungen</span>
-                      </button>
-                    }
+                    <button
+                      mat-stroked-button
+                      type="button"
+                      data-testid="qa-settings"
+                      (click)="openQaConfigurationDialog()"
+                    >
+                      <mat-icon aria-hidden="true">tune</mat-icon>
+                      <span i18n="@@sessionQa.changeDeadline">Q&A-Einstellungen</span>
+                    </button>
                   </div>
                 }
 
@@ -4091,7 +4118,7 @@
                           [attr.aria-label]="qaTotalSummaryAria()"
                         >
                           <mat-icon class="session-qa-summary__icon" aria-hidden="true"
-                            >chat_bubble_outline</mat-icon
+                            >chat_bubble</mat-icon
                           >
                           <span>{{ formatCount(qaHostStatusStripTotalCount()) }}</span>
                         </span>
@@ -4147,7 +4174,7 @@
                           data-testid="qa-summary-pinned"
                         >
                           <mat-icon class="session-qa-summary__icon" aria-hidden="true"
-                            >push_pin</mat-icon
+                            >keep</mat-icon
                           >
                           <span>{{ qaHostStatusPinnedChipLabel() }}</span>
                         </span>
@@ -4175,7 +4202,7 @@
                           data-testid="qa-summary-deleted"
                         >
                           <mat-icon class="session-qa-summary__icon" aria-hidden="true"
-                            >delete_outline</mat-icon
+                            >delete</mat-icon
                           >
                           <span>{{ formatCount(qaDeletedCount()) }}</span>
                         </span>
@@ -4427,9 +4454,25 @@
                           aria-label="Q&A-Sortierung"
                           i18n-aria-label="@@sessionQa.sortAria"
                         >
-                          <mat-button-toggle value="TOP" i18n="@@sessionQa.sortTop"
-                            >Meist unterstützt</mat-button-toggle
-                          >
+                          <mat-button-toggle value="CONTROVERSIAL">
+                            <span class="session-qa-sort-toggle__label">
+                              <span i18n="@@sessionQa.sortControversial">Kontroverse</span>
+                              <span
+                                class="session-qa-sort-help"
+                                role="button"
+                                tabindex="0"
+                                data-testid="qa-sort-help-controversial"
+                                i18n-aria-label="@@sessionQa.sortHelpControversialAria"
+                                aria-label="Hilfe zu »Kontroverse«"
+                                (click)="openQaSortHelp($event, 'CONTROVERSIAL')"
+                                (keydown.enter)="openQaSortHelp($event, 'CONTROVERSIAL')"
+                                (keydown.space)="openQaSortHelp($event, 'CONTROVERSIAL')"
+                                (mousedown)="$event.stopPropagation()"
+                              >
+                                <mat-icon aria-hidden="true">help</mat-icon>
+                              </span>
+                            </span>
+                          </mat-button-toggle>
                           <mat-button-toggle value="BEST">
                             <span class="session-qa-sort-toggle__label">
                               <span i18n="@@sessionQa.sortBest">Beste Fragen</span>
@@ -4445,29 +4488,13 @@
                                 (keydown.space)="openQaSortHelp($event, 'BEST')"
                                 (mousedown)="$event.stopPropagation()"
                               >
-                                <mat-icon aria-hidden="true">help_outline</mat-icon>
+                                <mat-icon aria-hidden="true">help</mat-icon>
                               </span>
                             </span>
                           </mat-button-toggle>
-                          <mat-button-toggle value="CONTROVERSIAL">
-                            <span class="session-qa-sort-toggle__label">
-                              <span i18n="@@sessionQa.sortControversial">Umstritten</span>
-                              <span
-                                class="session-qa-sort-help"
-                                role="button"
-                                tabindex="0"
-                                data-testid="qa-sort-help-controversial"
-                                i18n-aria-label="@@sessionQa.sortHelpControversialAria"
-                                aria-label="Hilfe zu »Umstritten«"
-                                (click)="openQaSortHelp($event, 'CONTROVERSIAL')"
-                                (keydown.enter)="openQaSortHelp($event, 'CONTROVERSIAL')"
-                                (keydown.space)="openQaSortHelp($event, 'CONTROVERSIAL')"
-                                (mousedown)="$event.stopPropagation()"
-                              >
-                                <mat-icon aria-hidden="true">help_outline</mat-icon>
-                              </span>
-                            </span>
-                          </mat-button-toggle>
+                          <mat-button-toggle value="TOP" i18n="@@sessionQa.sortTop"
+                            >Stimmensaldo</mat-button-toggle
+                          >
                           <mat-button-toggle value="TIME" i18n="@@sessionQa.sortTime"
                             >Zeit</mat-button-toggle
                           >
@@ -4487,7 +4514,7 @@
                             <mat-icon aria-hidden="true">visibility</mat-icon>
                             <span i18n="@@sessionQa.filterShowAllLabel">Alle anzeigen</span>
                           } @else {
-                            <mat-icon aria-hidden="true">push_pin</mat-icon>
+                            <mat-icon aria-hidden="true">keep</mat-icon>
                             <span i18n="@@sessionQa.filterPinnedLabel">Nur hervorgehobene</span>
                           }
                         </button>
@@ -4553,27 +4580,14 @@
                             mat-menu-item
                             type="button"
                             role="menuitemradio"
-                            data-testid="qa-mobile-sort-top"
-                            [attr.aria-checked]="qaSortMode() === 'TOP'"
-                            (click)="setQaSortMode('TOP')"
+                            data-testid="qa-mobile-sort-controversial"
+                            [attr.aria-checked]="qaSortMode() === 'CONTROVERSIAL'"
+                            (click)="setQaSortMode('CONTROVERSIAL')"
                           >
                             <mat-icon aria-hidden="true">{{
-                              qaSortMode() === 'TOP' ? 'check' : 'thumb_up'
+                              qaSortMode() === 'CONTROVERSIAL' ? 'check' : 'compare_arrows'
                             }}</mat-icon>
-                            <span i18n="@@sessionQa.sortTop">Meist unterstützt</span>
-                          </button>
-                          <button
-                            mat-menu-item
-                            type="button"
-                            role="menuitemradio"
-                            data-testid="qa-mobile-sort-time"
-                            [attr.aria-checked]="qaSortMode() === 'TIME'"
-                            (click)="setQaSortMode('TIME')"
-                          >
-                            <mat-icon aria-hidden="true">{{
-                              qaSortMode() === 'TIME' ? 'check' : 'schedule'
-                            }}</mat-icon>
-                            <span i18n="@@sessionQa.sortTime">Zeit</span>
+                            <span i18n="@@sessionQa.sortControversial">Kontroverse</span>
                           </button>
                           <button
                             mat-menu-item
@@ -4592,14 +4606,27 @@
                             mat-menu-item
                             type="button"
                             role="menuitemradio"
-                            data-testid="qa-mobile-sort-controversial"
-                            [attr.aria-checked]="qaSortMode() === 'CONTROVERSIAL'"
-                            (click)="setQaSortMode('CONTROVERSIAL')"
+                            data-testid="qa-mobile-sort-top"
+                            [attr.aria-checked]="qaSortMode() === 'TOP'"
+                            (click)="setQaSortMode('TOP')"
                           >
                             <mat-icon aria-hidden="true">{{
-                              qaSortMode() === 'CONTROVERSIAL' ? 'check' : 'compare_arrows'
+                              qaSortMode() === 'TOP' ? 'check' : 'thumb_up'
                             }}</mat-icon>
-                            <span i18n="@@sessionQa.sortControversial">Umstritten</span>
+                            <span i18n="@@sessionQa.sortTop">Stimmensaldo</span>
+                          </button>
+                          <button
+                            mat-menu-item
+                            type="button"
+                            role="menuitemradio"
+                            data-testid="qa-mobile-sort-time"
+                            [attr.aria-checked]="qaSortMode() === 'TIME'"
+                            (click)="setQaSortMode('TIME')"
+                          >
+                            <mat-icon aria-hidden="true">{{
+                              qaSortMode() === 'TIME' ? 'check' : 'schedule'
+                            }}</mat-icon>
+                            <span i18n="@@sessionQa.sortTime">Zeit</span>
                           </button>
                           <button
                             mat-menu-item
@@ -4607,7 +4634,7 @@
                             data-testid="qa-mobile-sort-help-best"
                             (click)="openQaSortHelp($event, 'BEST')"
                           >
-                            <mat-icon aria-hidden="true">help_outline</mat-icon>
+                            <mat-icon aria-hidden="true">help</mat-icon>
                             <span i18n="@@sessionQa.sortHelpBestMenu">Hilfe: Beste Fragen</span>
                           </button>
                           <button
@@ -4616,9 +4643,9 @@
                             data-testid="qa-mobile-sort-help-controversial"
                             (click)="openQaSortHelp($event, 'CONTROVERSIAL')"
                           >
-                            <mat-icon aria-hidden="true">help_outline</mat-icon>
+                            <mat-icon aria-hidden="true">help</mat-icon>
                             <span i18n="@@sessionQa.sortHelpControversialMenu"
-                              >Hilfe: Umstritten</span
+                              >Hilfe: Kontroverse</span
                             >
                           </button>
                           <button
@@ -4631,7 +4658,7 @@
                             (click)="setQaPinnedFilter(!qaShowPinnedOnly())"
                           >
                             <mat-icon aria-hidden="true">{{
-                              qaShowPinnedOnly() ? 'visibility' : 'push_pin'
+                              qaShowPinnedOnly() ? 'visibility' : 'keep'
                             }}</mat-icon>
                             @if (qaShowPinnedOnly()) {
                               <span i18n="@@sessionQa.filterShowAllLabel">Alle anzeigen</span>
@@ -4909,7 +4936,7 @@
                 ) {
                   <div class="session-qa-empty">
                     <mat-icon class="session-qa-empty__icon" aria-hidden="true"
-                      >chat_bubble_outline</mat-icon
+                      >chat_bubble</mat-icon
                     >
                     <p class="session-qa-empty__text" i18n="@@sessionTabs.qaHostPlaceholder">
                       Noch keine Fragen.
@@ -5291,9 +5318,7 @@
                     </div>
                   } @else if (qaFilteredQuestions().length === 0 && qaShowPinnedOnly()) {
                     <div class="session-qa-empty session-qa-empty--filtered" role="status">
-                      <mat-icon class="session-qa-empty__icon" aria-hidden="true"
-                        >push_pin</mat-icon
-                      >
+                      <mat-icon class="session-qa-empty__icon" aria-hidden="true">keep</mat-icon>
                       <p class="session-qa-empty__text" i18n="@@sessionQa.filterEmptyHint">
                         Nur hervorgehobene aktiv – noch keine hervorgehobenen Fragen.
                       </p>

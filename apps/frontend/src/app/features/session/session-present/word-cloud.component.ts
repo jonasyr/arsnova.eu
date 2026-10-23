@@ -24,7 +24,12 @@ import {
 import { MatDialog } from '@angular/material/dialog';
 import { MatButtonToggle, MatButtonToggleGroup } from '@angular/material/button-toggle';
 import { MatIcon } from '@angular/material/icon';
-import { MatTooltip } from '@angular/material/tooltip';
+import { DomSanitizer, type SafeHtml } from '@angular/platform-browser';
+import {
+  WordCloudMarkdownTooltipDirective,
+  trustWordCloudTooltipHtml,
+  type WordCloudTooltipBlock,
+} from './word-cloud-markdown-tooltip.directive';
 import type { CloudLayout } from 'd3-cloud';
 import type { WordCloudAnalysisEntryDTO } from '@arsnova/shared-types';
 import { getEffectiveLocale, localeIdToSupported } from '../../../core/locale-from-path';
@@ -152,7 +157,7 @@ interface RoundedRectStyle {
     MatCardSubtitle,
     MatCardTitle,
     MatIcon,
-    MatTooltip,
+    WordCloudMarkdownTooltipDirective,
   ],
   templateUrl: './word-cloud.component.html',
   styleUrl: './word-cloud.component.scss',
@@ -163,6 +168,8 @@ interface RoundedRectStyle {
 })
 export class WordCloudComponent implements AfterViewInit, OnDestroy {
   private readonly document = inject(DOCUMENT);
+  private readonly sanitizer = inject(DomSanitizer);
+  private readonly tooltipMarkdownCache = new Map<string, SafeHtml>();
   private readonly dialog = inject(MatDialog, { optional: true });
   private readonly localeId = inject(LOCALE_ID);
   private readonly exportSurface = viewChild<ElementRef<HTMLElement>>('exportSurface');
@@ -203,6 +210,8 @@ export class WordCloudComponent implements AfterViewInit, OnDestroy {
   );
   readonly tooltipMetricLabel = input<string | null>(null);
   readonly analysisModelVersion = input<string | null>(null);
+  readonly labelModelId = input<string | null>(null);
+  readonly labelModelVersion = input<string | null>(null);
   readonly disableCloudLayout = input(false);
   readonly presentationMode = input(false);
   readonly outputOnly = input(false);
@@ -614,6 +623,21 @@ export class WordCloudComponent implements AfterViewInit, OnDestroy {
       .join('|'),
   );
 
+  /**
+   * Stabiler Seed für die d3-cloud-Spirale: hängt nur an der Menge der Begriffe
+   * (sortierte groupKeys), nicht an deren aktuellem Gewicht (`count`) oder Rang.
+   * Dadurch behalten Bubbles beim Umschalten der Sortieroption ihre Spiralbahn.
+   */
+  private readonly layoutStableRandomSeedSignature = computed(() => {
+    const width = Math.round(this.stageWidth());
+    const height = Math.round(this.cloudStageHeightPx());
+    const keys = this.displayWords()
+      .map((entry) => entry.groupKey)
+      .sort()
+      .join('|');
+    return [width, height, this.layoutFontFamily(), keys].join('|');
+  });
+
   readonly layoutInputSignature = computed(() => {
     const width = Math.round(this.stageWidth());
     const height = Math.round(this.cloudStageHeightPx());
@@ -955,6 +979,8 @@ export class WordCloudComponent implements AfterViewInit, OnDestroy {
       const runId = ++this.layoutRunId;
       const layoutWords = this.createLayoutWords(words);
       const contentSignature = this.layoutContentSignature();
+      const isInitialCloudRender = this.positionedWords().length === 0;
+      const debounceMs = isInitialCloudRender ? 0 : CLOUD_LAYOUT_DEBOUNCE_MS;
       this.layoutTimer = setTimeout(
         () =>
           void this.runCloudLayout(
@@ -966,12 +992,13 @@ export class WordCloudComponent implements AfterViewInit, OnDestroy {
             contentSignature,
             runId,
           ),
-        CLOUD_LAYOUT_DEBOUNCE_MS,
+        debounceMs,
       );
     });
   }
 
   ngAfterViewInit(): void {
+    void this.loadD3Cloud();
     this.observeVisualFrame(this.visualFrame()?.nativeElement ?? null);
     this.observeStage(this.layoutStage()?.nativeElement ?? null);
   }
@@ -1176,6 +1203,85 @@ export class WordCloudComponent implements AfterViewInit, OnDestroy {
     return Math.max(1, 200 - rank);
   }
 
+  wordTooltipBlocks(entry: CloudWord): readonly WordCloudTooltipBlock[] {
+    const blocks: WordCloudTooltipBlock[] = [];
+    const meta = [this.tooltipValueLine(entry.count)];
+    const sourceCountLine = this.tooltipSourceCountLine(entry.sourceCount);
+    if (sourceCountLine) {
+      meta.push(sourceCountLine);
+    }
+    const metricLine = this.tooltipMetricLine();
+    if (metricLine) {
+      meta.push(metricLine);
+    }
+    const basisLine = this.analysisBasisLine(entry);
+    if (basisLine) {
+      meta.push(basisLine);
+    }
+    const confidenceLine = this.analysisConfidenceLine(entry.confidence);
+    if (confidenceLine) {
+      meta.push(confidenceLine);
+    }
+    const modelLine = this.analysisModelVersionLine();
+    if (modelLine) {
+      meta.push(modelLine);
+    }
+    if (meta.length > 0) {
+      blocks.push({ kind: 'text', text: meta.join('\n') });
+    }
+    const extraVariants = this.tooltipExtraVariants(entry);
+    if (extraVariants.length > 0) {
+      blocks.push({
+        kind: 'heading',
+        text: $localize`:@@wordCloud.tooltipOtherForms:Weitere gezählte Formen`,
+      });
+      for (const variant of extraVariants) {
+        blocks.push({ kind: 'markdown', html: this.tooltipMarkdown(variant) });
+      }
+    }
+    if (this.analysisMode() === 'qa') {
+      const related = this.relatedResponsePreview(entry.groupKey).filter((response) =>
+        response === '...' ? true : Boolean(response.trim()),
+      );
+      if (related.length > 0) {
+        blocks.push({
+          kind: 'heading',
+          text: $localize`:@@wordCloud.tooltipRelatedQuestions:Zugehörige Fragen`,
+        });
+        for (const response of related) {
+          if (response === '...') {
+            blocks.push({ kind: 'text', text: '…' });
+            continue;
+          }
+          blocks.push({ kind: 'markdown', html: this.tooltipMarkdown(response.trim()) });
+        }
+      }
+    }
+    return blocks;
+  }
+
+  private tooltipExtraVariants(entry: CloudWord): string[] {
+    const seen = new Set<string>();
+    const extras: string[] = [];
+    for (const variant of entry.variants) {
+      const source = variant.trim();
+      if (!source || this.tooltipFormsMatch(source, entry.word)) {
+        continue;
+      }
+      const key = source.toLocaleLowerCase('de');
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      extras.push(source);
+    }
+    return extras;
+  }
+
+  private tooltipFormsMatch(left: string, right: string): boolean {
+    return left.trim().toLocaleLowerCase('de') === right.trim().toLocaleLowerCase('de');
+  }
+
   wordTooltip(entry: CloudWord): string {
     const lines = [this.tooltipValueLine(entry.count)];
     const sourceCountLine = this.tooltipSourceCountLine(entry.sourceCount);
@@ -1297,10 +1403,16 @@ export class WordCloudComponent implements AfterViewInit, OnDestroy {
     const analysisEntries = this.analysisEntries();
     if (analysisEntries && analysisEntries.length > 0) {
       const includeSemanticMeta = Boolean(this.analysisModelVersion());
+      const includeLabelModel = analysisEntries.some((entry) => entry.labelOrigin === 'model');
       const rows = [
-        includeSemanticMeta
-          ? 'label,count,variants,basis,members,confidence,modelVersion'
-          : 'label,count,variants,basis,members',
+        [
+          includeSemanticMeta
+            ? 'label,count,variants,basis,members,confidence,modelVersion'
+            : 'label,count,variants,basis,members',
+          includeLabelModel ? 'labelOrigin,labelModelId,labelModelVersion' : '',
+        ]
+          .filter((column) => column.length > 0)
+          .join(','),
         ...analysisEntries.map((entry) =>
           [
             this.escapeCsvField(entry.label),
@@ -1312,6 +1424,13 @@ export class WordCloudComponent implements AfterViewInit, OnDestroy {
               ? [
                   entry.confidence === null ? '' : String(entry.confidence),
                   this.escapeCsvField(this.analysisModelVersion() ?? ''),
+                ]
+              : []),
+            ...(includeLabelModel
+              ? [
+                  this.escapeCsvField(entry.labelOrigin ?? 'extractive'),
+                  this.escapeCsvField(this.labelModelId() ?? ''),
+                  this.escapeCsvField(this.labelModelVersion() ?? ''),
                 ]
               : []),
           ].join(','),
@@ -1651,7 +1770,11 @@ export class WordCloudComponent implements AfterViewInit, OnDestroy {
     const stageWidth = this.stageWidth();
     const stageHeight = this.cloudStageHeightPx();
     return entries.map((entry) => {
-      const rotate = getWordCloudRotation(entry.word, entry.rank, stageWidth);
+      // Stabile Rotation über Sortierwechsel hinweg: nur das absolute Top-Wort (rank 0)
+      // wird nie gedreht; alle übrigen nutzen einen rangunabhängigen Wert (> 0), damit
+      // eine Rangverschiebung (z. B. Platz 2 -> Platz 1) nicht plötzlich 0° <-> 90° kippt.
+      const rotationRank = entry.rank === 0 ? 0 : 1;
+      const rotate = getWordCloudRotation(entry.word, rotationRank, stageWidth);
       const size = capWordCloudFontToStage(entry.word, entry.size, stageWidth, stageHeight, rotate);
       return {
         text: entry.word,
@@ -1805,7 +1928,7 @@ export class WordCloudComponent implements AfterViewInit, OnDestroy {
         .padding((word) => word.padding)
         .rotate((word) => word.rotate)
         .fontSize((word) => word.size)
-        .random(this.createSeededRandom(this.hashSignature(signature)))
+        .random(this.createTermSeededRandom(layoutWords, this.layoutStableRandomSeedSignature()))
         .timeInterval(CLOUD_LAYOUT_TIME_SLICE_MS);
 
       this.activeCloudLayout = layout;
@@ -1873,6 +1996,29 @@ export class WordCloudComponent implements AfterViewInit, OnDestroy {
       return module.default;
     });
     return this.d3CloudImportPromise;
+  }
+
+  private createTermSeededRandom(
+    words: readonly LayoutWord[],
+    baseSeedSignature: string,
+  ): () => number {
+    // d3-cloud sortiert seine Wortliste intern vor der Platzierung nach ~~fontSize absteigend
+    // und konsumiert pro Wort genau drei Zufallszahlen (startX, startY, Spiralrichtung dt).
+    // Indem wir die Zufallssequenz in derselben Sortierreihenfolge deterministisch an den
+    // jeweiligen groupKey binden, behält jedes Wort auch bei Rangwechseln seine Spiral-Startwerte.
+    const orderedWords = [...words].sort((a, b) => ~~b.size - ~~a.size);
+    const wordRngs = orderedWords.map((word) =>
+      this.createSeededRandom(this.hashSignature(`${baseSeedSignature}|${word.entry.groupKey}`)),
+    );
+    const fallbackRng = this.createSeededRandom(this.hashSignature(baseSeedSignature));
+    let callIndex = 0;
+
+    return () => {
+      const wordIndex = Math.floor(callIndex / 3);
+      callIndex += 1;
+      const wordRng = wordRngs[wordIndex];
+      return wordRng ? wordRng() : fallbackRng();
+    };
   }
 
   private createSeededRandom(seed: number): () => number {
@@ -2081,6 +2227,16 @@ export class WordCloudComponent implements AfterViewInit, OnDestroy {
       [];
     const preview = responses.slice(0, 4);
     return responses.length > 4 ? [...preview, '...'] : preview;
+  }
+
+  private tooltipMarkdown(source: string): SafeHtml {
+    const cached = this.tooltipMarkdownCache.get(source);
+    if (cached) {
+      return cached;
+    }
+    const html = trustWordCloudTooltipHtml(this.sanitizer, source);
+    this.tooltipMarkdownCache.set(source, html);
+    return html;
   }
 
   private formatTooltipListItem(value: string): string {

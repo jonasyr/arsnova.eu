@@ -554,11 +554,11 @@ export class SessionVoteComponent implements OnInit, OnDestroy {
       case 'BEST':
         return $localize`:@@sessionQa.sortHintBest:Zeigt Fragen mit viel Zustimmung und genug Stimmen zuerst. Hervorgehobene Fragen erscheinen zuerst und sind markiert.`;
       case 'CONTROVERSIAL':
-        return $localize`:@@sessionQa.sortHintControversial:Zeigt Fragen mit gemischter Reaktion zuerst. Hervorgehobene Fragen erscheinen zuerst und sind markiert.`;
+        return $localize`:@@sessionQa.sortHintControversial:Zeigt zuerst die Fragen mit der höchsten Kontroverse: Stimmen dafür und dagegen sind möglichst ausgeglichen. Hervorgehobene Fragen erscheinen zuerst und sind markiert.`;
       case 'TIME':
         return $localize`:@@sessionQa.sortHintTime:Zeigt die neuesten Fragen zuerst. Hervorgehobene Fragen erscheinen zuerst und sind markiert.`;
       default:
-        return $localize`:@@sessionQa.sortHintTopVote:Hervorgehobene Fragen stehen zuerst. Danach kommen die mit den meisten Stimmen.`;
+        return $localize`:@@sessionQa.sortHintTopVote:Hervorgehobene Fragen stehen zuerst. Danach kommen die Fragen mit dem höchsten Stimmensaldo.`;
     }
   });
   readonly qaListTotalCount = signal(0);
@@ -594,6 +594,8 @@ export class SessionVoteComponent implements OnInit, OnDestroy {
   /** Optional Markdown/KaTeX-Editor statt einfachem Textfeld (gleiche Komponente wie Quiz-Editor). */
   readonly qaRichEditorOpen = signal(false);
   readonly qaQuota = signal<QaQuestionQuotaDTO | null>(null);
+  readonly qaForumAssignments = signal<readonly string[]>([]);
+  readonly qaAssignmentExpanded = signal(false);
   readonly qaSubmitting = signal(false);
   readonly qaError = signal<string | null>(null);
   readonly qaInfo = signal<string | null>(null);
@@ -1384,6 +1386,19 @@ export class SessionVoteComponent implements OnInit, OnDestroy {
   readonly isQaChannelOpen = computed(
     () => this.channelOpenState().qa && !this.qaDeadlineExpired() && !this.isQaDeadlineExpired(),
   );
+  readonly showQaFindSortTools = computed(() => {
+    if (!this.isQaChannelOpen()) {
+      return false;
+    }
+    if (Math.max(this.qaForumVisibleCount(), this.qaQuestions().length) > 3) {
+      return true;
+    }
+    return (
+      this.qaSearch().trim().length > 0 ||
+      this.qaSearchDraft().trim().length > 0 ||
+      this.qaSortMode() !== 'BEST'
+    );
+  });
   readonly isQaDeadlineExpired = computed(
     () => this.sessionSettings().channels?.qa.state === 'DEADLINE_EXPIRED',
   );
@@ -3321,7 +3336,7 @@ export class SessionVoteComponent implements OnInit, OnDestroy {
     if (!this.personalResultLoaded()) {
       return 'hourglass_top';
     }
-    return this.finishedHeroIsCelebration() ? 'emoji_events' : 'task_alt';
+    return this.finishedHeroIsCelebration() ? 'trophy' : 'task_alt';
   }
 
   /** Sichtbarer Team-Rang (#n) oder Gedankenstrich, solange die Wertung noch ohne Punkte ist. */
@@ -3574,6 +3589,43 @@ export class SessionVoteComponent implements OnInit, OnDestroy {
     return rendered;
   }
 
+  toggleQaAssignmentExpanded(): void {
+    this.qaAssignmentExpanded.update((open) => !open);
+  }
+
+  private isQaAssignmentFocusActive(): boolean {
+    const active = globalThis.document?.activeElement;
+    if (!(active instanceof HTMLElement)) return false;
+    return Boolean(
+      active.closest('[data-testid="vote-qa-assignment-toggle"]') ||
+      active.closest('[data-testid="vote-qa-assignment-panel"]'),
+    );
+  }
+
+  private restoreFocusAfterQaAssignmentRemoved(): void {
+    const heading = globalThis.document?.getElementById('vote-qa-heading');
+    if (!(heading instanceof HTMLElement) || heading.hasAttribute('disabled')) return;
+    heading.focus();
+  }
+
+  renderQaAssignmentMarkdown(value: string): SafeHtml {
+    const cacheKey = `qa-assignment\u0000${value}`;
+    const cached = this.markdownCache.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+    const rendered = this.sanitizer.bypassSecurityTrustHtml(
+      renderMarkdownWithKatex(value, {
+        escapeListMarkers: true,
+        headingStartLevel: 4,
+        imagePolicy: 'allow-relative-and-https',
+        interactive: false,
+      }).html,
+    );
+    this.markdownCache.set(cacheKey, rendered);
+    return rendered;
+  }
+
   renderOrderingItemMarkdown(value: string): SafeHtml {
     // Leading numbers like »9. November« must stay; escapeListMarkers avoids <ol> renumbering.
     return this.renderMarkdown(value, 4);
@@ -3765,6 +3817,8 @@ export class SessionVoteComponent implements OnInit, OnDestroy {
     this.qaDraft.set('');
     this.qaRichEditorOpen.set(false);
     this.qaQuota.set(null);
+    this.qaForumAssignments.set([]);
+    this.qaAssignmentExpanded.set(false);
     this.qaSubmitAttempt = null;
     this.qaSubmitting.set(false);
     this.qaError.set(null);
@@ -5257,6 +5311,17 @@ export class SessionVoteComponent implements OnInit, OnDestroy {
     }
     if (snapshot.quota) {
       this.qaQuota.set(snapshot.quota);
+    }
+    const nextAssignments = snapshot.forumAssignments ?? [];
+    const assignmentUiRemoved =
+      this.qaForumAssignments().length > 0 && nextAssignments.length === 0;
+    const assignmentFocusActive = this.isQaAssignmentFocusActive();
+    this.qaForumAssignments.set(nextAssignments);
+    if (nextAssignments.length === 0) {
+      this.qaAssignmentExpanded.set(false);
+    }
+    if (assignmentUiRemoved && assignmentFocusActive) {
+      this.restoreFocusAfterQaAssignmentRemoved();
     }
     if (snapshot.state !== 'ACTIVE') {
       this.qaQuestions.set([]);

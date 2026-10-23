@@ -80,6 +80,7 @@ import {
   SHORT_TEXT_DEFAULT_EVALUATION_MODE,
   SHORT_TEXT_DEFAULT_TOLERANCE_LEVEL,
   SHORT_TEXT_MAX_LENGTH_LIMIT,
+  SHORT_TEXT_MAX_SOLUTIONS,
   CONFIDENCE_SCALE_MAX,
   CONFIDENCE_SCALE_MIN,
   evaluateNumericAnswer,
@@ -609,14 +610,26 @@ export class QuizEditComponent implements OnDestroy {
   ];
 
   readonly nicknameThemeOptions: Array<{ value: NicknameTheme; label: string }> = [
-    { value: 'NOBEL_LAUREATES', label: $localize`Nobelpreis` },
     {
       value: 'KINDERGARTEN',
-      label: $localize`:@@quiz.nicknameTheme.kindergarten:Kindergarten (Tier-Emojis)`,
+      label: $localize`:@@sessionParticipation.themeKindergarten:Bunte Tier-Icons`,
     },
-    { value: 'PRIMARY_SCHOOL', label: $localize`Grundschule` },
-    { value: 'MIDDLE_SCHOOL', label: $localize`Mittelstufe` },
-    { value: 'HIGH_SCHOOL', label: $localize`Oberstufe` },
+    {
+      value: 'PRIMARY_SCHOOL',
+      label: $localize`:@@sessionParticipation.themePrimary:Märchenfiguren`,
+    },
+    {
+      value: 'MIDDLE_SCHOOL',
+      label: $localize`:@@sessionParticipation.themeMiddle:Entdecker und Superhelden`,
+    },
+    {
+      value: 'HIGH_SCHOOL',
+      label: $localize`:@@sessionParticipation.themeHigh:Philosophen und Forscher`,
+    },
+    {
+      value: 'NOBEL_LAUREATES',
+      label: $localize`:@@sessionParticipation.themeNobel:Nobelpreisträger:innen`,
+    },
   ];
 
   readonly quiz = computed(() => this.quizStore.getQuizById(this.id));
@@ -923,7 +936,7 @@ export class QuizEditComponent implements OnDestroy {
     this.settingsForm.markAsDirty();
   }
 
-  /** Altersgruppe nur bei vorgegebenen Pseudonymen. */
+  /** Pseudonymgruppe nur bei vorgegebenen Pseudonymen. */
   isNicknameThemeSectionVisible(): boolean {
     return this.participantNameMode() === 'nicknameTheme';
   }
@@ -2247,9 +2260,10 @@ export class QuizEditComponent implements OnDestroy {
   }
 
   canAddAnswer(): boolean {
-    return (
-      this.hasAnswerOptions() && this.answersArray.length < QUIZ_UPLOAD_MAX_OPTIONS_PER_QUESTION
-    );
+    const limit = this.isShortTextType()
+      ? SHORT_TEXT_MAX_SOLUTIONS
+      : QUIZ_UPLOAD_MAX_OPTIONS_PER_QUESTION;
+    return this.hasAnswerOptions() && this.answersArray.length < limit;
   }
 
   canRemoveAnswer(): boolean {
@@ -3985,10 +3999,7 @@ export class QuizEditComponent implements OnDestroy {
     }
 
     if (question.type === 'SHORT_TEXT') {
-      if (
-        question.answers.length < 1 ||
-        question.answers.length > QUIZ_UPLOAD_MAX_OPTIONS_PER_QUESTION
-      ) {
+      if (question.answers.length < 1 || question.answers.length > SHORT_TEXT_MAX_SOLUTIONS) {
         return false;
       }
 

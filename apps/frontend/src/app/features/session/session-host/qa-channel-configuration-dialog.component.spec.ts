@@ -130,7 +130,7 @@ describe('QaChannelConfigurationDialogComponent', () => {
 
     expect(host.querySelector('.dialog-title-header')).not.toBeNull();
     expect(host.querySelector('.dialog-title-header__icon mat-icon')?.textContent?.trim()).toBe(
-      'chat_bubble_outline',
+      'chat_bubble',
     );
     expect(host.textContent).toContain('Fragerunde einrichten');
     expect(host.textContent).toContain('Fragerunde öffnen');
@@ -139,6 +139,24 @@ describe('QaChannelConfigurationDialogComponent', () => {
     expect(host.textContent).not.toContain('Schritt 1 von 2');
     expect(host.textContent).not.toContain('Verbindliche Vorschau');
     expect(host.textContent).not.toContain('Vorschau prüfen');
+    expect(host.textContent).not.toContain('Lege fest, bis wann');
+    expect(host.querySelector('.dialog-title-header__sub')).toBeNull();
+    const details = [
+      ...host.querySelectorAll('details.qa-config__details'),
+    ] as HTMLDetailsElement[];
+    expect(details).toHaveLength(1);
+    expect(details[0]?.open).toBe(false);
+    expect(details[0]?.querySelector('summary')?.textContent).toContain('Teilnahmeprofil');
+    expect(host.textContent).not.toContain('Weitere Einstellungen');
+    expect(host.textContent).not.toContain('Neue Fragen vor Veröffentlichung prüfen');
+    const content = host.querySelector('.qa-config__content');
+    const contentChildren = [...(content?.children ?? [])];
+    expect(contentChildren.at(-1)).toBe(details[0]);
+    expect(host.textContent).toContain('Zeitzone:');
+    expect(host.textContent).not.toContain('Zeitplan');
+    expect(host.querySelector('.qa-config__title')).not.toBeNull();
+    expect(host.textContent).toContain('/200');
+    expect(host.textContent).not.toContain('Überschrift zum Forum');
   });
 
   it('zeigt die Sequenznummer nur beim ersten Q&A-Start', async () => {
@@ -167,6 +185,7 @@ describe('QaChannelConfigurationDialogComponent', () => {
     expect(fixture.nativeElement.textContent).not.toContain('Schritt 1 von 2');
     expect(fixture.nativeElement.textContent).not.toContain('Teilnahmeprofil');
     expect(fixture.nativeElement.textContent).not.toContain('Sichtbarer Name');
+    expect(fixture.nativeElement.querySelector('.qa-config__details')).toBeNull();
 
     await component.confirm();
 
@@ -185,14 +204,61 @@ describe('QaChannelConfigurationDialogComponent', () => {
 
   it('sperrt das Teilnahmeprofil nach dem ersten Beitritt sichtbar', () => {
     const { fixture } = configureTestBed(true);
+    const host = fixture.nativeElement as HTMLElement;
+    const moreSettings = host.querySelector('.qa-config__details') as HTMLDetailsElement;
 
-    expect(fixture.nativeElement.textContent).toContain(
+    expect(host.textContent).not.toContain(
       'Diese Einstellungen können nach dem ersten Beitritt nicht mehr geändert werden.',
     );
-    const profileFieldset = fixture.nativeElement.querySelector(
-      'fieldset:nth-of-type(2)',
-    ) as HTMLFieldSetElement;
+    expect(moreSettings.open).toBe(false);
+    const profileFieldset = host.querySelector('.qa-config__profile') as HTMLFieldSetElement;
     expect(profileFieldset.disabled).toBe(true);
+  });
+
+  it('bietet die Pseudonymgruppen in der vereinbarten Reihenfolge', () => {
+    const { fixture } = configureTestBed(false, undefined, true, {
+      ...session,
+      allowCustomNicknames: false,
+    });
+    const details = fixture.nativeElement.querySelector(
+      '.qa-config__details',
+    ) as HTMLDetailsElement;
+    details.open = true;
+    fixture.detectChanges();
+
+    const themeSelect = fixture.nativeElement.querySelector(
+      'mat-select[aria-label="Pseudonymgruppe wählen"]',
+    ) as HTMLElement;
+    themeSelect.click();
+    fixture.detectChanges();
+
+    const options = [...document.querySelectorAll('mat-option')].map((el) =>
+      el.textContent?.replace(/\s+/g, ' ').trim(),
+    );
+    expect(options).toEqual([
+      'Bunte Tier-Icons',
+      'Märchenfiguren',
+      'Entdecker und Superhelden',
+      'Philosophen und Forscher',
+      'Nobelpreisträger:innen',
+    ]);
+  });
+
+  it('blendet die Pseudonymgruppe bei anonymem Zugang aus', () => {
+    const { fixture } = configureTestBed(false, undefined, true, {
+      ...session,
+      anonymousMode: true,
+      allowCustomNicknames: false,
+    });
+    const details = fixture.nativeElement.querySelector(
+      '.qa-config__details',
+    ) as HTMLDetailsElement;
+    details.open = true;
+    fixture.detectChanges();
+
+    expect(
+      fixture.nativeElement.querySelector('mat-select[aria-label="Pseudonymgruppe wählen"]'),
+    ).toBeNull();
   });
 
   it('zeigt die ausgerechnete Frist und die globale Verlängerung direkt im Formular', async () => {
@@ -219,7 +285,11 @@ describe('QaChannelConfigurationDialogComponent', () => {
       'Beim Bestätigen kannst du die Fragen danach länger einsehen',
     );
     expect(fixture.nativeElement.textContent).not.toContain('Grün markierte Tage sind wählbar');
-    expect(fixture.nativeElement.textContent).toContain('Titel der Fragenwand');
+    expect(fixture.nativeElement.querySelector('.qa-config__title')).not.toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('/200');
+    expect(fixture.nativeElement.textContent).not.toContain('Überschrift zum Forum');
+    expect(fixture.nativeElement.textContent).not.toContain('Titel der Fragenwand');
+    expect(fixture.nativeElement.textContent).not.toContain('Inhalt');
   });
 
   it('bindet die Mutation an Revision, Vorschauzeit und bestätigte Fristen', async () => {
@@ -245,6 +315,7 @@ describe('QaChannelConfigurationDialogComponent', () => {
     component.deadlineKind = 'DURATION_DAYS';
     component.days = 1;
     component.identityMode = 'PRESET_PSEUDONYM';
+    component.nicknameTheme = 'KINDERGARTEN';
     component.qaTitle = 'Prüfungsfragen';
 
     await component.onDeadlineChange();
@@ -265,7 +336,7 @@ describe('QaChannelConfigurationDialogComponent', () => {
       moderationMode: true,
       participationProfile: {
         identityMode: 'PRESET_PSEUDONYM',
-        nicknameTheme: 'HIGH_SCHOOL',
+        nicknameTheme: 'KINDERGARTEN',
       },
     });
     expect(close).toHaveBeenCalledWith(expect.objectContaining({ preferredChannel: 'qa' }));
@@ -373,7 +444,7 @@ describe('QaChannelConfigurationDialogComponent', () => {
     fixture.detectChanges();
 
     expect(component.profileLocked()).toBe(true);
-    expect(fixture.nativeElement.textContent).toContain(
+    expect(fixture.nativeElement.textContent).not.toContain(
       'Diese Einstellungen können nach dem ersten Beitritt nicht mehr geändert werden.',
     );
     expect(configureMock).toHaveBeenCalledWith(
@@ -462,6 +533,8 @@ describe('QaChannelConfigurationDialogComponent', () => {
     expect(component.reopenQa).toBe(false);
     expect(fixture.nativeElement.textContent).toContain('Fragerunde bearbeiten');
     expect(fixture.nativeElement.textContent).toContain('Änderungen speichern');
+    expect(fixture.nativeElement.querySelector('.qa-config__title')).toBeNull();
+    expect(fixture.nativeElement.textContent).not.toContain('/200');
 
     component.qaTitle = 'Nur Titel';
     await component.confirm();
@@ -780,7 +853,9 @@ describe('QaChannelConfigurationDialogComponent', () => {
   });
 
   it('behält die Datepicker-Obergrenze, wenn die Vorschau scheitert', async () => {
-    previewMock.mockRejectedValue(new Error('closesAt nach maxExpiresAt'));
+    previewMock.mockRejectedValue(
+      new Error('Der Ablaufzeitpunkt überschreitet die maximal erlaubte Sessiondauer.'),
+    );
     const { fixture, component } = configureTestBed();
     component.deadlineKind = 'ABSOLUTE';
     component.absoluteLocal = '2027-06-24T06:43';
@@ -790,6 +865,64 @@ describe('QaChannelConfigurationDialogComponent', () => {
     expect(component.absoluteMinLocal()).toBe('2026-09-15T09:01');
     expect(component.absoluteMaxLocal()).toBe('2026-09-29T08:00');
     expect(component.preview()).toBeNull();
+    expect(component.error()).toContain('maximalen Sessiondauer');
+    expect(fixture.nativeElement.textContent).toContain('maximalen Sessiondauer');
+  });
+
+  it('zeigt den Servergrund sofort, statt die Vorschau still zu verwerfen', async () => {
+    previewMock.mockRejectedValue(new Error('Die Session ist bereits beendet.'));
+    const { fixture, component } = configureTestBed();
+    await component.onDeadlineChange();
+    fixture.detectChanges();
+
+    expect(component.preview()).toBeNull();
+    expect(component.error()).toContain('bereits beendet');
+    expect(fixture.nativeElement.textContent).toContain('bereits beendet');
+  });
+
+  it('nutzt denselben konkreten Hinweis, wenn Bestätigen die Vorschau nicht holen kann', async () => {
+    previewMock.mockRejectedValue(new Error('Der Ablaufzeitpunkt muss in der Zukunft liegen.'));
+    const { component } = configureTestBed();
+    await component.confirm();
+
+    expect(configureMock).not.toHaveBeenCalled();
+    expect(component.error()).toContain('Zukunft');
+    expect(component.confirmLabel()).toBe('Erneut prüfen');
+    expect(component.confirmLabel()).not.toContain('wieder öffnen');
+  });
+
+  it('verspricht kein Wiederöffnen, solange die Prüfung fehlgeschlagen ist', async () => {
+    const closedSession = {
+      ...session,
+      qaClosesAt: '2026-09-16T04:00:00.000Z',
+      channels: {
+        ...session.channels,
+        qa: {
+          enabled: true,
+          open: false,
+          closesAt: '2026-09-16T04:00:00.000Z',
+          state: 'MANUALLY_CLOSED' as const,
+          title: 'Alte Fragenwand',
+          moderationMode: false,
+        },
+      },
+    };
+    previewMock.mockRejectedValue(
+      new Error('Der Ablaufzeitpunkt überschreitet die maximal erlaubte Sessiondauer.'),
+    );
+    const { fixture, component } = configureTestBed(false, undefined, true, closedSession);
+    component.reopenQa = true;
+    await component.onDeadlineChange();
+    fixture.detectChanges();
+
+    expect(component.error()).toBeTruthy();
+    expect(component.preview()).toBeNull();
+    expect(component.confirmLabel()).toBe('Erneut prüfen');
+    const confirmButton = [...fixture.nativeElement.querySelectorAll('button')].find((button) =>
+      button.className.includes('mat-mdc-unelevated-button'),
+    );
+    expect(confirmButton?.textContent).toContain('Erneut prüfen');
+    expect(confirmButton?.textContent).not.toContain('wieder öffnen');
   });
 
   it('begrenzt den Datepicker auf Serverjetzt bis maxExpiresAt', async () => {

@@ -4886,6 +4886,36 @@ describe('SessionVoteComponent', { timeout: 30_000 }, () => {
           isOwn: false,
           hasUpvoted: false,
         },
+        {
+          id: 'question-1b',
+          text: 'Zweite Frage',
+          upvoteCount: 1,
+          status: 'ACTIVE',
+          createdAt: '2026-03-13T12:01:00.000Z',
+          myVote: null,
+          isOwn: false,
+          hasUpvoted: false,
+        },
+        {
+          id: 'question-1c',
+          text: 'Dritte Frage',
+          upvoteCount: 0,
+          status: 'ACTIVE',
+          createdAt: '2026-03-13T12:02:00.000Z',
+          myVote: null,
+          isOwn: false,
+          hasUpvoted: false,
+        },
+        {
+          id: 'question-1d',
+          text: 'Vierte Frage',
+          upvoteCount: 0,
+          status: 'ACTIVE',
+          createdAt: '2026-03-13T12:03:00.000Z',
+          myVote: null,
+          isOwn: false,
+          hasUpvoted: false,
+        },
       ],
       state: 'ACTIVE',
       sessionLifecycleRevision: 1,
@@ -4902,9 +4932,9 @@ describe('SessionVoteComponent', { timeout: 30_000 }, () => {
     fixture.detectChanges();
 
     const text = fixture.nativeElement.textContent as string;
-    expect(text).toContain('Meist unterstützt');
+    expect(text).toContain('Stimmensaldo');
     expect(text).toContain('Beste Fragen');
-    expect(text).toContain('Umstritten');
+    expect(text).toContain('Kontroverse');
     expect(text).toContain('Zeit');
     expect(text).toContain('Fragen durchsuchen');
     expect(text).toContain('viel Zustimmung und genug Stimmen');
@@ -4945,6 +4975,36 @@ describe('SessionVoteComponent', { timeout: 30_000 }, () => {
             isOwn: false,
             hasUpvoted: false,
           },
+          {
+            id: 'question-2b',
+            text: 'Weitere Frage B',
+            upvoteCount: 3,
+            status: 'ACTIVE',
+            createdAt: '2026-03-13T12:02:10.000Z',
+            myVote: null,
+            isOwn: false,
+            hasUpvoted: false,
+          },
+          {
+            id: 'question-2c',
+            text: 'Weitere Frage C',
+            upvoteCount: 2,
+            status: 'ACTIVE',
+            createdAt: '2026-03-13T12:02:20.000Z',
+            myVote: null,
+            isOwn: false,
+            hasUpvoted: false,
+          },
+          {
+            id: 'question-2d',
+            text: 'Weitere Frage D',
+            upvoteCount: 1,
+            status: 'ACTIVE',
+            createdAt: '2026-03-13T12:02:30.000Z',
+            myVote: null,
+            isOwn: false,
+            hasUpvoted: false,
+          },
         ],
         state: 'ACTIVE',
         sessionLifecycleRevision: 1,
@@ -4964,6 +5024,9 @@ describe('SessionVoteComponent', { timeout: 30_000 }, () => {
       );
       expect(fixture.componentInstance.qaQuestions().map((question) => question.id)).toEqual([
         'question-2',
+        'question-2b',
+        'question-2c',
+        'question-2d',
       ]);
       expect(qaListQueryMock).toHaveBeenCalledWith({
         sessionId: '6a8edced-5f8f-4cfa-9176-454fac9570ad',
@@ -4998,6 +5061,36 @@ describe('SessionVoteComponent', { timeout: 30_000 }, () => {
             upvoteCount: 1,
             status: 'ACTIVE',
             createdAt: '2026-03-13T12:03:00.000Z',
+            myVote: null,
+            isOwn: false,
+            hasUpvoted: false,
+          },
+          {
+            id: 'question-3b',
+            text: 'Umstritten B',
+            upvoteCount: 1,
+            status: 'ACTIVE',
+            createdAt: '2026-03-13T12:03:10.000Z',
+            myVote: null,
+            isOwn: false,
+            hasUpvoted: false,
+          },
+          {
+            id: 'question-3c',
+            text: 'Umstritten C',
+            upvoteCount: 1,
+            status: 'ACTIVE',
+            createdAt: '2026-03-13T12:03:20.000Z',
+            myVote: null,
+            isOwn: false,
+            hasUpvoted: false,
+          },
+          {
+            id: 'question-3d',
+            text: 'Umstritten D',
+            upvoteCount: 1,
+            status: 'ACTIVE',
+            createdAt: '2026-03-13T12:03:30.000Z',
             myVote: null,
             isOwn: false,
             hasUpvoted: false,
@@ -10389,8 +10482,62 @@ describe('SessionVoteComponent', { timeout: 30_000 }, () => {
       fixture.destroy();
     });
 
+    it('zeigt Fragen finden und sortieren erst ab mehr als drei Fragen', async () => {
+      const { fixture, c } = await setup();
+      const host = fixture.nativeElement as HTMLElement;
+      expect(host.querySelector('.session-qa-tools')).toBeNull();
+
+      c.qaQuestions.set([{ id: 'q1', text: 'Freigegebene Frage', status: 'ACTIVE' } as never]);
+      c.qaForumVisibleCount.set(1);
+      fixture.detectChanges();
+      expect(host.querySelector('.session-qa-tools')).toBeNull();
+      expect(host.querySelector('[data-qa-id="q1"]')).not.toBeNull();
+      expect(host.querySelector('[data-testid="vote-qa-empty"]')).toBeNull();
+      expect(host.textContent).not.toContain('ausgeblendet');
+
+      c.qaQuestions.set([
+        { id: 'q1', text: 'Eins', status: 'ACTIVE' } as never,
+        { id: 'q2', text: 'Zwei', status: 'ACTIVE' } as never,
+        { id: 'q3', text: 'Drei', status: 'ACTIVE' } as never,
+      ]);
+      c.qaForumVisibleCount.set(3);
+      fixture.detectChanges();
+      expect(host.querySelector('.session-qa-tools')).toBeNull();
+      expect(host.querySelectorAll('[data-qa-id]')).toHaveLength(3);
+
+      c.qaSearch.set('Prüfung');
+      fixture.detectChanges();
+      expect(host.querySelector('.session-qa-tools')).not.toBeNull();
+      c.qaSearch.set('');
+      fixture.detectChanges();
+      expect(host.querySelector('.session-qa-tools')).toBeNull();
+
+      c.qaQuestions.set([
+        { id: 'q1', text: 'Eins', status: 'ACTIVE' } as never,
+        { id: 'q2', text: 'Zwei', status: 'ACTIVE' } as never,
+        { id: 'q3', text: 'Drei', status: 'ACTIVE' } as never,
+        { id: 'q4', text: 'Vier', status: 'ACTIVE' } as never,
+      ]);
+      c.qaForumVisibleCount.set(4);
+      fixture.detectChanges();
+      expect(host.querySelector('.session-qa-tools')).not.toBeNull();
+      expect(host.querySelector('#qa-tools-summary')?.textContent).toContain(
+        'Fragen finden & sortieren',
+      );
+      expect(host.querySelectorAll('[data-qa-id]')).toHaveLength(4);
+      fixture.destroy();
+    });
+
     it('bewahrt Suche und Sortierung beim Einklappen der Q&A-Werkzeuge', async () => {
       const { fixture, c } = await setup();
+      c.qaQuestions.set([
+        { id: 'q1', text: 'Eins', status: 'ACTIVE' } as never,
+        { id: 'q2', text: 'Zwei', status: 'ACTIVE' } as never,
+        { id: 'q3', text: 'Drei', status: 'ACTIVE' } as never,
+        { id: 'q4', text: 'Vier', status: 'ACTIVE' } as never,
+      ]);
+      c.qaForumVisibleCount.set(4);
+      fixture.detectChanges();
       const host = fixture.nativeElement as HTMLElement;
       const details = host.querySelector<HTMLDetailsElement>('.session-qa-tools')!;
       expect(details.open).toBe(false);
@@ -10453,6 +10600,83 @@ describe('SessionVoteComponent', { timeout: 30_000 }, () => {
       c.selectChannel('quickFeedback');
       expect(c.activeChannel()).toBe('quickFeedback');
       expect(c.showSessionEndGate()).toBe(false);
+      fixture.destroy();
+    });
+
+    it('zeigt im Q&A-Forum den Button »Auftrag« nur, wenn ein Forumsauftrag hinterlegt ist', async () => {
+      const { fixture, c } = await setup();
+      c.selectChannel('qa');
+      fixture.detectChanges();
+
+      const host = fixture.nativeElement as HTMLElement;
+      expect(host.querySelector('[data-testid="vote-qa-assignment-toggle"]')).toBeNull();
+
+      c.qaForumAssignments.set(['Sammelt zentrale Fragen zum Fallbeispiel.']);
+      fixture.detectChanges();
+
+      const toggleBtn = host.querySelector(
+        '[data-testid="vote-qa-assignment-toggle"]',
+      ) as HTMLButtonElement | null;
+      expect(toggleBtn).not.toBeNull();
+      expect(toggleBtn?.textContent).toContain('Auftrag');
+      expect(host.querySelector('[data-testid="vote-qa-assignment-panel"]')).toBeNull();
+
+      toggleBtn?.click();
+      fixture.detectChanges();
+
+      const panel = host.querySelector(
+        '[data-testid="vote-qa-assignment-panel"]',
+      ) as HTMLElement | null;
+      expect(panel).not.toBeNull();
+      expect(panel?.textContent).toContain('Dein Auftrag in diesem Forum');
+      expect(panel?.textContent).toContain('Sammelt zentrale Fragen zum Fallbeispiel.');
+      expect(panel?.textContent).not.toContain('Lernziel');
+      fixture.destroy();
+    });
+
+    it('setzt den Fokus auf die Q&A-Überschrift, wenn der letzte Auftrag verschwindet', async () => {
+      const { fixture, c } = await setup();
+      c.selectChannel('qa');
+      c.qaForumAssignments.set(['Sammelt zentrale Fragen zum Fallbeispiel.']);
+      fixture.detectChanges();
+
+      const host = fixture.nativeElement as HTMLElement;
+      const toggleBtn = host.querySelector(
+        '[data-testid="vote-qa-assignment-toggle"]',
+      ) as HTMLButtonElement;
+      toggleBtn.focus();
+      expect(document.activeElement).toBe(toggleBtn);
+
+      (
+        c as unknown as {
+          applyQaQuestionsSnapshot(snapshot: {
+            questions: unknown[];
+            state: 'ACTIVE';
+            forumAssignments: string[];
+            sessionLifecycleRevision: number;
+            serverNow: string;
+            expiresAt: string;
+            qaClosesAt: string;
+            endedAt: null;
+            postProcessingEndsAt: null;
+          }): boolean;
+        }
+      ).applyQaQuestionsSnapshot({
+        questions: [],
+        state: 'ACTIVE',
+        forumAssignments: [],
+        sessionLifecycleRevision: 1,
+        serverNow: new Date().toISOString(),
+        expiresAt: '2099-09-15T12:00:00.000Z',
+        qaClosesAt: '2099-09-15T11:00:00.000Z',
+        endedAt: null,
+        postProcessingEndsAt: null,
+      });
+      fixture.detectChanges();
+
+      expect(c.qaForumAssignments()).toEqual([]);
+      expect(host.querySelector('[data-testid="vote-qa-assignment-toggle"]')).toBeNull();
+      expect(document.activeElement).toBe(host.querySelector('#vote-qa-heading'));
       fixture.destroy();
     });
   });

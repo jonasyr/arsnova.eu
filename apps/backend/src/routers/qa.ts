@@ -43,6 +43,7 @@ import { prisma } from '../db';
 import { isQaNlpEnabled } from '../lib/qaNlpConfig';
 import { getQaNlpMetrics } from '../lib/qaNlpQueue';
 import { enqueueQaNlpJob, invalidateQaNlpForQuestion } from '../lib/qaNlpQueue';
+import { scheduleWordCloudSemanticEmbeddingPrewarm } from '../lib/wordCloudPrewarmQueue';
 import { isQaSummaryEnabled } from '../lib/qaSummaryConfig';
 import {
   getQaSummaryRuntime,
@@ -80,7 +81,10 @@ import {
   waitForQaQuestionsSignal,
 } from '../lib/qaQuestionsSignal';
 import { zAsyncIterable } from '../lib/zAsyncIterable';
-import { markSessionLearningObjectiveQaSourceRemoved } from '../lib/sessionLearningObjectives';
+import {
+  getSessionForumAssignments,
+  markSessionLearningObjectiveQaSourceRemoved,
+} from '../lib/sessionLearningObjectives';
 
 type QaQuestionVoteRecord = {
   participantId?: string;
@@ -183,6 +187,7 @@ function buildQaQuestionsSnapshot(
     | 'sessionRemaining'
     | 'quota'
     | 'sortMode'
+    | 'forumAssignments'
   > = {},
 ) {
   const expiresAt =
@@ -573,6 +578,7 @@ type RankedQaPage = {
 };
 
 const QA_PAGE_CACHE_TTL_MS = 2_000;
+const QA_SUBSCRIPTION_SESSION_CACHE_TTL_MS = 250;
 const QA_PAGE_CACHE_MAX_ENTRIES = 256;
 type SharedQaRankingCacheEntry = {
   expiresAt: number;
@@ -594,17 +600,53 @@ type SharedQaHostOverviewCacheEntry = {
   promise: Promise<HostQaStatusOverview>;
 };
 const sharedQaHostOverviewLoads = new Map<string, SharedQaHostOverviewCacheEntry>();
+type SharedQaParticipantCountCacheEntry = {
+  expiresAt: number;
+  promise: Promise<number>;
+};
+const sharedQaParticipantCountLoads = new Map<string, SharedQaParticipantCountCacheEntry>();
+type QaOwnQuestionQuotaSnapshot = {
+  participantQuestionCount: number;
+  ownQuestionCounts: { visible: number; pending: number; archived: number };
+};
+type SharedQaOwnQuestionQuotaCacheEntry = {
+  expiresAt: number;
+  promise: Promise<QaOwnQuestionQuotaSnapshot>;
+};
+const sharedQaOwnQuestionQuotaLoads = new Map<string, SharedQaOwnQuestionQuotaCacheEntry>();
+const QA_OWN_QUESTION_QUOTA_CACHE_TTL_MS = 10_000;
+const QA_OWN_QUESTION_QUOTA_CACHE_MAX_ENTRIES = 2_048;
+type QaSubscriptionSessionSnapshot = {
+  id: string;
+  status: string;
+  endedAt: Date | null;
+  expiresAt: Date | null;
+  type: 'QUIZ' | 'Q_AND_A';
+  qaEnabled: boolean;
+  qaOpen: boolean;
+  qaClosesAt: Date | null;
+  sessionLifecycleRevision: number;
+  qaRankingRevision: number;
+  participantRevision: number;
+  qaModerationMode: boolean;
+} | null;
+type SharedQaSubscriptionSessionCacheEntry = {
+  expiresAt: number;
+  promise: Promise<QaSubscriptionSessionSnapshot>;
+};
+const sharedQaSubscriptionSessionLoads = new Map<string, SharedQaSubscriptionSessionCacheEntry>();
 
 function pruneSharedMapByExpiry<T extends { expiresAt: number }>(
   map: Map<string, T>,
   nowMs: number,
+  maxEntries: number = QA_PAGE_CACHE_MAX_ENTRIES,
 ): void {
   for (const [key, entry] of map) {
     if (entry.expiresAt <= nowMs) {
       map.delete(key);
     }
   }
-  while (map.size >= QA_PAGE_CACHE_MAX_ENTRIES) {
+  while (map.size >= maxEntries) {
     const oldestKey = map.keys().next().value as string | undefined;
     if (!oldestKey) {
       break;
@@ -618,6 +660,13 @@ function pruneSharedQaRankingCache(nowMs: number): void {
   pruneSharedMapByExpiry(sharedQaPendingCountLoads, nowMs);
   pruneSharedMapByExpiry(sharedQaForumVisibleCountLoads, nowMs);
   pruneSharedMapByExpiry(sharedQaHostOverviewLoads, nowMs);
+  pruneSharedMapByExpiry(sharedQaParticipantCountLoads, nowMs);
+  pruneSharedMapByExpiry(sharedQaSubscriptionSessionLoads, nowMs);
+  pruneSharedMapByExpiry(
+    sharedQaOwnQuestionQuotaLoads,
+    nowMs,
+    QA_OWN_QUESTION_QUOTA_CACHE_MAX_ENTRIES,
+  );
 }
 
 export function resetSharedQaRankingCacheForTests(): void {
@@ -625,12 +674,25 @@ export function resetSharedQaRankingCacheForTests(): void {
   sharedQaPendingCountLoads.clear();
   sharedQaForumVisibleCountLoads.clear();
   sharedQaHostOverviewLoads.clear();
+  sharedQaParticipantCountLoads.clear();
+  sharedQaSubscriptionSessionLoads.clear();
+  sharedQaOwnQuestionQuotaLoads.clear();
+}
+
+function invalidateQaOwnQuestionQuotaCache(sessionId: string, participantId?: string): void {
+  const prefix = participantId ? `${sessionId}:${participantId}:` : `${sessionId}:`;
+  for (const key of sharedQaOwnQuestionQuotaLoads.keys()) {
+    if (key.startsWith(prefix)) {
+      sharedQaOwnQuestionQuotaLoads.delete(key);
+    }
+  }
 }
 
 function rememberSharedPromise<T>(
   map: Map<string, { expiresAt: number; promise: Promise<T> }>,
   key: string,
   load: () => Promise<T>,
+  ttlMs: number = QA_PAGE_CACHE_TTL_MS,
 ): Promise<T> {
   const nowMs = Date.now();
   pruneSharedQaRankingCache(nowMs);
@@ -640,12 +702,12 @@ function rememberSharedPromise<T>(
   }
   const entry: { expiresAt: number; promise: Promise<T> } = {
     expiresAt: Number.POSITIVE_INFINITY,
-    promise: load(),
+    promise: Promise.resolve().then(load),
   };
   entry.promise = entry.promise.then(
     (value) => {
       if (map.get(key) === entry) {
-        entry.expiresAt = Date.now() + QA_PAGE_CACHE_TTL_MS;
+        entry.expiresAt = Date.now() + ttlMs;
       }
       return value;
     },
@@ -658,6 +720,74 @@ function rememberSharedPromise<T>(
   );
   map.set(key, entry);
   return entry.promise;
+}
+
+async function loadQaParticipantCount(
+  sessionId: string,
+  rankingRevision: number,
+  participantRevision: number,
+): Promise<number> {
+  return rememberSharedPromise(
+    sharedQaParticipantCountLoads,
+    `${sessionId}:${rankingRevision}:${participantRevision}`,
+    () => prisma.participant.count({ where: { sessionId } }),
+  );
+}
+
+async function loadQaOwnQuestionQuota(
+  sessionId: string,
+  participantId: string,
+  sessionQuestionCount: number,
+  moderatorView: boolean,
+): Promise<QaOwnQuestionQuotaSnapshot> {
+  return rememberSharedPromise(
+    sharedQaOwnQuestionQuotaLoads,
+    `${sessionId}:${participantId}:${sessionQuestionCount}:${moderatorView ? 1 : 0}`,
+    async () => {
+      const participantQuestionCount = await prisma.qaQuestion.count({
+        where: { sessionId, participantId },
+      });
+      const ownQuestionCounts =
+        !moderatorView && participantQuestionCount > 0
+          ? await countOwnQaQuestionsByStatus(sessionId, participantId).catch(() => ({
+              visible: 0,
+              pending: 0,
+              archived: 0,
+            }))
+          : { visible: 0, pending: 0, archived: 0 };
+      return { participantQuestionCount, ownQuestionCounts };
+    },
+    QA_OWN_QUESTION_QUOTA_CACHE_TTL_MS,
+  );
+}
+
+async function loadQaSubscriptionSessionSnapshot(
+  sessionId: string,
+  signalVersion: number,
+): Promise<QaSubscriptionSessionSnapshot> {
+  return rememberSharedPromise(
+    sharedQaSubscriptionSessionLoads,
+    `${sessionId}:${signalVersion}`,
+    () =>
+      prisma.session.findUnique({
+        where: { id: sessionId },
+        select: {
+          id: true,
+          status: true,
+          endedAt: true,
+          expiresAt: true,
+          type: true,
+          qaEnabled: true,
+          qaOpen: true,
+          qaClosesAt: true,
+          sessionLifecycleRevision: true,
+          qaRankingRevision: true,
+          participantRevision: true,
+          qaModerationMode: true,
+        },
+      }),
+    QA_SUBSCRIPTION_SESSION_CACHE_TTL_MS,
+  );
 }
 
 async function loadQaPendingCount(sessionId: string, rankingRevision: number): Promise<number> {
@@ -1152,6 +1282,7 @@ export const qaRouter = router({
           qaClosesAt: true,
           sessionLifecycleRevision: true,
           qaRankingRevision: true,
+          participantRevision: true,
           qaQuestionCount: true,
           qaModerationMode: true,
           onboardingAnonymousMode: true,
@@ -1210,8 +1341,12 @@ export const qaRouter = router({
         });
       }
       if (!input.moderatorView && contentState !== 'ACTIVE') {
+        const forumAssignments = await getSessionForumAssignments(session.id).catch(
+          () => [] as string[],
+        );
         return buildQaQuestionsSnapshot(session, [], contentState, serverNow, {
           forumVisibleCount: await loadQaForumVisibleCount(session.id, session.qaRankingRevision),
+          ...(forumAssignments.length > 0 ? { forumAssignments } : {}),
           ...(input.participantId
             ? {
                 ownQuestionCounts: await countOwnQaQuestionsByStatus(
@@ -1223,9 +1358,11 @@ export const qaRouter = router({
         });
       }
 
-      const participantCountForControversy = await prisma.participant.count({
-        where: { sessionId: session.id },
-      });
+      const participantCountForControversy = await loadQaParticipantCount(
+        session.id,
+        session.qaRankingRevision,
+        session.participantRevision ?? 0,
+      );
       const includeAuthorNickname = session.onboardingAnonymousMode !== true;
       const authorNickname = input.moderatorView
         ? input.authorNickname?.trim() || undefined
@@ -1245,10 +1382,11 @@ export const qaRouter = router({
           : Promise.resolve<number | undefined>(undefined);
       const [
         page,
-        participantQuestionCount,
+        ownQuestionQuota,
         filteredSessionPendingCount,
         forumVisibleCount,
         hostOverview,
+        forumAssignments,
       ] = await Promise.all([
         buildQaQuestionPayloadFromDb({
           sessionId: session.id,
@@ -1275,38 +1413,36 @@ export const qaRouter = router({
               : undefined,
         }),
         input.participantId
-          ? prisma.qaQuestion.count({
-              where: { sessionId: session.id, participantId: input.participantId },
-            })
-          : Promise.resolve(0),
+          ? loadQaOwnQuestionQuota(
+              session.id,
+              input.participantId,
+              session.qaQuestionCount ?? 0,
+              input.moderatorView === true,
+            )
+          : Promise.resolve(undefined),
         filteredSessionPendingCountPromise,
         loadQaForumVisibleCount(session.id, session.qaRankingRevision),
         input.moderatorView
           ? loadHostQaStatusOverview(session.id, session.qaRankingRevision).catch(() => undefined)
           : Promise.resolve(undefined),
+        getSessionForumAssignments(session.id).catch(() => [] as string[]),
       ]);
+      const participantQuestionCount = ownQuestionQuota?.participantQuestionCount ?? 0;
       const ownQuestionCounts =
         input.participantId && !input.moderatorView
-          ? participantQuestionCount > 0
-            ? await countOwnQaQuestionsByStatus(session.id, input.participantId).catch(() => ({
-                visible: 0,
-                pending: 0,
-                archived: 0,
-              }))
-            : { visible: 0, pending: 0, archived: 0 }
+          ? ownQuestionQuota?.ownQuestionCounts
           : undefined;
-      const [currentRevision, currentParticipantCount] = await Promise.all([
-        prisma.session.findUnique({
-          where: { id: session.id },
-          select: { qaRankingRevision: true },
-        }),
-        sortMode === 'CONTROVERSIAL'
-          ? prisma.participant.count({ where: { sessionId: session.id } })
-          : Promise.resolve(participantCountForControversy),
-      ]);
+      const currentRevision = await prisma.session.findUnique({
+        where: { id: session.id },
+        select: {
+          qaRankingRevision: true,
+          participantRevision: true,
+        },
+      });
       if (
         currentRevision?.qaRankingRevision !== session.qaRankingRevision ||
-        currentParticipantCount !== participantCountForControversy
+        (sortMode === 'CONTROVERSIAL' &&
+          (currentRevision?.participantRevision ?? 0) !== (session.participantRevision ?? 0))
       ) {
         throw new TRPCError({
           code: 'CONFLICT',
@@ -1347,6 +1483,7 @@ export const qaRouter = router({
         sessionQuestionCount: session.qaQuestionCount,
         sessionRemaining: Math.max(0, QA_MAX_QUESTIONS_PER_SESSION - session.qaQuestionCount),
         quota,
+        ...(forumAssignments.length > 0 ? { forumAssignments } : {}),
       });
     }),
 
@@ -1557,7 +1694,13 @@ export const qaRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Session nicht gefunden.' });
       }
       const hostToken = await assertHostSessionAccessFromContext(ctx, session.code);
-      assertQaSessionOpenForParticipants(session);
+      assertQaHostContentReadAllowed(session);
+      if (!isQaEnabled(session)) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Q&A ist in dieser Session nicht aktiviert.',
+        });
+      }
       if (!isQaSummaryEnabled()) {
         throw new TRPCError({
           code: 'FORBIDDEN',
@@ -1673,6 +1816,7 @@ export const qaRouter = router({
           });
           return mapQaQuestion(updated);
         });
+        invalidateQaOwnQuestionQuotaCache(session.id);
         emitQaQuestionsSignal(session.id, { immediate: true });
         return moderated;
       } catch (error) {
@@ -1817,6 +1961,10 @@ export const qaRouter = router({
               text: redactedText,
             });
           }
+          scheduleWordCloudSemanticEmbeddingPrewarm({
+            sessionId: session.id,
+            text: redactedText,
+          });
         }
         emitQaQuestionsSignal(session.id, { immediate: true });
         return redacted;
@@ -1887,12 +2035,17 @@ export const qaRouter = router({
         });
       }
       if (!created.replayed) {
+        scheduleWordCloudSemanticEmbeddingPrewarm({
+          sessionId: input.sessionId,
+          text: created.text,
+        });
         void recordQaQuestionAccepted(created.id);
         await enqueueUsageStatisticEventAndSchedule({
           kind: 'QA_QUESTION',
           sessionId: input.sessionId,
           idempotencyKey: `qa-question:${created.id}`,
         });
+        invalidateQaOwnQuestionQuotaCache(input.sessionId, input.participantId);
         emitQaQuestionsSignal(input.sessionId);
       }
       return {
@@ -1968,6 +2121,7 @@ export const qaRouter = router({
         }
         throw error;
       }
+      invalidateQaOwnQuestionQuotaCache(question.sessionId, input.participantId);
       emitQaQuestionsSignal(question.sessionId, { immediate: true });
       return { deleted: true };
     }),
@@ -2167,6 +2321,7 @@ export const qaRouter = router({
         .catch(rethrowQaContributionError);
 
       if (releasedCount > 0) {
+        invalidateQaOwnQuestionQuotaCache(session.id);
         emitQaQuestionsSignal(session.id, { immediate: true });
       }
       return { releasedCount };
@@ -2319,23 +2474,11 @@ export const qaRouter = router({
             participantId: input.participantId!,
           });
         }
-        const session = await prisma.session.findUnique({
-          where: { id: input.sessionId },
-          select: {
-            id: true,
-            status: true,
-            endedAt: true,
-            expiresAt: true,
-            type: true,
-            qaEnabled: true,
-            qaOpen: true,
-            qaClosesAt: true,
-            sessionLifecycleRevision: true,
-            qaRankingRevision: true,
-            participantRevision: true,
-            qaModerationMode: true,
-          },
-        });
+        const signalVersionBeforeRead = getQaQuestionsSignalVersion(input.sessionId);
+        const session = await loadQaSubscriptionSessionSnapshot(
+          input.sessionId,
+          signalVersionBeforeRead,
+        );
         if (!session) {
           return;
         }

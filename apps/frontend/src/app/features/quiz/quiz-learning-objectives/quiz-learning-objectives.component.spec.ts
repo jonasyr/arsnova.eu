@@ -99,7 +99,7 @@ describe('QuizLearningObjectivesComponent', () => {
     fixture.detectChanges();
     await fixture.whenStable();
 
-    expect(component.errorMessage()).toContain('mindestens eine Aufgabe');
+    expect(component.errorMessage()).toContain('mindestens eine Frage');
     const scopeOption = document.getElementById('learning-objective-scope-all');
     expect(scopeOption?.contains(document.activeElement)).toBe(true);
   });
@@ -208,7 +208,7 @@ describe('QuizLearningObjectivesComponent', () => {
     fixture.detectChanges();
     await fixture.whenStable();
 
-    expect(component.errorMessage()).toContain('fehlendem Aufgabenverweis');
+    expect(component.errorMessage()).toContain('fehlendem Fragenverweis');
     expect(document.activeElement?.id).toBe(`learning-objective-remove-missing-${question.id}`);
     expect(store.getLearningObjectiveBundle(quiz.id).objectives[0]?.confirmation.state).toBe(
       'needs-review',
@@ -274,9 +274,9 @@ describe('QuizLearningObjectivesComponent', () => {
     const intro = fixture.nativeElement.querySelector(
       '.learning-objectives__origin-intro',
     ) as HTMLElement;
-    expect(intro.textContent).toContain('Manuelle Lernziele formulierst du selbst');
-    expect(intro.textContent).toContain('Automatisch aus Aufgaben formulierte Lernziele');
-    expect(intro.textContent).toContain('fachlich geprüft');
+    expect(intro.textContent).toContain('Du kannst Lernziele selbst schreiben');
+    expect(intro.textContent).toContain('automatisch aus deinen Fragen vorschlagen lassen');
+    expect(intro.textContent).toContain('prüfst und bestätigst');
   });
 
   it('erklärt Entwurf und Bestätigt direkt an den Statusoptionen', () => {
@@ -292,8 +292,8 @@ describe('QuizLearningObjectivesComponent', () => {
     const statusGroup = fixture.nativeElement.querySelector(
       '[aria-label="Status des Lernziels"]',
     ) as HTMLElement;
-    expect(statusGroup.textContent).toContain('Noch nicht fachlich geprüft');
-    expect(statusGroup.textContent).toContain('Relevante Quellenänderungen');
+    expect(statusGroup.textContent).toContain('Noch in Abstimmung');
+    expect(statusGroup.textContent).toContain('zur Prüfung markiert');
   });
 
   it('startet die Herleitung nur per Klick, speichert Entwürfe und rendert ihr Markdown sicher', async () => {
@@ -809,4 +809,298 @@ describe('QuizLearningObjectivesComponent', () => {
     );
     expect(sent.questions.some(({ enabled, answers }) => enabled && answers.length > 0)).toBe(true);
   });
+
+  it('bietet Lernziele im eingeklappten Expansion-Panel an und blendet die KI-Herleitung ohne geeignete Frage aus', () => {
+    const store = TestBed.inject(QuizStoreService);
+    const quiz = store.createQuiz({ name: 'Expansion & Sichtbarkeit' });
+    const fixture = TestBed.createComponent(QuizLearningObjectivesComponent);
+    fixture.componentRef.setInput('quizId', quiz.id);
+    fixture.componentRef.setInput('questions', []);
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.panelExpanded()).toBe(false);
+    expect(fixture.nativeElement.querySelector('#learning-objective-derive')).toBeNull();
+    expect(fixture.nativeElement.querySelector('#learning-objective-add')).not.toBeNull();
+
+    const surveyQuestion = store.addQuestion(quiz.id, {
+      text: 'Was denkt ihr?',
+      type: 'SURVEY',
+      difficulty: 'EASY',
+      answers: [
+        { text: 'Option A', isCorrect: false },
+        { text: 'Option B', isCorrect: false },
+      ],
+    });
+    fixture.componentRef.setInput('questions', [surveyQuestion]);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('#learning-objective-derive')).toBeNull();
+
+    const scoredQuestion = store.addQuestion(quiz.id, {
+      text: 'Welche Aussage stimmt?',
+      type: 'SINGLE_CHOICE',
+      difficulty: 'EASY',
+      answers: [
+        { text: 'Richtig', isCorrect: true },
+        { text: 'Falsch', isCorrect: false },
+      ],
+    });
+    fixture.componentRef.setInput('questions', [surveyQuestion, scoredQuestion]);
+    fixture.detectChanges();
+    const derive = fixture.nativeElement.querySelector(
+      '#learning-objective-derive',
+    ) as HTMLButtonElement;
+    expect(derive).not.toBeNull();
+    expect(derive.classList.contains('mat-mdc-outlined-button')).toBe(true);
+    expect(derive.textContent).toContain('Automatisch aus Fragen formulieren');
+  });
+
+  it('zeigt bei fokussierter Frage nur deren Lernziele und ordnet neue Ziele dieser Frage zu', () => {
+    const store = TestBed.inject(QuizStoreService);
+    const quiz = store.createQuiz({ name: 'Fragefokus' });
+    const q1 = store.addQuestion(quiz.id, {
+      text: 'Frage 1?',
+      type: 'SINGLE_CHOICE',
+      difficulty: 'EASY',
+      answers: [
+        { text: 'A', isCorrect: true },
+        { text: 'B', isCorrect: false },
+      ],
+    });
+    const q2 = store.addQuestion(quiz.id, {
+      text: 'Frage 2?',
+      type: 'SINGLE_CHOICE',
+      difficulty: 'EASY',
+      answers: [
+        { text: 'C', isCorrect: true },
+        { text: 'D', isCorrect: false },
+      ],
+    });
+    store.saveQuizLearningObjective(quiz.id, {
+      text: 'Quizweites Ziel',
+      scope: { kind: 'quiz-wide' },
+      confirmationState: 'confirmed',
+    });
+    store.saveQuizLearningObjective(quiz.id, {
+      text: 'Ziel zu Frage 1',
+      scope: { kind: 'question-set', sourceQuestionIds: [q1.id] },
+      confirmationState: 'confirmed',
+    });
+    store.saveQuizLearningObjective(quiz.id, {
+      text: 'Ziel zu Frage 2',
+      scope: { kind: 'question-set', sourceQuestionIds: [q2.id] },
+      confirmationState: 'confirmed',
+    });
+
+    const fixture = TestBed.createComponent(QuizLearningObjectivesComponent);
+    fixture.componentRef.setInput('quizId', quiz.id);
+    fixture.componentRef.setInput('questions', [q1, q2]);
+    fixture.componentRef.setInput('focusedQuestionId', q1.id);
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.objectives().map((o) => o.text)).toEqual(['Ziel zu Frage 1']);
+
+    fixture.componentInstance.beginAdd();
+    fixture.componentInstance.setText('Weiteres Ziel zu Frage 1');
+    fixture.componentInstance.save();
+
+    expect(fixture.componentInstance.objectives().map((o) => o.text)).toEqual([
+      'Ziel zu Frage 1',
+      'Weiteres Ziel zu Frage 1',
+    ]);
+  });
+
+  it('bestätigt alle offenen KI-Vorschläge und lässt manuelle Entwürfe unverändert', () => {
+    const store = TestBed.inject(QuizStoreService);
+    const quiz = store.createQuiz({ name: 'Sammelbestätigung' });
+    const first = store.addQuestion(quiz.id, {
+      text: 'Was ist ein Mittelwert?',
+      type: 'SINGLE_CHOICE',
+      difficulty: 'EASY',
+      answers: [
+        { text: 'Ein Lagemaß', isCorrect: true },
+        { text: 'Ein Diagramm', isCorrect: false },
+      ],
+    });
+    const second = store.addQuestion(quiz.id, {
+      text: 'Was ist eine Varianz?',
+      type: 'SINGLE_CHOICE',
+      difficulty: 'MEDIUM',
+      answers: [
+        { text: 'Ein Streuungsmaß', isCorrect: true },
+        { text: 'Ein Mittelwert', isCorrect: false },
+      ],
+    });
+    store.applyDerivedLearningObjectiveDrafts(
+      quiz.id,
+      store.getLearningObjectiveBundle(quiz.id).revision,
+      '50000000-0000-4000-8000-0000000000aa',
+      [
+        derivedDraft('50000000-0000-4000-8000-000000000011', first.id, 'Mittelwerte erklären'),
+        derivedDraft('50000000-0000-4000-8000-000000000012', second.id, 'Streuung erklären'),
+      ],
+    );
+    store.saveQuizLearningObjective(quiz.id, {
+      text: 'Manuell formuliert',
+      scope: { kind: 'quiz-wide' },
+      confirmationState: 'draft',
+    });
+
+    const fixture = TestBed.createComponent(QuizLearningObjectivesComponent);
+    fixture.componentRef.setInput('quizId', quiz.id);
+    fixture.componentRef.setInput('questions', [first, second]);
+    fixture.detectChanges();
+
+    const footer = fixture.nativeElement.querySelector(
+      '.learning-objectives__footer-actions',
+    ) as HTMLElement;
+    const confirmAll = footer.querySelector('#learning-objective-confirm-all') as HTMLButtonElement;
+    const add = footer.querySelector('#learning-objective-add') as HTMLButtonElement;
+    expect(confirmAll.textContent).toContain('Alle Vorschläge bestätigen');
+    expect(confirmAll.classList.contains('mat-mdc-unelevated-button')).toBe(false);
+    expect(confirmAll.classList.contains('mat-mdc-outlined-button')).toBe(false);
+    expect(confirmAll.compareDocumentPosition(add) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(add.classList.contains('mat-mdc-outlined-button')).toBe(true);
+    expect(
+      (fixture.nativeElement.querySelector('mat-card-content') as HTMLElement).lastElementChild,
+    ).toBe(footer);
+
+    confirmAll.click();
+    fixture.detectChanges();
+
+    const objectives = store.getLearningObjectiveBundle(quiz.id).objectives;
+    expect(
+      objectives
+        .filter((objective) => objective.origin.kind === 'model-derived')
+        .map((objective) => objective.confirmation.state),
+    ).toEqual(['confirmed', 'confirmed']);
+    expect(
+      objectives.find((objective) => objective.origin.kind === 'manual')?.confirmation.state,
+    ).toBe('draft');
+    expect(fixture.nativeElement.querySelector('#learning-objective-confirm-all')).toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('Alle KI-Vorschläge wurden bestätigt.');
+  });
+
+  it('bestätigt nur KI-Vorschläge mit gültigen Fragenverweisen', () => {
+    const store = TestBed.inject(QuizStoreService);
+    const quiz = store.createQuiz({ name: 'Teilbestätigung' });
+    const kept = store.addQuestion(quiz.id, {
+      text: 'Was bleibt?',
+      type: 'SINGLE_CHOICE',
+      difficulty: 'EASY',
+      answers: [
+        { text: 'A', isCorrect: true },
+        { text: 'B', isCorrect: false },
+      ],
+    });
+    const removed = store.addQuestion(quiz.id, {
+      text: 'Was fällt weg?',
+      type: 'SINGLE_CHOICE',
+      difficulty: 'EASY',
+      answers: [
+        { text: 'C', isCorrect: true },
+        { text: 'D', isCorrect: false },
+      ],
+    });
+    store.applyDerivedLearningObjectiveDrafts(
+      quiz.id,
+      store.getLearningObjectiveBundle(quiz.id).revision,
+      '50000000-0000-4000-8000-0000000000bb',
+      [
+        derivedDraft('50000000-0000-4000-8000-000000000021', kept.id, 'Bleibendes Ziel'),
+        derivedDraft('50000000-0000-4000-8000-000000000022', removed.id, 'Verwaistes Ziel'),
+      ],
+    );
+    store.deleteQuestion(quiz.id, removed.id);
+
+    const fixture = TestBed.createComponent(QuizLearningObjectivesComponent);
+    fixture.componentRef.setInput('quizId', quiz.id);
+    fixture.componentRef.setInput('questions', [kept]);
+    fixture.detectChanges();
+
+    (
+      fixture.nativeElement.querySelector('#learning-objective-confirm-all') as HTMLButtonElement
+    ).click();
+    fixture.detectChanges();
+
+    const objectives = store.getLearningObjectiveBundle(quiz.id).objectives;
+    expect(
+      objectives.find((objective) => objective.text === 'Bleibendes Ziel')?.confirmation.state,
+    ).toBe('confirmed');
+    expect(
+      objectives.find((objective) => objective.text === 'Verwaistes Ziel')?.confirmation.state,
+    ).toBe('needs-review');
+    expect(fixture.nativeElement.textContent).toContain(
+      'Ein KI-Vorschlag wurde bestätigt. Die übrigen bleiben offen.',
+    );
+  });
+
+  it('meldet fehlgeschlagene Sammelbestätigung außerhalb des Formulars', () => {
+    const store = TestBed.inject(QuizStoreService);
+    const quiz = store.createQuiz({ name: 'Sammelfehler' });
+    const question = store.addQuestion(quiz.id, {
+      text: 'Was ist ein Median?',
+      type: 'SINGLE_CHOICE',
+      difficulty: 'EASY',
+      answers: [
+        { text: 'Ein Lagemaß', isCorrect: true },
+        { text: 'Ein Diagramm', isCorrect: false },
+      ],
+    });
+    store.applyDerivedLearningObjectiveDrafts(
+      quiz.id,
+      store.getLearningObjectiveBundle(quiz.id).revision,
+      '50000000-0000-4000-8000-0000000000cc',
+      [derivedDraft('50000000-0000-4000-8000-000000000031', question.id, 'Mediane erklären')],
+    );
+    const fixture = TestBed.createComponent(QuizLearningObjectivesComponent);
+    fixture.componentRef.setInput('quizId', quiz.id);
+    fixture.componentRef.setInput('questions', [question]);
+    fixture.detectChanges();
+
+    const saveSpy = vi.spyOn(store, 'saveQuizLearningObjective').mockImplementation(() => {
+      throw new Error('Das Lernziel wurde inzwischen geändert.');
+    });
+
+    (
+      fixture.nativeElement.querySelector('#learning-objective-confirm-all') as HTMLButtonElement
+    ).click();
+    fixture.detectChanges();
+
+    const alert = fixture.nativeElement.querySelector(
+      '#learning-objective-confirm-all-error',
+    ) as HTMLElement | null;
+    expect(alert).not.toBeNull();
+    expect(alert?.getAttribute('role')).toBe('alert');
+    expect(alert?.textContent).toContain('Das Lernziel wurde inzwischen geändert.');
+    expect(fixture.componentInstance.statusMessage()).toContain(
+      'Das Lernziel wurde inzwischen geändert.',
+    );
+    expect(fixture.componentInstance.formOpen()).toBe(false);
+    expect(store.getLearningObjectiveBundle(quiz.id).objectives[0]?.confirmation.state).toBe(
+      'draft',
+    );
+    saveSpy.mockRestore();
+  });
 });
+
+function derivedDraft(id: string, questionId: string, text: string) {
+  return {
+    id,
+    revision: 0 as const,
+    text,
+    scope: { kind: 'question-set' as const, sourceQuestionIds: [questionId] },
+    origin: {
+      kind: 'model-derived' as const,
+      modelId: 'local-model',
+      modelVersion: '1',
+      derivationVersion: 'learning-objectives-v1',
+      derivedFromSourceQuestionIds: [questionId],
+      sourceDigest: 'c'.repeat(64),
+    },
+    confirmation: { state: 'draft' as const },
+    createdAt: '2026-10-05T12:00:00.000Z',
+    updatedAt: '2026-10-05T12:00:00.000Z',
+  };
+}

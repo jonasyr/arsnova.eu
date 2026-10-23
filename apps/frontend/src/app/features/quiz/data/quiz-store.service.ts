@@ -1463,7 +1463,7 @@ export class QuizStoreService implements OnDestroy {
     const hasMissingReference = hasMissingScopeReference || hasMissingDerivationReference;
     if (hasMissingReference && input.confirmationState === 'confirmed') {
       throw new Error(
-        $localize`:@@learningObjectives.missingScopeCannotConfirm:Ein Lernziel mit fehlendem Aufgabenverweis kann nicht bestätigt werden.`,
+        $localize`:@@learningObjectives.missingScopeCannotConfirm:Ein Lernziel mit fehlendem Fragenverweis kann nicht bestätigt werden.`,
       );
     }
     const previousConfirmation = existing
@@ -1603,7 +1603,7 @@ export class QuizStoreService implements OnDestroy {
       ]);
       if ([...references].some((questionId) => !knownEnabledQuestionIds.has(questionId))) {
         throw new Error(
-          $localize`:@@learningObjectives.derivationSourceChanged:Mindestens eine verwendete Aufgabe wurde während der automatischen Herleitung geändert oder deaktiviert. Deine Lernziele bleiben unverändert. Starte die Herleitung erneut.`,
+          $localize`:@@learningObjectives.derivationSourceChanged:Mindestens eine verwendete Frage wurde während der automatischen Herleitung geändert oder deaktiviert. Deine Lernziele bleiben unverändert. Starte die Herleitung erneut.`,
         );
       }
     }
@@ -5310,7 +5310,7 @@ function parseQuizSettings(input: Partial<QuizSettings>): QuizSettings {
     allowCustomNicknames: input.allowCustomNicknames,
     defaultTimer: input.defaultTimer ?? null,
     timerScaleByDifficulty: input.timerScaleByDifficulty ?? true,
-    enableTimerAccommodation: input.enableTimerAccommodation ?? true,
+    enableTimerAccommodation: input.enableTimerAccommodation ?? false,
     enableSoundEffects: input.enableSoundEffects,
     enableRewardEffects: input.enableRewardEffects,
     enableMotivationMessages: input.enableMotivationMessages,
@@ -5338,7 +5338,7 @@ function parseQuizSettings(input: Partial<QuizSettings>): QuizSettings {
     allowCustomNicknames: parsed.data.allowCustomNicknames,
     defaultTimer: parsed.data.defaultTimer ?? null,
     timerScaleByDifficulty: parsed.data.timerScaleByDifficulty ?? true,
-    enableTimerAccommodation: parsed.data.enableTimerAccommodation ?? true,
+    enableTimerAccommodation: parsed.data.enableTimerAccommodation ?? false,
     enableSoundEffects: parsed.data.enableSoundEffects,
     enableRewardEffects: parsed.data.enableRewardEffects,
     enableMotivationMessages: parsed.data.enableMotivationMessages,
@@ -5370,7 +5370,10 @@ function normalizeStoredQuizSettings(value: unknown): QuizSettings {
       allowCustomNicknames: readBoolean(candidate['allowCustomNicknames']),
       defaultTimer: readNumberOrNull(candidate['defaultTimer']),
       timerScaleByDifficulty: readBoolean(candidate['timerScaleByDifficulty']),
-      enableTimerAccommodation: readBoolean(candidate['enableTimerAccommodation']),
+      enableTimerAccommodation:
+        typeof candidate['enableTimerAccommodation'] === 'boolean'
+          ? candidate['enableTimerAccommodation']
+          : true,
       enableSoundEffects: readBoolean(candidate['enableSoundEffects']),
       enableRewardEffects: readBoolean(candidate['enableRewardEffects']),
       enableMotivationMessages: readBoolean(candidate['enableMotivationMessages']),

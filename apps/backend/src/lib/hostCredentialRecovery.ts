@@ -27,6 +27,19 @@ import { invalidateHostPairingForSession } from './hostPairing';
 import { buildSessionRetentionTimeline } from './sessionLifecycle';
 
 export const HOST_CREDENTIAL_EXCHANGE_MS = 15 * 60 * 1000;
+export const HOST_ADMIN_HANDOFF_MS = 24 * 60 * 60 * 1000;
+
+function computeBoundedExpiry(
+  now: Date,
+  durationMs: number,
+  postProcessingEndsAt: Date | null,
+): Date {
+  const unboundedMs = now.getTime() + durationMs;
+  if (postProcessingEndsAt) {
+    return new Date(Math.min(unboundedMs, postProcessingEndsAt.getTime()));
+  }
+  return new Date(unboundedMs);
+}
 
 type InitialHostCredentialMaterial = {
   browserCapability: string;
@@ -287,8 +300,12 @@ async function prepareExchange(params: {
       where: { sessionId: session.id },
     });
     if (current) {
-      if (
-        current.expiresAt > now &&
+      if (current.expiresAt <= now) {
+        await tx.hostCredentialExchange.delete({ where: { id: current.id } });
+        await tx.hostCredential.deleteMany({
+          where: { id: current.targetCredentialId, status: 'PENDING' },
+        });
+      } else if (
         current.sourceType === sourceIdentity.type &&
         current.sourceSecretHash === sourceIdentity.secretHash &&
         current.exchangeIdHash === exchangeIdHash
@@ -297,8 +314,9 @@ async function prepareExchange(params: {
           current.encryptedEnvelope,
           exchangeAad(session.id, exchangeIdHash),
         );
+      } else {
+        return null;
       }
-      return null;
     }
     const source = await resolveExchangeSource({
       tx,
@@ -317,7 +335,11 @@ async function prepareExchange(params: {
     }
     const browserCapability = createOpaqueCapability();
     const recoveryCode = createOpaqueCapability();
-    const pendingExpiresAt = new Date(now.getTime() + HOST_CREDENTIAL_EXCHANGE_MS);
+    const pendingExpiresAt = computeBoundedExpiry(
+      now,
+      HOST_CREDENTIAL_EXCHANGE_MS,
+      retention.postProcessingEndsAt,
+    );
     const target = await tx.hostCredential.create({
       data: {
         sessionId: session.id,
@@ -628,7 +650,11 @@ export async function resetSessionHostAccess(params: {
         hostSupportId: supportId,
       },
     });
-    const expiresAt = new Date(now.getTime() + HOST_CREDENTIAL_EXCHANGE_MS);
+    const expiresAt = computeBoundedExpiry(
+      now,
+      HOST_ADMIN_HANDOFF_MS,
+      retention.postProcessingEndsAt,
+    );
     const output: AdminResetSessionHostAccessOutput = {
       sessionId: session.id,
       code: session.code,

@@ -13,12 +13,12 @@ threads=${OPEN_WEIGHT_LLM_THREADS:-4}
 validate_open_weight_llm_token "$token"
 case "$threads" in
   '' | *[!0-9]*)
-    echo 'OPEN_WEIGHT_LLM_THREADS must be an integer from 1 to 4' >&2
+    echo 'OPEN_WEIGHT_LLM_THREADS must be an integer from 1 to 8' >&2
     exit 64
     ;;
 esac
-if [ "$threads" -lt 1 ] || [ "$threads" -gt 4 ]; then
-  echo 'OPEN_WEIGHT_LLM_THREADS must be an integer from 1 to 4' >&2
+if [ "$threads" -lt 1 ] || [ "$threads" -gt 8 ]; then
+  echo 'OPEN_WEIGHT_LLM_THREADS must be an integer from 1 to 8' >&2
   exit 64
 fi
 if [ ! -r "$model_path" ]; then
@@ -36,7 +36,7 @@ set -- \
   --model "$model_path" \
   --alias qwen3-4b-instruct-2507-q4_k_m \
   --parallel 1 \
-  --ctx-size 4096 \
+  --ctx-size 8192 \
   --n-predict 768 \
   --threads "$threads" \
   --threads-batch "$threads" \

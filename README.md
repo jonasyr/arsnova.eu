@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/kqc-real/arsnova.eu/actions/workflows/ci.yml/badge.svg)](https://github.com/kqc-real/arsnova.eu/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-0f766e.svg?style=flat-square)](./LICENSE)
-[![Tech Stack: Angular](https://img.shields.io/badge/Frontend-Angular%2021.2-DD0031.svg?style=flat-square&logo=angular)](https://angular.dev/)
+[![Tech Stack: Angular](https://img.shields.io/badge/Frontend-Angular%2022.2-DD0031.svg?style=flat-square&logo=angular)](https://angular.dev/)
 [![Tech Stack: tRPC](https://img.shields.io/badge/API-tRPC%20v11-2596be.svg?style=flat-square&logo=trpc)](https://trpc.io/)
 [![Tech Stack: Prisma](https://img.shields.io/badge/ORM-Prisma%207.4-2D3748.svg?style=flat-square&logo=prisma)](https://www.prisma.io/)
 [![Docs: Architecture](https://img.shields.io/badge/Docs-Architecture%20%26%20ADRs-007A8A.svg?style=flat-square)](./docs/architecture/)
@@ -62,7 +62,7 @@ Wichtig: arsnova.eu ersetzt keine organisationsweite IAM-, LMS-, Prüfungs- oder
 
 | Schicht            | Technologie                                                                 |
 | ------------------ | --------------------------------------------------------------------------- |
-| Frontend           | Angular 21.2.x, Standalone Components, Signals, Angular Material 3          |
+| Frontend           | Angular 22.2.x, Standalone Components, Signals, Angular Material 3          |
 | API                | Node.js, Express, tRPC v11, HTTP und WebSocket-Subscriptions                |
 | Schemas / DTOs     | Zod v4 in `@arsnova/shared-types`, gemeinsam genutzt von Backend/Frontend   |
 | Persistenz         | PostgreSQL 16 via Prisma ORM 7.4.x                                          |
@@ -150,6 +150,27 @@ npm run dev
 Danach ist die App lokal unter **http://localhost:4200** erreichbar. Backend, tRPC-WebSocket und Yjs-Relay laufen standardmäßig auf den Ports `3000`, `3001` und `3002`.
 
 Für den Admin-Bereich (`/admin`) muss in `.env` ein starkes `ADMIN_SECRET` gesetzt sein.
+
+### Optional: lokale Text-KI (Qwen3-4B)
+
+Die Text-KI ist **kein** Pflichtbestandteil des Schnellstarts. Quiz, Q&A und Blitzlicht laufen ohne Modell, ohne Hugging-Face-Download und ohne SSH-Zugang zu einem Inferenzserver. Forks und Clones ohne Schlüssel werden dadurch nicht blockiert.
+
+Wer lokal mit Lernzielvorschlägen, Themenlabels oder der Moderationskurzfassung experimentieren möchte, startet **Qwen3-4B-Instruct** in Docker. Das Modell wird einmalig heruntergeladen (rund 2,5 GB) und nicht ins Git übernommen.
+
+Neben dem normalen `npm run dev`:
+
+```bash
+mkdir -p models/open-weight-llm
+curl --fail --location \
+  --output models/open-weight-llm/Qwen3-4B-Instruct-2507-Q4_K_M.gguf \
+  https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF/resolve/a06e946bb6b655725eafa393f4a9745d460374c9/Qwen3-4B-Instruct-2507-Q4_K_M.gguf
+node scripts/open-weight-llm/verify-model.mjs
+npm run docker:up:llm:http
+```
+
+Anschließend in `.env` `OPEN_WEIGHT_LLM_ENABLED=true`, `OPEN_WEIGHT_LLM_URL=http://127.0.0.1:8080` und dasselbe Runtime-Token wie im Container setzen, danach `npm run dev` neu starten. Den vollständigen Docker-Laborpfad (`npm run docker:up:llm`) nicht parallel zu `npm run dev` verwenden: Er startet zusätzlich den App-Container auf denselben Ports.
+
+Schritt-für-Schritt, Hardware, `.env` und typische Fehler stehen in [docs/onboarding.md](./docs/onboarding.md#optional-lokale-text-ki-qwen3-4b). Der technische Runtime-Vertrag bleibt [docs/features/open-weight-llm-runtime.md](./docs/features/open-weight-llm-runtime.md).
 
 ### Lokale Checks
 

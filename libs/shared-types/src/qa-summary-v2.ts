@@ -11,14 +11,14 @@ import { QaSummaryLocaleEnum, QaSummaryRuntimeDTOSchema, QaSummaryStatusEnum } f
 /** Versioned, full-context Q&A summary contracts. Legacy summary schemas stay unchanged. */
 export const QA_SUMMARY_V2_SCHEMA_VERSION = 2 as const;
 export const QA_SUMMARY_CONTEXT_V2_CONTRACT_VERSION = 'qa-summary-context-v2' as const;
-export const QA_SUMMARY_MODEL_OUTPUT_V2_CONTRACT_VERSION = 'qa-summary-model-output-v2' as const;
+export const QA_SUMMARY_MODEL_OUTPUT_V2_CONTRACT_VERSION = 'qa-summary-model-output-v3' as const;
 export const QA_SUMMARY_RESULT_V2_CONTRACT_VERSION = 'qa-summary-result-v2' as const;
 export const QA_SUMMARY_CONTEXT_PREVIEW_SCHEMA_VERSION = 1 as const;
 export const QA_SUMMARY_CONTEXT_PREVIEW_CONTRACT_VERSION = 'qa-summary-context-preview-v1' as const;
 export const QA_SUMMARY_ADAPTER_CAPABILITIES_CONTRACT_VERSION =
   'qa-summary-adapter-capabilities-v1' as const;
 export const QA_SUMMARY_FALLBACK_CONTRACT_VERSION = 'qa-summary-fallback-v1' as const;
-export const QA_SUMMARY_TECHNICAL_INSTRUCTION_VERSION = 'qa-summary-technical-handoff-v1' as const;
+export const QA_SUMMARY_TECHNICAL_INSTRUCTION_VERSION = 'qa-summary-technical-handoff-v2' as const;
 
 /** Short aliases for consumers that consistently call contract literals “contracts”. */
 export const QA_SUMMARY_CONTEXT_V2_CONTRACT = QA_SUMMARY_CONTEXT_V2_CONTRACT_VERSION;
@@ -52,9 +52,9 @@ export type QaSummaryStatementV2 = z.infer<typeof QaSummaryStatementV2Schema>;
 const QaSummaryModelOutputV2BaseSchema = z
   .object({
     status: z.enum(['ready', 'uncertain', 'failed']),
-    statements: z.array(QaSummaryStatementV2Schema).max(6),
-    suggestedNextSteps: z.array(QaSummaryStatementV2Schema).max(4),
-    limitations: z.array(z.string().trim().min(1).max(280)).max(6),
+    statements: z.array(QaSummaryStatementV2Schema).max(4),
+    suggestedNextSteps: z.array(QaSummaryStatementV2Schema).max(2),
+    limitations: z.array(z.string().trim().min(1).max(280)).max(2),
     modelVersion: z.string().trim().min(1).max(120).optional(),
   })
   .strict();
@@ -189,6 +189,7 @@ export type QaSummaryAdapterCapabilities = z.infer<typeof QaSummaryAdapterCapabi
 export const QA_SUMMARY_FALLBACK_REASONS = [
   'adapter_incompatible',
   'context_unavailable',
+  'no_packed_sources',
   'disabled',
   'busy',
   'aborted',

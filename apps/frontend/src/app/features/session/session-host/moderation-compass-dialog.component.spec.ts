@@ -25,7 +25,7 @@ describe('ModerationCompassDialogComponent', () => {
           {
             kind: 'full-context',
             requestContract: 'qa-summary-context-v2',
-            outputContract: 'qa-summary-model-output-v2',
+            outputContract: 'qa-summary-model-output-v3',
             promptContextContract: 'moderation-prompt-context-v1',
             definitionVersion: 'moderation-prompt-definitions-v1',
           },
@@ -40,14 +40,14 @@ describe('ModerationCompassDialogComponent', () => {
     return {
       schemaVersion: 1,
       contractVersion: 'qa-summary-context-preview-v1',
-      instructionVersion: 'qa-summary-technical-handoff-v1',
+      instructionVersion: 'qa-summary-technical-handoff-v2',
       definitionVersion: 'moderation-prompt-definitions-v1',
       capabilities: v2Runtime({ inferenceConfigured: false, result: null }).capabilities,
       selectedMode: null,
       fallback: {
         contractVersion: 'qa-summary-fallback-v1',
         requestedRequestContract: 'qa-summary-context-v2',
-        requestedOutputContract: 'qa-summary-model-output-v2',
+        requestedOutputContract: 'qa-summary-model-output-v3',
         mode: 'extractive',
         reason: 'disabled',
         retry: 'not-applicable',
@@ -90,7 +90,7 @@ describe('ModerationCompassDialogComponent', () => {
         },
         budget: {
           packedInputTokens: 3138,
-          contextWindowTokens: 4096,
+          contextWindowTokens: 8192,
           reservedOutputTokens: 640,
           safetyMarginTokens: 128,
           truncations: [{ section: 'questions', omittedItems: 2499, reason: 'token-budget' }],
@@ -198,10 +198,11 @@ describe('ModerationCompassDialogComponent', () => {
     expect(fixture.nativeElement.querySelector('.moderation-compass-card__suggestion')).toBeNull();
   });
 
-  it('zeigt den ruhigen Zustand wenn die Analyse aus ist', () => {
+  it('zeigt den ruhigen Zustand ohne Hinweis auf ausgeschaltete Sortierung', () => {
     const { fixture } = setup([], vi.fn(), 'disabled');
     const text = fixture.nativeElement.textContent as string;
-    expect(text).toContain('Die automatische Sortierung der Fragen ist aus.');
+    expect(text).not.toContain('Die automatische Sortierung der Fragen ist aus.');
+    expect(text).toContain('Sobald Fragen oder ein Blitzlicht da sind');
     expect(text).not.toContain('Aus der Live-Runde');
   });
 
@@ -349,6 +350,39 @@ describe('ModerationCompassDialogComponent', () => {
 
     expect(onSourceActivate).toHaveBeenCalledWith(source, 'clarification');
     expect(dialogRef.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('lässt den Dialog offen, wenn der Sprung fehlschlägt', async () => {
+    const source = {
+      kind: 'quiz-result' as const,
+      label: 'Viele falsche Antworten',
+      target: {
+        channel: 'quiz' as const,
+        questionId: '11111111-1111-4111-8111-111111111111',
+      },
+    };
+    const onSourceActivate = vi.fn().mockResolvedValue(false);
+    const { fixture, dialogRef } = setup(
+      [
+        {
+          kind: 'clarification',
+          sources: [source],
+        },
+      ],
+      onSourceActivate,
+    );
+
+    const button = fixture.nativeElement.querySelector(
+      '.moderation-compass-card__source-button',
+    ) as HTMLButtonElement | null;
+    button?.click();
+    await fixture.whenStable();
+
+    expect(onSourceActivate).toHaveBeenCalledWith(source, 'clarification');
+    expect(dialogRef.close).not.toHaveBeenCalled();
+    expect(
+      fixture.nativeElement.querySelector('.moderation-compass-card__source-button'),
+    ).not.toBeNull();
   });
 
   it('klappt weitere Quellen hinter den ersten drei auf', () => {
@@ -931,7 +965,7 @@ describe('ModerationCompassDialogComponent', () => {
             fallback: {
               contractVersion: 'qa-summary-fallback-v1',
               requestedRequestContract: 'qa-summary-context-v2',
-              requestedOutputContract: 'qa-summary-model-output-v2',
+              requestedOutputContract: 'qa-summary-model-output-v3',
               mode: 'extractive',
               reason: 'disabled',
               retry: 'not-applicable',

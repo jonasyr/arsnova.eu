@@ -3,8 +3,8 @@
 # Generative Moderationszusammenfassung (Story 8.9c)
 
 **Zielgruppe:** Product Owner, Entwickler, Betrieb
-**Stand:** 2026-10-05
-**Status:** Versionierter Summary-V2-Pfad, private Runtimeübergabe, Kontextvorschau und extraktiver Backend-Fallback implementiert; Kill-Switches produktiv default aus; reale CPU-/Prefill-/Speicherabnahme und reichhaltiges 4.096-Token-Profil offen
+**Stand:** 2026-10-17
+**Status:** Versionierter Summary-V2-Pfad (`qa-summary-technical-handoff-v2`, `qa-summary-model-output-v3`), private Runtimeübergabe, Kontextvorschau und extraktiver Backend-Fallback implementiert und auf dem privaten 8-vCPU-Produktionshost real vermessen (~56,9 s / 374 Completion-Tokens); Kill-Switches im Repo standardmäßig `false`
 **Backlog:** Story 8.9c
 **ADR:** [0032-optional-nlp-cascade-for-qa-moderation-signals.md](../architecture/decisions/0032-optional-nlp-cascade-for-qa-moderation-signals.md) (Kaskade), [0035-self-hosted-llm-runtime-llama-cpp-over-ollama.md](../architecture/decisions/0035-self-hosted-llm-runtime-llama-cpp-over-ollama.md) (Slice-4-Runtime)
 
@@ -16,18 +16,18 @@ Sie ist **kein** spaCy-Pfad, **keine** Q&A-Klassifikation und **kein** Wortwolke
 
 ## Betriebsgrenzen
 
-| Env                          | Default   | Wirkung                                                                                                                                                             |
-| ---------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `QA_SUMMARY_ENABLED`         | `false`   | Nur exakt `true` erlaubt die Host-Karte und `qa.requestSummary`; V2 kann auch ohne Inferenzserver den quellengebundenen extraktiven Backend-Fallback liefern        |
-| `QA_SUMMARY_TIMEOUT_MS`      | `8000`    | Hartes Wall-Clock-Limit der Summary-Queue (500–30.000 ms), auch um einen Runtimeaufruf; Timeout degradiert auf den extraktiven Backend-Fallback                     |
-| `QA_SUMMARY_QUEUE_LIMIT`     | `8`       | Wartende plus laufende Jobs (1–32). Überlast startet keinen Modelljob und liefert einen explizit als `queue_full` markierten extraktiven Fallback                   |
-| `QA_SUMMARY_CONCURRENCY`     | `1`       | Parallele Summary-Jobs im Backend-Prozess (1–2); der gemeinsame llama.cpp-Slot ist zusätzlich global auf einen Auftrag begrenzt                                     |
-| `QA_SUMMARY_COOLDOWN_MS`     | `30000`   | Kein zweiter Job für denselben Snapshot-Hash innerhalb der Frist. Manuell wiederholbare Fallbacks blockieren keinen ausdrücklichen Retry                            |
-| `QA_SUMMARY_TTL_MS`          | `1800000` | Ephemeres Ergebnis pro Session (60 s–8 h); keine Prisma-Spalte                                                                                                      |
-| `QA_SUMMARY_MAX_SOURCES`     | `20`      | Legacy-Snapshotgrenze für Q&A-Texte (3–40); der V2-Packer besitzt eigene Bereichs-, Quellen- und Budgetgrenzen                                                      |
-| `QA_SUMMARY_INFERENCE_URL`   | leer      | Privater Legacy-Endpunkt für `legacy-text`; nie direkt llama.cpp. Leer oder SaaS-Host aktiviert keinen Cloudpfad, V2 fällt lokal extraktiv zurück                   |
-| `QA_SUMMARY_INFERENCE_TOKEN` | leer      | Optionaler Bearer-Token nur für den privaten Legacy-Endpunkt; nie in der URL                                                                                        |
-| `OPEN_WEIGHT_LLM_ENABLED`    | `false`   | Getrennter Kill-Switch der privaten llama.cpp-Runtime; zusammen mit genau einem privaten Transport und Token Voraussetzung für den generativen `full-context`-Modus |
+| Env                          | Default   | Wirkung                                                                                                                                                                                                               |
+| ---------------------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `QA_SUMMARY_ENABLED`         | `false`   | Nur exakt `true` erlaubt die Host-Karte und `qa.requestSummary`; V2 kann auch ohne Inferenzserver den quellengebundenen extraktiven Backend-Fallback liefern                                                          |
+| `QA_SUMMARY_TIMEOUT_MS`      | `90000`   | Queue-Wall-Clock (500–300.000 ms); bei aktivem Open-Weight-Full-Context effektiv `max` mit `OPEN_WEIGHT_LLM_SUMMARY_TIMEOUT_MS`; Legacy/disabled behalten den Queue-Wert; Timeout degradiert auf extraktiven Fallback |
+| `QA_SUMMARY_QUEUE_LIMIT`     | `8`       | Wartende plus laufende Jobs (1–32). Überlast startet keinen Modelljob und liefert einen explizit als `queue_full` markierten extraktiven Fallback                                                                     |
+| `QA_SUMMARY_CONCURRENCY`     | `1`       | Parallele Summary-Jobs im Backend-Prozess (1–2); der gemeinsame llama.cpp-Slot ist zusätzlich global auf einen Auftrag begrenzt                                                                                       |
+| `QA_SUMMARY_COOLDOWN_MS`     | `30000`   | Kein zweiter Job für denselben Snapshot-Hash innerhalb der Frist. Manuell wiederholbare Fallbacks blockieren keinen ausdrücklichen Retry                                                                              |
+| `QA_SUMMARY_TTL_MS`          | `1800000` | Ephemeres Ergebnis pro Session (60 s–8 h); keine Prisma-Spalte                                                                                                                                                        |
+| `QA_SUMMARY_MAX_SOURCES`     | `20`      | Legacy-Snapshotgrenze für Q&A-Texte (3–40); der V2-Packer besitzt eigene Bereichs-, Quellen- und Budgetgrenzen                                                                                                        |
+| `QA_SUMMARY_INFERENCE_URL`   | leer      | Privater Legacy-Endpunkt für `legacy-text`; nie direkt llama.cpp. Leer oder SaaS-Host aktiviert keinen Cloudpfad, V2 fällt lokal extraktiv zurück                                                                     |
+| `QA_SUMMARY_INFERENCE_TOKEN` | leer      | Optionaler Bearer-Token nur für den privaten Legacy-Endpunkt; nie in der URL                                                                                                                                          |
+| `OPEN_WEIGHT_LLM_ENABLED`    | `false`   | Getrennter Kill-Switch der privaten llama.cpp-Runtime; zusammen mit genau einem privaten Transport und Token Voraussetzung für den generativen `full-context`-Modus                                                   |
 
 `qa.requestSummary` awaitet die Inferenz nicht. Das Ergebnis liegt in Memory bis TTL oder bis zur nächsten Anfrage.
 
@@ -42,7 +42,7 @@ Aussagen sind weiterhin `{ text, sourceIds }`; V2 erlaubt dabei typisierte Quell
 Host-only:
 
 - `qa.summaryRuntime` — Kill-Switch, Adapterfähigkeiten, Inferenzkonfiguration und letztes V1-/V2-Ergebnis; vor Auslieferung wird ein fertiges V2-Ergebnis gegen einen frisch autorisierten Hash geprüft
-- `qa.requestSummary` — startet einen Job, kehrt sofort mit `pending` zurück
+- `qa.requestSummary` — startet einen Job (auch während der 14-tägigen Host-Nachbereitungsfrist bei aktiviertem Q&A-Kanal via `assertQaHostContentReadAllowed`), kehrt sofort mit `pending` zurück
 - `qa.summaryContextPreview` — hostgeschützte, ausdrücklich geladene Diagnose desselben gepackten V2-Kontexts
 
 Teilnehmer-DTOs enthalten kein Summary- oder Kontextfeld. V2 entsteht ausschließlich aus dem hostautorisierten N10–N12-Pfad; Tokens, IPs, Nicknames und Participant-IDs sind nicht zulässig. Nicht freigegebene Quizresultate und Lösungen gelangen nicht in den Live-Kontext. Der Lernziel-Vorbereitungsauftrag ist davon getrennt und darf lösungshaltige Quizdaten nur nach der eigenen ausdrücklichen Hostaktion verwenden.
@@ -65,7 +65,7 @@ Die Adapterwahl ist ausdrücklich und nachvollziehbar:
 
 Vor dem Modelllauf baut die Queue den Kontext frisch auf; danach folgen derselbe erneute Kontextaufbau und ein Hashvergleich. Eine Quellenänderung verwirft die Modellantwort und bindet den Fallback an den neuen Stand. `summaryRuntime` prüft fertige Ergebnisse vor der nächsten Auslieferung erneut. Session-Purge löscht Ergebnis, Warteschlangeneintrag und flüchtiges Host-Credential und bricht einen laufenden Auftrag ab.
 
-Das technische Profil verwendet 4.096 konservative Budgeteinheiten, 640 Antwortreserve und 128 Sicherheitsmarge. Der reichhaltige Vollkontext passt derzeit nicht in dieses Profil; der Packer degradiert sichtbar auf eine Q&A-Textbaseline. Das ist ein sicherer Betriebszustand, aber **keine bestandene Full-context- oder CPU-Prefill-Abnahme**. Details und offene Nachweise stehen in [Issue #456 – Slice-8-Abnahme](../implementation/ISSUE-456-SLICE-8-ABNAHME.md).
+Das technische Profil verwendet 8.192 konservative Budgeteinheiten, 640 Antwortreserve und 128 Sicherheitsmarge (unter dem praxisnahen 8k-Arbeitsfenster von Qwen3-4B Q4; nie Modelldefault). Passen Basismetadaten trotzdem nicht, degradiert der Packer sichtbar auf eine Q&A-Textbaseline bzw. Force-Fit-Mindestbelege. Das ist ein sicherer Betriebszustand, aber **keine bestandene Full-context- oder CPU-Prefill-Abnahme**. Details und offene Nachweise stehen in [Issue #456 – Slice-8-Abnahme](../implementation/ISSUE-456-SLICE-8-ABNAHME.md).
 
 ## Lokal prüfen
 
@@ -120,4 +120,4 @@ Produktiv weder `QA_SUMMARY_ENABLED` noch `OPEN_WEIGHT_LLM_ENABLED` stillschweig
 
 [Issue #456](https://github.com/kqc-real/arsnova.eu/issues/456) liefert den versionierten Shared-Vertrag, hostautorisierten Gesamtbuilder, deterministischen Packer/Hash/Cache, die getrennte Lernzielvorbereitung sowie den V2-Adapter- und Vorschaupfad. Integrationsgrenzen und Zustände stehen in [moderation-prompt-context.md](moderation-prompt-context.md); die Datenhaltung regelt [ADR-0036](../architecture/decisions/0036-learning-objective-storage-and-live-projection.md).
 
-Runtime R ist in die Summary-Queue verdrahtet, bleibt aber produktiv deaktiviert. Der reale Runtime-Nachweis umfasst bislang nur einen kurzen `topic_label`-Auftrag. Für `qa_summary` V2 und `learning_objectives` fehlen der reale Lauf auf der vorgesehenen Hardware sowie CPU-/Prefill-/RSS-Werte. Zudem reicht das feste 4.096-Profil nicht für den reichhaltigen Vollkontext. Diese beiden Blocker sind in der [Slice-8-Abnahme](../implementation/ISSUE-456-SLICE-8-ABNAHME.md) ausdrücklich offen; kein Flag wird durch die Integration aktiviert.
+Runtime R ist in die Summary-Queue verdrahtet und bleibt im Repository standardmäßig deaktiviert (`false`). Auf dem privaten 8-vCPU-Produktionshost wurden neben dem kurzen `topic_label`-Auftrag (Einzel- und Multi-Cluster-Batch V2: 6 Cluster in 22,9 s) und `learning_objectives` (10 Entwürfe im Demo-Quiz, ~3,56 GiB Peak-RAM) auch `qa_summary` V2 (`qa-summary-technical-handoff-v2` + `qa-summary-model-output-v3`: 56,9 s, 374 Completion-Tokens) erfolgreich real ausgeführt. Die formale Detailprotokollierung (isolierte TTFT-/Prefill- und RSS-Werte für die Obergrenze des reichhaltigen 8.192-Vollkontexts sowie fachliche Qualitätsabnahme) bleibt in der [Slice-8-Abnahme](../implementation/ISSUE-456-SLICE-8-ABNAHME.md) als getrennter Abnahmepunkt dokumentiert; kein Flag wird im Repository standardmäßig aktiviert.

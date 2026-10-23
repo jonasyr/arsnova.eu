@@ -2,9 +2,9 @@
 
 # Private Open-Weight-LLM-Runtime (Story 8.9d / Runtime R)
 
-**Stand:** 2026-10-05
+**Stand:** 2026-10-17
 
-**Status:** Runtime, App-Verträge und Betriebswrapper implementiert; Lernzielableitung und Summary V2 als getrennte Consumer verdrahtet; produktiv standardmäßig aus; reale Consumer-/Hardwareabnahme offen
+**Status:** Runtime, App-Verträge und Betriebswrapper implementiert; `topic_label` (Einzel- und Multi-Cluster-Batching), `qa_summary` V2 (`qa-summary-model-output-v3`) und `learning_objectives` sind als getrennte Consumer verdrahtet und auf dem privaten 8-vCPU-Produktionshost (`arsnova-privat`) real vermessen
 
 **ADR:** [ADR-0035](../architecture/decisions/0035-self-hosted-llm-runtime-llama-cpp-over-ollama.md)
 
@@ -12,17 +12,19 @@
 
 Runtime R stellt eine gemeinsame, private CPU-Runtime für drei getrennte technische Aufträge bereit:
 
-- `topic_label` für 1.14c Stufe 2,
+- `topic_label` für 1.14c Stufe 2 auf Host-Q&A und Host-Freitext,
 - `qa_summary` für 8.9c Slice 4,
 - `learning_objectives` für Issue #456 Slice 5.
 
-Die versionierten Zod-Verträge liegen in `libs/shared-types/src/open-weight-llm.ts`. Der Backend-Client übersetzt ausschließlich diese Verträge nach llama.cpp Chat Completions, prüft die strukturierte Antwort erneut und verwirft unbekannte Quellen- oder Aufgabenreferenzen. #456 Slice 5 verdrahtet den bewusst ausgelösten Vorbereitungsauftrag aus [Modellgestützte Lernzielableitung](learning-objective-derivation.md); Slice 7 verdrahtet `qa_summary` V2 mit dem versionierten [Moderations-Prompt-Kontext](moderation-prompt-context.md), einem hostgeschützten Vorschaupfad und dem extraktiven Backend-Fallback. Der Labelpfad bleibt fachlich offen. Alle drei Aufträge behalten eigene Aktivierungs-, Schema-, Timeout- und Fallbackgrenzen.
+Die versionierten Zod-Verträge liegen in `libs/shared-types/src/open-weight-llm.ts`. Der Backend-Client übersetzt ausschließlich diese Verträge nach llama.cpp Chat Completions, prüft die strukturierte Antwort erneut und verwirft unbekannte Quellen- oder Aufgabenreferenzen. #456 Slice 5 verdrahtet den bewusst ausgelösten Vorbereitungsauftrag aus [Modellgestützte Lernzielableitung](learning-objective-derivation.md); Slice 7 verdrahtet `qa_summary` V2 mit dem versionierten [Moderations-Prompt-Kontext](moderation-prompt-context.md), einem hostgeschützten Vorschaupfad und dem extraktiven Backend-Fallback. Der Labelpfad ist für Host-Q&A und Host-Freitext angeschlossen und bleibt produktiv aus: [WORD-CLOUD-THEMENLABEL-1.14C-STUFE-2-PLAN.md](../implementation/WORD-CLOUD-THEMENLABEL-1.14C-STUFE-2-PLAN.md). Alle drei Aufträge behalten eigene Aktivierungs-, Schema-, Timeout- und Fallbackgrenzen.
 
-`topic_label`, `learning_objectives` und der Legacy-Summaryauftrag sind zusätzlich auf 2.500 UTF-8-Bytes für die vollständig serialisierte User-Nachricht begrenzt. Größere Lernzielmengen werden deterministisch in sequenzielle Aufträge geteilt. Summary V2 besitzt bewusst nicht diese historische Gesamtgrenze, sondern den bereits gepackten `ModerationPromptContextV1` mit seinem eigenen Kontext-, Instruktions-, Definitions-, Antwort- und Sicherheitsbudget. Sein festes Profil reserviert bei 4.096 insgesamt 640 für die Antwort und 128 als Sicherheitsmarge.
+`topic_label` (Einzelauftrag V1 und Multi-Cluster-Sammelauftrag V2), `learning_objectives` und der Legacy-Summaryauftrag sind zusätzlich auf 2.500 UTF-8-Bytes für die vollständig serialisierte User-Nachricht begrenzt. Größere Mengen unbenannter Cluster (`packBatchRequests`) bzw. größere Lernzielmengen werden deterministisch in einen oder mehrere sequenzielle, größenbegrenzte Aufträge (≤ 2.500 UTF-8-Bytes) geteilt. Summary V2 besitzt bewusst nicht diese historische Gesamtgrenze, sondern den bereits gepackten `ModerationPromptContextV1` mit seinem eigenen Kontext-, Instruktions-, Definitions-, Antwort- und Sicherheitsbudget. Sein festes Profil reserviert bei 8.192 insgesamt 640 für die Antwort und 128 als Sicherheitsmarge (unter dem praxisnahen 8k-Arbeitsfenster von Qwen3-4B Q4; nativ 32k, nie Modelldefault).
 
-Der reichhaltige Summary-V2-Referenzkontext passt in diesem Profil nicht: Die App packt sichtbar eine Q&A-Textbaseline neu. Das verhindert einen unausführbaren Großauftrag, belegt aber nicht die vom Issue geforderte reichhaltige Vollkontexttauglichkeit. Es gibt keinen stillen Ausbau des Kontextfensters, keine GPU- und keine SaaS-Ausweicharchitektur.
+Der Summary-V2-Referenzkontext passt im 8.192-Profil mit Q&A-Belegen und sichtbaren Kürzungen; bei zu großen Basismetadaten degradiert der Packer kontrolliert auf Q&A-Textbaseline bzw. Force-Fit-Mindestbelege. Das verhindert unausführbare Großaufträge, belegt aber nicht die Prefill-/RSS-Abnahme auf dem vorgesehenen CPU-Host. Es gibt keinen stillen Ausbau auf Modelldefault (32k/128k), keine GPU- und keine SaaS-Ausweicharchitektur.
 
 `OPEN_WEIGHT_LLM_ENABLED` bleibt standardmäßig `false` und ist unabhängig von `NLP_ENABLED`, `QA_NLP_ENABLED`, `WORD_CLOUD_SEMANTIC_ENABLED` und `QA_SUMMARY_ENABLED`. Es gibt keinen SaaS-Fallback.
+
+Der Betriebsstatus-Dialog (Startseite → Betrieb & Nutzung) zeigt unter **Lokale Text-KI** das Ergebnis von `health.openWeightLlmProbe`: feste Mini-Fixtures für `topic_label` und `learning_objectives` sowie denselben Summary-V2-Vertrag wie der produktive Full-Context-Pfad, mit Kurzbeschreibung für Erstnutzer und dem Hinweis auf das lokal betriebene Open-Weight-Modell (kein Cloud-Anbieter). Die Prüfung ist vom Footer-Poll und vom Kern-`serviceStatus` getrennt, läuft im Frontend über den ungebündelten `httpLink` (damit ein laufender Probe-Call niemals `health.stats` im HTTP-Batch blockiert) und cached fünf Minuten (auch `refresh: true` umgeht diese Abkühlzeit nicht). Timeouts: `topic_label` 20 s, `learning_objectives` höchstens 90 s (oder der konfigurierte Lernziel-Timeout, falls kürzer), `qa_summary` der konfigurierte Produktions-Timeout. Nach Abbruch/Timeout wartet die Probe 1,5 s Slot-Cooldown, damit `llama-server` seinen Einzel-Slot vor dem Folgeauftrag freigibt. Das Lernziel-Wire-Schema setzt `questionIds.items.enum` auf die Quell-IDs des Auftrags; die UUID-Regex aus Zod darf nicht nach `llama-server` gelangen, weil sie die GBNF-Generierung über das Probe-Budget treibt und der Statusdialog sonst »nicht erreichbar« zeigt. Ist die Runtime aus, erscheint der Status »ausgeschaltet« ohne Inferenzaufruf.
 
 ## Gepinnte Artefakte
 
@@ -87,6 +89,12 @@ URL und Socket sind gegenseitig exklusiv. Das Flag bleibt bis zur gesonderten Co
 
 ### Same-Host-Labor
 
+**Studierende / Fork ohne Inferenz-SSH:** `npm run dev` braucht kein Modell. Die verständliche
+Anleitung zum lokalen Docker-Labor (Modell laden, `npm run docker:up:llm:http` neben dem
+Dev-Server, `.env`) steht in
+[docs/onboarding.md](../onboarding.md#optional-lokale-text-ki-qwen3-4b).
+Die folgenden Befehle sind der technische Vertrag dazu.
+
 ```bash
 OPEN_WEIGHT_LLM_MODEL_DIR=/absoluter/pfad/zum/modell \
 OPEN_WEIGHT_LLM_TOKEN=<lokales-ascii-secret-mit-32-bis-512-zeichen> \
@@ -136,12 +144,12 @@ llama.cpp b10524 dokumentiert mehrere strukturierte `response_format`-Varianten.
 Der Entry-Point erzwingt unter anderem:
 
 ```text
---parallel 1 --ctx-size 4096 --n-predict 768
+--parallel 1 --ctx-size 8192 --n-predict 768
 --no-webui --slots --api-key … --reasoning off
 --n-gpu-layers 0 --slot-prompt-similarity 0 --jinja --offline
 ```
 
-Containergrenzen: 4 CPU, 5 GiB RAM, 128 PIDs, read-only Root-Dateisystem, alle Linux-Capabilities entfernt und `no-new-privileges`. Der Server bindet nie automatisch an eine Wildcard.
+Containergrenzen: 4 CPU im Same-Host-Labor (`docker-compose.yml`, `docker-compose.prod.yml`) bzw. 8 CPU auf dem zweiten Produktionshost (`docker-compose.llm.yml`), 128 PIDs, read-only Root-Dateisystem, alle Linux-Capabilities entfernt und `no-new-privileges`. Die Same-Host-Laborprofile bleiben auf 5 GiB RAM begrenzt. Der separate Produktionshost nutzt 8 GiB RAM und 10 GiB als Gesamtgrenze für RAM plus Swap; die höhere Grenze ist für den vollständigen Lernzielauftrag vorgesehen. Der Server bindet nie automatisch an eine Wildcard.
 
 Der `/health`-Endpunkt des gepinnten llama.cpp-Builds erzwingt selbst keinen API-Key. Der Container-Healthcheck sendet den Bearer-Header zwar mit, aber die Readiness-Antwort ist keine Authentisierungsgrenze. Deshalb bleiben privates Netz beziehungsweise `network_mode: none` und die Host-Firewall verbindlich. Die auftragsrelevanten Endpunkte `/slots` und `/v1/chat/completions` erzwingen das exakte Runtime-Credential.
 
@@ -234,7 +242,14 @@ docker exec -i arsnova-v3-open-weight-llm sh -c \
 
 Der finale isolierte Container war zusätzlich effektiv als UID/GID `65532:65532`, read-only, `network_mode: none`, 128 PIDs, `cap_drop: ALL`, `no-new-privileges` und `healthy` geprüft. Am geschützten Slot-Endpunkt lieferte das exakte Credential unter der abweichenden App-UID und gemeinsamen Socket-Gruppe HTTP 200, ein anderes formal gültiges Credential HTTP 401. Ein anschließendes `SIGTERM` wurde sauber an den Server weitergegeben; der Container beendete sich innerhalb der Grace Period mit Exitcode 0 und ohne OOM. Der `/health`-Endpunkt bleibt, wie oben beschrieben, nur eine Readiness-Sonde.
 
-Die drei Läufe belegen Schemaerzwingung und Ausführbarkeit des kurzen Labelauftrags. Sie belegen nicht Summary-Prefill auf der echten 8-vCPU-Inferenzbox, einen realen Lernzielauftrag, Lernzielqualität, p95 unter Last, Produktions-RSS oder fachliche Freigabe. Die Slices 5–7 ergänzen dafür modellfreie Consumer-, Prompt-, Adapter-, Quellen- und Lebenszyklustests. Für den integrierten Head stand keine reale Zielruntime für `qa_summary` V2 oder `learning_objectives` zur Verfügung; die fehlenden Läufe und der nicht passende reichhaltige 4.096-Kontext bleiben in der [Slice-8-Abnahme](../implementation/ISSUE-456-SLICE-8-ABNAHME.md) offen. Die Produktivflags bleiben aus.
+Die drei lokalen Läufe belegen Schemaerzwingung und Ausführbarkeit des kurzen Labelauftrags. Danach wurde `learning_objectives` am 12.10.2026 auf dem privaten Produktionshost mit dem vollständigen Demo-Quiz ausgeführt: Nach Anpassung der Containergrenze auf 8 GiB RAM und 10 GiB RAM plus Swap wurden zehn Vorschläge als Entwürfe hinzugefügt; `memory.peak` der aktuellen cgroup betrug rund 3,56 GiB ohne neues OOM-Ereignis. Der vorangegangene Versuch war bei Batch 3 an der früheren 5-GiB-Grenze durch ein Docker-OOM-Ereignis abgebrochen. Details und verbleibende Nachweise stehen in [Modellgestützte Lernzielableitung](learning-objective-derivation.md) und der [Slice-8-Abnahme](../implementation/ISSUE-456-SLICE-8-ABNAHME.md).
+
+Dieser Produktionslauf belegt keine vollständige Lernzielqualität und keine p95 unter Last. Am 17.10.2026 wurden zusätzlich auf derselben Zwei-Host-Produktionsarchitektur (`arsnova` ↔ `arsnova-privat` über privates Netz `10.0.0.2:8080`) sowohl `qa_summary` V2 als auch das Multi-Cluster-Batching für `topic_label` real vermessen:
+
+- **`qa_summary` V2 (`qa-summary-technical-handoff-v2` + `qa-summary-model-output-v3`):** Durch die einzeilige JSON-Kompaktierung, die explizite Beschränkung auf `included`-Quellen und die Schema-Obergrenzen `statements.max(4)`, `suggestedNextSteps.max(2)`, `limitations.max(2)` sank die Antwortgröße von 640 Tokens (`finish_reason: "length"`, Timeout nach 90 s) auf **374 Completion-Tokens** (`finish_reason: "stop"`) und **56,9 Sekunden** Ende-zu-Ende-Laufzeit.
+- **`topic_label` Multi-Cluster-Batching (`schemaVersion: 2`) & kompakte Quell-IDs (`s1`..`s6`):** Durch Komprimierung langer UUID-Quell-IDs auf `s1`..`s6` (max. 6 repräsentative Quellen à 240 Zeichen pro Cluster) und Partitionierung mehrerer unbenannter Cluster über `packBatchRequests` in einen oder mehrere größenbegrenzte `topic_label`-Batch-Aufrufe (jeweils ≤ 2.500 UTF-8-Bytes, max. 12 Cluster) wurden in der Messung **6 Cluster gemeinsam in einem Batch in 22,9 Sekunden** (`promptTokens: 411`, `completionTokens: 179`) benannt. Zusammen mit dem session-gescopeten `clusterTopicLabelCache`, `sessionClustersCache` und `sessionItemEmbeddingsCache` verkürzt sich die Themen-Verarbeitung bei 500 Fragen im Q&A-Forum über alle vier Sortieransichten von 10–15 Minuten auf **< 5 ms** pro Sortierwechsel (und ~20–30 s beim allerersten Kaltstart).
+
+`OPEN_WEIGHT_LLM_ENABLED` ist im Repository standardmäßig `false`; der Betreiber aktiviert das Flag explizit in seiner Produktionsumgebung.
 
 ## Verifikation
 

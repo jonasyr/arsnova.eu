@@ -6058,7 +6058,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="hostRecovery.handoffValidity" datatype="html">
-        <source> Der Code vom Support ist ab seiner Ausstellung 15 Minuten gültig. Ist er abgelaufen, bitte den Support um einen neuen Code.</source>
+        <source> Der Code vom Support ist ab seiner Ausstellung 24 Stunden gültig. Ist er abgelaufen, bitte den Support um einen neuen Code.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/admin/admin.component.html</context>
           <context context-type="linenumber">544,548</context>
@@ -9096,21 +9096,7 @@
           <context context-type="linenumber">82</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="join.nicknameSelectLabelKita" datatype="html">
-        <source>Tier-Icons</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/join/join.component.html</context>
-          <context context-type="linenumber">196</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="join.nicknameSelectLabelFromList" datatype="html">
-        <source>Name aus Liste</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/join/join.component.html</context>
-          <context context-type="linenumber">198</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="1342587625788309343" datatype="html">
+                  <trans-unit id="1342587625788309343" datatype="html">
         <source>— Bitte wählen —</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/join/join.component.html</context>
@@ -10998,29 +10984,7 @@
           <context context-type="linenumber">310</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="quizForm.nicknameThemePseudonymLabel" datatype="html">
-        <source>Altersgruppe für Pseudonyme</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/quiz/quiz-edit/quiz-edit.component.html</context>
-          <context context-type="linenumber">365</context>
-        </context-group>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/quiz/quiz-new/quiz-new.component.html</context>
-          <context context-type="linenumber">316</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="quizForm.nicknameThemePseudonymAria" datatype="html">
-        <source>Altersgruppe für Pseudonyme wählen</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/quiz/quiz-edit/quiz-edit.component.html</context>
-          <context context-type="linenumber">370</context>
-        </context-group>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/quiz/quiz-new/quiz-new.component.html</context>
-          <context context-type="linenumber">321</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="3305022433902109133" datatype="html">
+                  <trans-unit id="3305022433902109133" datatype="html">
         <source>Ablauf &amp; Zeit</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/quiz/quiz-edit/quiz-edit.component.html</context>
@@ -12994,82 +12958,7 @@
           <context context-type="linenumber">1010</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="3898616236407170196" datatype="html">
-        <source>Nobelpreis</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/quiz/quiz-edit/quiz-edit.component.ts</context>
-          <context context-type="linenumber">600</context>
-        </context-group>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/quiz/quiz-new/quiz-new.component.ts</context>
-          <context context-type="linenumber">102</context>
-        </context-group>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/shared/preset-toast/preset-toast.component.ts</context>
-          <context context-type="linenumber">103</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="quiz.nicknameTheme.kindergarten" datatype="html">
-        <source>Kindergarten (Tier-Emojis)</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/quiz/quiz-edit/quiz-edit.component.ts</context>
-          <context context-type="linenumber">603</context>
-        </context-group>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/quiz/quiz-new/quiz-new.component.ts</context>
-          <context context-type="linenumber">105</context>
-        </context-group>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/shared/preset-toast/preset-toast.component.ts</context>
-          <context context-type="linenumber">106</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="3750722582864738355" datatype="html">
-        <source>Grundschule</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/quiz/quiz-edit/quiz-edit.component.ts</context>
-          <context context-type="linenumber">605</context>
-        </context-group>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/quiz/quiz-new/quiz-new.component.ts</context>
-          <context context-type="linenumber">107</context>
-        </context-group>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/shared/preset-toast/preset-toast.component.ts</context>
-          <context context-type="linenumber">109</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="7176543650453804262" datatype="html">
-        <source>Mittelstufe</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/quiz/quiz-edit/quiz-edit.component.ts</context>
-          <context context-type="linenumber">606</context>
-        </context-group>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/quiz/quiz-new/quiz-new.component.ts</context>
-          <context context-type="linenumber">108</context>
-        </context-group>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/shared/preset-toast/preset-toast.component.ts</context>
-          <context context-type="linenumber">110</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="4290010202262796761" datatype="html">
-        <source>Oberstufe</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/quiz/quiz-edit/quiz-edit.component.ts</context>
-          <context context-type="linenumber">607</context>
-        </context-group>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/quiz/quiz-new/quiz-new.component.ts</context>
-          <context context-type="linenumber">109</context>
-        </context-group>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/shared/preset-toast/preset-toast.component.ts</context>
-          <context context-type="linenumber">111</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="quiz.edit.questionTimerQuizDefault" datatype="html">
+                                    <trans-unit id="quiz.edit.questionTimerQuizDefault" datatype="html">
         <source>Quiz-Standard</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/quiz/quiz-edit/quiz-edit.component.ts</context>
@@ -15962,11 +15851,11 @@
           <context context-type="linenumber">11,13</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="hostRecovery.cardSubtitle" datatype="html">
-        <source> Lade die Zugangskarte herunter oder kopiere die Angaben in eine sichere Notiz.</source>
+      <trans-unit id="hostRecovery.moreDetails" datatype="html">
+        <source>Wiederherstellung und Support</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/host-recovery/host-recovery-card-dialog.component.html</context>
-          <context context-type="linenumber">14,16</context>
+          <context context-type="linenumber">88</context>
         </context-group>
       </trans-unit>
       <trans-unit id="hostRecovery.cardWhy" datatype="html">
@@ -16912,6 +16801,90 @@
           <context context-type="linenumber">326</context>
         </context-group>
       </trans-unit>
+      <trans-unit id="sessionHost.moderationCardSurvey" datatype="html">
+        <source>Antwortverteilung</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/moderation-compass-dialog.component.ts</context>
+          <context context-type="linenumber">1</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationCardFreetext" datatype="html">
+        <source>Ähnliche Antworten</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/moderation-compass-dialog.component.ts</context>
+          <context context-type="linenumber">1</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationCardMention" datatype="html">
+        <source>Andere Antworten</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/moderation-compass-dialog.component.ts</context>
+          <context context-type="linenumber">1</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationNextFreetext" datatype="html">
+        <source>Lies die wiederkehrenden Freitextantworten kurz vor.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/moderation-compass-dialog.component.ts</context>
+          <context context-type="linenumber">1</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationNextMention" datatype="html">
+        <source>Einzelne andere Antworten sind sichtbar. Du musst sie nicht zum Thema machen.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/moderation-compass-dialog.component.ts</context>
+          <context context-type="linenumber">1</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationNextTempoSlow" datatype="html">
+        <source>Die Gruppe kann schneller. Du kannst das Tempo anziehen.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/moderation-compass-dialog.component.ts</context>
+          <context context-type="linenumber">1</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationNextTempoMixed" datatype="html">
+        <source>Die Rückmeldungen sind gemischt. Frag kurz nach, woran es liegt.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/moderation-compass-dialog.component.ts</context>
+          <context context-type="linenumber">1</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationQuizJumpTitle" datatype="html">
+        <source>Ergebnis für alle zeigen?</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.ts</context>
+          <context context-type="linenumber">1</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationQuizJumpMessage" datatype="html">
+        <source>Die laufende Ansicht wechselt für den Raum auf dieses frühere Ergebnis.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.ts</context>
+          <context context-type="linenumber">1</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationQuizJumpConsequence" datatype="html">
+        <source>Teilnehmende und Präsentation sehen diese Frage im Ergebnis.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.ts</context>
+          <context context-type="linenumber">1</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationQuizJumpConfirm" datatype="html">
+        <source>Ergebnis zeigen</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.ts</context>
+          <context context-type="linenumber">1</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.moderationQuizJumpCancel" datatype="html">
+        <source>Abbrechen</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.ts</context>
+          <context context-type="linenumber">1</context>
+        </context-group>
+      </trans-unit>
       <trans-unit id="sessionHost.moderationNextFeedback" datatype="html">
         <source>Sieh dir das Blitzlicht kurz an.</source>
         <context-group purpose="location">
@@ -16961,32 +16934,11 @@
           <context context-type="linenumber">347</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="qaConfig.intro" datatype="html">
-        <source> Lege fest, bis wann Teilnehmende den Q&amp;A-Kanal nutzen können und bis wann du die Fragen danach noch einsehen kannst.</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/session/session-host/qa-channel-configuration-dialog.component.html</context>
-          <context context-type="linenumber">12,15</context>
-        </context-group>
-      </trans-unit>
       <trans-unit id="qaConfig.contentLegend" datatype="html">
-        <source>Inhalt</source>
+        <source>Überschrift zum Forum</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/qa-channel-configuration-dialog.component.html</context>
-          <context context-type="linenumber">21</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="qaConfig.qaTitleLabel" datatype="html">
-        <source>Titel der Fragenwand</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/session/session-host/qa-channel-configuration-dialog.component.html</context>
-          <context context-type="linenumber">23</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="qaConfig.moderationLabel" datatype="html">
-        <source> Neue Fragen vor Veröffentlichung prüfen</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/session/session-host/qa-channel-configuration-dialog.component.html</context>
-          <context context-type="linenumber">27,29</context>
+          <context context-type="linenumber">17</context>
         </context-group>
       </trans-unit>
       <trans-unit id="qaConfig.profileLegend" datatype="html">
@@ -17022,13 +16974,6 @@
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/qa-channel-configuration-dialog.component.html</context>
           <context context-type="linenumber">44,46</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="qaConfig.profileLocked" datatype="html">
-        <source> Diese Einstellungen können nach dem ersten Beitritt nicht mehr geändert werden.</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/session/session-host/qa-channel-configuration-dialog.component.html</context>
-          <context context-type="linenumber">50,52</context>
         </context-group>
       </trans-unit>
       <trans-unit id="qaConfig.deadlineLegend" datatype="html">
@@ -17140,6 +17085,13 @@
           <context context-type="linenumber">161</context>
         </context-group>
       </trans-unit>
+      <trans-unit id="qaConfig.retryPreview" datatype="html">
+        <source>Erneut prüfen</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/qa-channel-configuration-dialog.component.ts</context>
+          <context context-type="linenumber">166</context>
+        </context-group>
+      </trans-unit>
       <trans-unit id="qaConfig.reopen" datatype="html">
         <source>Fragerunde wieder öffnen</source>
         <context-group purpose="location">
@@ -17187,6 +17139,34 @@
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/qa-channel-configuration-dialog.component.ts</context>
           <context context-type="linenumber">199</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="qaConfig.deadlineInPast" datatype="html">
+        <source>Der Zeitpunkt muss in der Zukunft liegen. Wähle ein späteres Datum oder eine spätere Uhrzeit.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/qa-channel-configuration-dialog.component.ts</context>
+          <context context-type="linenumber">603</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="qaConfig.deadlineBeyondMax" datatype="html">
+        <source>Dieser Zeitpunkt liegt nach der maximalen Sessiondauer. Wähle ein früheres Datum.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/qa-channel-configuration-dialog.component.ts</context>
+          <context context-type="linenumber">605</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="qaConfig.sessionEnded" datatype="html">
+        <source>Die Session ist bereits beendet. Die Fragerunde lässt sich so nicht mehr öffnen.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/qa-channel-configuration-dialog.component.ts</context>
+          <context context-type="linenumber">607</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="qaConfig.previewUnavailable" datatype="html">
+        <source>Die Prüfung ist gerade nicht erreichbar. Prüfe die Verbindung und versuche es erneut.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/qa-channel-configuration-dialog.component.ts</context>
+          <context context-type="linenumber">609</context>
         </context-group>
       </trans-unit>
       <trans-unit id="qaConfig.previewError" datatype="html">
@@ -17742,7 +17722,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="sessionQa.wordCloudAnalysisSemantic" datatype="html">
-        <source>Themen</source>
+        <source>Thema</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/qa-word-cloud-dialog.component.html</context>
           <context context-type="linenumber">31</context>
@@ -17760,24 +17740,13 @@
         </context-group>
       </trans-unit>
       <trans-unit id="sessionQa.wordCloudSizeAria" datatype="html">
-        <source>Größe nach Stimmen, besten Fragen, Kontroverse oder Häufigkeit</source>
+        <source>Größe nach Kontroverse, besten Fragen, Stimmensaldo oder Vorkommen in Fragen</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/qa-word-cloud-dialog.component.html</context>
           <context context-type="linenumber">44</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="sessionQa.wordCloudSizeTop" datatype="html">
-        <source>Stimmen</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/session/session-host/qa-word-cloud-dialog.component.html</context>
-          <context context-type="linenumber">46</context>
-        </context-group>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/session/session-present/session-present.component.ts</context>
-          <context context-type="linenumber">660</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="sessionQa.sortBest" datatype="html">
+            <trans-unit id="sessionQa.sortBest" datatype="html">
         <source>Beste Fragen</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/qa-word-cloud-dialog.component.html</context>
@@ -17808,19 +17777,8 @@
           <context context-type="linenumber">2762</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="sessionQa.wordCloudMetricControversial" datatype="html">
-        <source> Kontroverse</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/session/session-host/qa-word-cloud-dialog.component.html</context>
-          <context context-type="linenumber">48,50</context>
-        </context-group>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.ts</context>
-          <context context-type="linenumber">2131</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="sessionQa.wordCloudMetricTime" datatype="html">
-        <source>Häufigkeit</source>
+            <trans-unit id="sessionQa.wordCloudMetricTime" datatype="html">
+        <source>Vorkommen in Fragen</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/qa-word-cloud-dialog.component.html</context>
           <context context-type="linenumber">51</context>
@@ -19405,7 +19363,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="sessionHost.wordCloudAnalysisSemantic" datatype="html">
-        <source>Themen</source>
+        <source>Thema</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.html</context>
           <context context-type="linenumber">3752</context>
@@ -19458,13 +19416,6 @@
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.html</context>
           <context context-type="linenumber">3960</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="sessionHost.qaTitleFieldLabel" datatype="html">
-        <source>Titel für Q&amp;A</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.html</context>
-          <context context-type="linenumber">3974</context>
         </context-group>
       </trans-unit>
       <trans-unit id="sessionTabs.qaTitleDefault" datatype="html">
@@ -19679,7 +19630,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="sessionQa.sortTop" datatype="html">
-        <source>Meist unterstützt</source>
+        <source>Stimmensaldo</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.html</context>
           <context context-type="linenumber">4407</context>
@@ -19713,7 +19664,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="sessionQa.sortControversial" datatype="html">
-        <source>Umstritten</source>
+        <source>Kontroverse</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.html</context>
           <context context-type="linenumber">4430</context>
@@ -19736,7 +19687,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="sessionQa.sortHelpControversialAria" datatype="html">
-        <source>Hilfe zu »Umstritten«</source>
+        <source>Hilfe zu »Kontroverse«</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.html</context>
           <context context-type="linenumber">4437</context>
@@ -19836,7 +19787,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="sessionQa.sortHelpControversialMenu" datatype="html">
-        <source>Hilfe: Umstritten</source>
+        <source>Hilfe: Kontroverse</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.html</context>
           <context context-type="linenumber">4597</context>
@@ -20895,7 +20846,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="sessionQa.wordCloudSmoothActive" datatype="html">
-        <source>Glättung ist an</source>
+        <source>Wort-Glättung ist an</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.ts</context>
           <context context-type="linenumber">1536</context>
@@ -20943,14 +20894,14 @@
         </context-group>
       </trans-unit>
       <trans-unit id="sessionHost.wordCloudSmoothStale" datatype="html">
-        <source>Neue Antworten seit letzter Glättung</source>
+        <source>Neue Antworten seit letzter Wort-Glättung</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.ts</context>
           <context context-type="linenumber">1553</context>
         </context-group>
       </trans-unit>
       <trans-unit id="sessionQa.wordCloudSmoothFailed" datatype="html">
-        <source>Glättung fehlgeschlagen</source>
+        <source>Wort-Glättung fehlgeschlagen</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.ts</context>
           <context context-type="linenumber">1558</context>
@@ -20961,7 +20912,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="sessionQa.wordCloudSmoothUnavailable" datatype="html">
-        <source>Glättung nicht verfügbar</source>
+        <source>Wort-Glättung nicht verfügbar</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.ts</context>
           <context context-type="linenumber">1567</context>
@@ -21084,14 +21035,7 @@
           <context context-type="linenumber">2129</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="sessionQa.wordCloudMetricTop" datatype="html">
-        <source>positive Stimmen</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.ts</context>
-          <context context-type="linenumber">2135</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="sessionQa.wordCloudTitleSemantic" datatype="html">
+            <trans-unit id="sessionQa.wordCloudTitleSemantic" datatype="html">
         <source>Themen in den Fragen</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.ts</context>
@@ -21143,28 +21087,28 @@
         </context-group>
       </trans-unit>
       <trans-unit id="sessionQa.wordCloudHintControversial" datatype="html">
-        <source>Große Wörter und Phrasen kommen aus Fragen mit gegensätzlichen Reaktionen. Darüberfahren zeigt die zugehörigen Fragen.</source>
+        <source>Große Wörter und Phrasen kommen aus Fragen mit hoher Kontroverse: Stimmen dafür und dagegen sind möglichst ausgeglichen. Darüberfahren zeigt die zugehörigen Fragen.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.ts</context>
           <context context-type="linenumber">2178</context>
         </context-group>
       </trans-unit>
       <trans-unit id="sessionQa.wordCloudHintTime" datatype="html">
-        <source>Jede sichtbare Frage zählt gleich. Die Größe folgt der Häufigkeit, nicht den Stimmen.</source>
+        <source>Ein Wort wird größer, je mehr sichtbare Fragen es enthalten. In einer Frage zählt es nur einmal.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.ts</context>
           <context context-type="linenumber">2180</context>
         </context-group>
       </trans-unit>
       <trans-unit id="sessionQa.wordCloudHintTop" datatype="html">
-        <source>Große Wörter und Phrasen kommen aus Fragen mit vielen positiven Stimmen.</source>
+        <source>Große Einträge stammen aus Fragen mit hohem Stimmensaldo (Stimmen dafür minus Stimmen dagegen).</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.ts</context>
           <context context-type="linenumber">2182</context>
         </context-group>
       </trans-unit>
       <trans-unit id="sessionQa.wordCloudSmoothStale" datatype="html">
-        <source>Neue Fragen seit letzter Glättung</source>
+        <source>Neue Fragen seit letzter Wort-Glättung</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.ts</context>
           <context context-type="linenumber">2389</context>
@@ -21189,7 +21133,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="sessionQa.sortHintControversial" datatype="html">
-        <source>Zeigt Fragen mit gemischter Reaktion zuerst. Hervorgehobene Fragen erscheinen zuerst und sind markiert.</source>
+        <source>Zeigt zuerst die Fragen mit der höchsten Kontroverse: Stimmen dafür und dagegen sind möglichst ausgeglichen. Hervorgehobene Fragen erscheinen zuerst und sind markiert.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.ts</context>
           <context context-type="linenumber">2464</context>
@@ -21211,7 +21155,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="sessionQa.sortHintTop" datatype="html">
-        <source>Zeigt Fragen mit den meisten positiven Stimmen zuerst. Hervorgehobene Fragen erscheinen zuerst und sind markiert.</source>
+        <source>Zeigt Fragen mit dem höchsten Stimmensaldo zuerst. Hervorgehobene Fragen erscheinen zuerst und sind markiert.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.ts</context>
           <context context-type="linenumber">2468</context>
@@ -23668,6 +23612,13 @@
           <context context-type="linenumber">14288</context>
         </context-group>
       </trans-unit>
+      <trans-unit id="sessionHost.exportPdfViewDone" datatype="html">
+        <source>Nachbesprechungsplan geöffnet.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.ts</context>
+          <context context-type="linenumber">14954</context>
+        </context-group>
+      </trans-unit>
       <trans-unit id="sessionHost.exportPdfDownloadDone" datatype="html">
         <source>Ergebnis-PDF heruntergeladen.</source>
         <context-group purpose="location">
@@ -23765,25 +23716,11 @@
           <context context-type="linenumber">14621</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="sessionParticipation.title" datatype="html">
-        <source> Teilnahme für Q&amp;A</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/session/session-participation-profile-dialog.component.ts</context>
-          <context context-type="linenumber">58,60</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="sessionParticipation.description" datatype="html">
-        <source> Lege fest, wie Personen in dieser Session beitreten und wie Verfasserangaben bei Q&amp;A erscheinen.</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/session/session-participation-profile-dialog.component.ts</context>
-          <context context-type="linenumber">65,68</context>
-        </context-group>
-      </trans-unit>
       <trans-unit id="sessionParticipation.modeLegend" datatype="html">
         <source>Namensdarstellung</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-participation-profile-dialog.component.ts</context>
-          <context context-type="linenumber">71</context>
+          <context context-type="linenumber">58,63</context>
         </context-group>
       </trans-unit>
       <trans-unit id="sessionParticipation.pseudonymLabel" datatype="html">
@@ -23815,17 +23752,17 @@
         </context-group>
       </trans-unit>
       <trans-unit id="sessionParticipation.anonymousLabel" datatype="html">
-        <source>Anonymmodus</source>
+        <source>Anonym</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-participation-profile-dialog.component.ts</context>
           <context context-type="linenumber">96</context>
         </context-group>
       </trans-unit>
       <trans-unit id="sessionParticipation.anonymousHint" datatype="html">
-        <source> Beiträge erscheinen ohne sichtbare Verfasserangabe. Technische Session- und Sicherheitsdaten können weiterhin verarbeitet werden; dies ist keine vollständige Anonymisierung.</source>
+        <source> Beiträge erscheinen ohne sichtbare Verfasserangabe.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-participation-profile-dialog.component.ts</context>
-          <context context-type="linenumber">97,101</context>
+          <context context-type="linenumber">97,99</context>
         </context-group>
       </trans-unit>
       <trans-unit id="sessionParticipation.themeLabel" datatype="html">
@@ -23843,28 +23780,28 @@
         </context-group>
       </trans-unit>
       <trans-unit id="sessionParticipation.themeKindergarten" datatype="html">
-        <source>Tier-Icons</source>
+        <source>Bunte Tier-Icons</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-participation-profile-dialog.component.ts</context>
           <context context-type="linenumber">117</context>
         </context-group>
       </trans-unit>
       <trans-unit id="sessionParticipation.themePrimary" datatype="html">
-        <source>Grundschule</source>
+        <source>Märchenfiguren</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-participation-profile-dialog.component.ts</context>
           <context context-type="linenumber">120</context>
         </context-group>
       </trans-unit>
       <trans-unit id="sessionParticipation.themeMiddle" datatype="html">
-        <source>Mittelstufe</source>
+        <source>Entdecker und Superhelden</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-participation-profile-dialog.component.ts</context>
           <context context-type="linenumber">123</context>
         </context-group>
       </trans-unit>
       <trans-unit id="sessionParticipation.themeHigh" datatype="html">
-        <source>Oberstufe</source>
+        <source>Philosophen und Forscher</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-participation-profile-dialog.component.ts</context>
           <context context-type="linenumber">126</context>
@@ -24095,27 +24032,20 @@
         </context-group>
       </trans-unit>
       <trans-unit id="sessionPresent.wordCloudSmoothingOn" datatype="html">
-        <source>Glättung an</source>
+        <source>Wort-Glättung an</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-present/session-present.component.ts</context>
           <context context-type="linenumber">635</context>
         </context-group>
       </trans-unit>
       <trans-unit id="sessionPresent.wordCloudSmoothingOff" datatype="html">
-        <source>ohne Glättung</source>
+        <source>ohne Wort-Glättung</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-present/session-present.component.ts</context>
           <context context-type="linenumber">636</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="sessionPresent.wordCloudMetricControversial" datatype="html">
-        <source>Kontroverse</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/session/session-present/session-present.component.ts</context>
-          <context context-type="linenumber">656</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="sessionPresent.qaClosed" datatype="html">
+            <trans-unit id="sessionPresent.qaClosed" datatype="html">
         <source>Q&amp;A ist geschlossen.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-present/session-present.component.ts</context>
@@ -24633,6 +24563,12 @@
           <context context-type="sourcefile">src/app/features/session/session-present/word-cloud.component.ts</context>
           <context context-type="linenumber">1251</context>
         </context-group>
+      </trans-unit>
+      <trans-unit id="wordCloud.tooltipOtherForms" datatype="html">
+        <source>Weitere gezählte Formen</source>
+      </trans-unit>
+      <trans-unit id="wordCloud.tooltipRelatedQuestions" datatype="html">
+        <source>Zugehörige Fragen</source>
       </trans-unit>
       <trans-unit id="wordCloud.loadMoreOne" datatype="html">
         <source>1 weitere Antwort laden</source>
@@ -26755,7 +26691,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="sessionQa.sortHintTopVote" datatype="html">
-        <source>Hervorgehobene Fragen stehen zuerst. Danach kommen die mit den meisten Stimmen.</source>
+        <source>Hervorgehobene Fragen stehen zuerst. Danach kommen die Fragen mit dem höchsten Stimmensaldo.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-vote/session-vote.component.ts</context>
           <context context-type="linenumber">540</context>
@@ -28591,21 +28527,7 @@
           <context context-type="linenumber">76</context>
         </context-group>
       </trans-unit>
-      <trans-unit id="7618679767641874671" datatype="html">
-        <source>Altersgruppe:</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/shared/preset-toast/preset-toast.component.html</context>
-          <context context-type="linenumber">116</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="presetToast.nicknameThemeAria" datatype="html">
-        <source>Altersgruppe wählen</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/shared/preset-toast/preset-toast.component.html</context>
-          <context context-type="linenumber">125</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="5445788768283993956" datatype="html">
+                  <trans-unit id="5445788768283993956" datatype="html">
         <source>Anzahl der Teams:</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/preset-toast/preset-toast.component.html</context>
@@ -28969,6 +28891,118 @@
           <context context-type="linenumber">208</context>
         </context-group>
       </trans-unit>
+      <trans-unit id="app.footer.statusMetricGroupOpenWeightLlm" datatype="html">
+        <source>Lokale Text-KI</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/server-status-help-dialog/server-status-help-dialog.component.ts</context>
+          <context context-type="linenumber">1</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="app.footer.statusOpenWeightLlmHint" datatype="html">
+        <source>Diese Prüfung betrifft nur die Text-KI auf diesem Server: ein lokal betriebenes Open-Weight-Modell, kein Cloud-Anbieter. Geprüft werden die drei Hilfen unten. Das Ergebnis ändert den allgemeinen Betriebsstatus nicht.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/server-status-help-dialog/server-status-help-dialog.component.ts</context>
+          <context context-type="linenumber">1</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="app.footer.statusOpenWeightLlmModel" datatype="html">
+        <source>Modell:</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/server-status-help-dialog/server-status-help-dialog.component.ts</context>
+          <context context-type="linenumber">1</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="app.footer.statusMetricOpenWeightLlmLearningHint" datatype="html">
+        <source>Schlägt aus Quizfragen prüfbare Lernziele als Entwurf vor.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/server-status-help-dialog/server-status-help-dialog.component.ts</context>
+          <context context-type="linenumber">1</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="app.footer.statusMetricOpenWeightLlmQaSummaryHint" datatype="html">
+        <source>Fasst wiederkehrende Fragen und Hinweise für die Moderation zusammen.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/server-status-help-dialog/server-status-help-dialog.component.ts</context>
+          <context context-type="linenumber">1</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="app.footer.statusMetricOpenWeightLlmTopicLabelHint" datatype="html">
+        <source>Kurze Namen für ähnliche Fragen oder Freitextantworten in der Wortwolke »Thema«.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/server-status-help-dialog/server-status-help-dialog.component.ts</context>
+          <context context-type="linenumber">1</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="app.footer.statusMetricOpenWeightLlmOverallHint" datatype="html">
+        <source>Gemeinsames Ergebnis der drei Hilfen.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/server-status-help-dialog/server-status-help-dialog.component.ts</context>
+          <context context-type="linenumber">1</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="app.footer.statusOpenWeightLlmLoading" datatype="html">
+        <source>Prüfung läuft …</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/server-status-help-dialog/server-status-help-dialog.component.ts</context>
+          <context context-type="linenumber">1</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="app.footer.statusOpenWeightLlmError" datatype="html">
+        <source>Prüfung derzeit nicht möglich.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/server-status-help-dialog/server-status-help-dialog.component.ts</context>
+          <context context-type="linenumber">1</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="app.footer.statusMetricOpenWeightLlmOverall" datatype="html">
+        <source>Gesamt</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/server-status-help-dialog/server-status-help-dialog.component.ts</context>
+          <context context-type="linenumber">1</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="app.footer.statusMetricOpenWeightLlmTopicLabel" datatype="html">
+        <source>Themennamen</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/server-status-help-dialog/server-status-help-dialog.component.ts</context>
+          <context context-type="linenumber">1</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="app.footer.statusMetricOpenWeightLlmQaSummary" datatype="html">
+        <source>Q&amp;A-Kurzfassung</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/server-status-help-dialog/server-status-help-dialog.component.ts</context>
+          <context context-type="linenumber">1</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="app.footer.statusMetricOpenWeightLlmLearning" datatype="html">
+        <source>Lernziele</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/server-status-help-dialog/server-status-help-dialog.component.ts</context>
+          <context context-type="linenumber">1</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="app.footer.statusOpenWeightLlmRefresh" datatype="html">
+        <source>Erneut prüfen</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/server-status-help-dialog/server-status-help-dialog.component.ts</context>
+          <context context-type="linenumber">1</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="app.footer.openWeightLlmBusy" datatype="html">
+        <source>beschäftigt</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/server-status-help-dialog/server-status-help-dialog.component.ts</context>
+          <context context-type="linenumber">1</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="app.footer.openWeightLlmDisabled" datatype="html">
+        <source>ausgeschaltet</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/server-status-help-dialog/server-status-help-dialog.component.ts</context>
+          <context context-type="linenumber">1</context>
+        </context-group>
+      </trans-unit>
       <trans-unit id="app.footer.statusMetricGroupTraffic" datatype="html">
         <source>Serververkehr und Qualität</source>
         <context-group purpose="location">
@@ -29068,10 +29102,17 @@
         </context-group>
       </trans-unit>
       <trans-unit id="app.footer.statusMetricSampleSize" datatype="html">
-        <source>Stichprobengröße</source>
+        <source>Stichprobenumfang (n)</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/server-status-help-dialog/server-status-help-dialog.component.ts</context>
           <context context-type="linenumber">338</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="app.footer.statusMetricSampleSizeHint" datatype="html">
+        <source> Überwachte API-Anfragen im Messfenster (60 s). </source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/server-status-help-dialog/server-status-help-dialog.component.ts</context>
+          <context context-type="linenumber">517,518</context>
         </context-group>
       </trans-unit>
       <trans-unit id="app.footer.statusErrorClasses" datatype="html">
@@ -29619,31 +29660,59 @@
         <source>Mindestens eine Quizantwort und eine Q&amp;A-Aktivität</source>
       </trans-unit>
       <trans-unit id="app.footer.statusMetricGroupSize" datatype="html">
-        <source>Reichweite nach Größe</source>
+        <source>Sessions nach Gruppengröße</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/server-status-help-dialog/server-status-help-dialog.component.ts</context>
           <context context-type="linenumber">1034</context>
         </context-group>
       </trans-unit>
+      <trans-unit id="app.footer.statusMetricGroupSizeHint" datatype="html">
+        <source> Klassierte Häufigkeitsverteilung der Sessions nach Zahl der Teilnahmen. Median und Quartile sind aus den Klassenmitten genähert (XS: 6, S: 20, M: 66, L: 200, XL: 301). </source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/server-status-help-dialog/server-status-help-dialog.component.ts</context>
+          <context context-type="linenumber">1298,1300</context>
+        </context-group>
+      </trans-unit>
       <trans-unit id="app.footer.statusUsageSizeSample" datatype="html">
-        <source>Stichprobe:</source>
+        <source>Stichprobenumfang (n):</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/server-status-help-dialog/server-status-help-dialog.component.ts</context>
           <context context-type="linenumber">1037</context>
         </context-group>
       </trans-unit>
+      <trans-unit id="app.footer.statusUsageSizeSessionsUnit" datatype="html">
+        <source>Sessions</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/server-status-help-dialog/server-status-help-dialog.component.ts</context>
+          <context context-type="linenumber">1307,1309</context>
+        </context-group>
+      </trans-unit>
       <trans-unit id="app.footer.statusUsageSizeMedian" datatype="html">
-        <source>Median:</source>
+        <source> Median (Klassenmitte): </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/server-status-help-dialog/server-status-help-dialog.component.ts</context>
           <context context-type="linenumber">1042</context>
         </context-group>
       </trans-unit>
+      <trans-unit id="app.footer.statusUsageSizeParticipationsUnit" datatype="html">
+        <source>Teilnahmen / Session</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/server-status-help-dialog/server-status-help-dialog.component.ts</context>
+          <context context-type="linenumber">1318,1320</context>
+        </context-group>
+      </trans-unit>
       <trans-unit id="app.footer.statusUsageSizeQuartiles" datatype="html">
-        <source>Q1–Q3:</source>
+        <source> Quartilsbereich (Q1–Q3): </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/server-status-help-dialog/server-status-help-dialog.component.ts</context>
           <context context-type="linenumber">1049</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="app.footer.statusUsageSizeClassRangeUnit" datatype="html">
+        <source>Teilnahmen</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/server-status-help-dialog/server-status-help-dialog.component.ts</context>
+          <context context-type="linenumber">1345,1346</context>
         </context-group>
       </trans-unit>
       <trans-unit id="app.footer.statusUsageSeriesDisclosure" datatype="html">
@@ -29782,21 +29851,21 @@
         </context-group>
       </trans-unit>
       <trans-unit id="app.footer.statusDailyHistoryMedianHint" datatype="html">
-        <source> Nur gemessene Tage im Fenster</source>
+        <source> Über <x id="INTERPOLATION" equiv-text="{{ statsFmt.sampleSize }}"/> gemessene Tage (n) im 100-Tage-Fenster </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/server-status-help-dialog/server-status-help-dialog.component.ts</context>
           <context context-type="linenumber">1268,1270</context>
         </context-group>
       </trans-unit>
       <trans-unit id="app.footer.statusDailyHistoryIqr" datatype="html">
-        <source>IQR</source>
+        <source>Quartilsabstand (IQR)</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/server-status-help-dialog/server-status-help-dialog.component.ts</context>
           <context context-type="linenumber">1275</context>
         </context-group>
       </trans-unit>
       <trans-unit id="app.footer.statusDailyHistoryIqrHint" datatype="html">
-        <source> Q3−Q1 der gemessenen Tage</source>
+        <source> Q3−Q1 der täglichen Join-Höchststände </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/server-status-help-dialog/server-status-help-dialog.component.ts</context>
           <context context-type="linenumber">1281,1283</context>
@@ -29810,7 +29879,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="app.footer.statusDailyHistoryMaxHint" datatype="html">
-        <source> Höchster Join-Stand im Fenster</source>
+        <source> Höchster Tages-Join-Stand im 100-Tage-Fenster </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/server-status-help-dialog/server-status-help-dialog.component.ts</context>
           <context context-type="linenumber">1294,1296</context>
@@ -30274,7 +30343,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="learningObjectives.missingScopeCannotConfirm" datatype="html">
-        <source>Ein Lernziel mit fehlendem Aufgabenverweis kann nicht bestätigt werden.</source>
+        <source>Ein Lernziel mit fehlendem Fragenverweis kann nicht bestätigt werden.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/quiz/data/quiz-store.service.ts</context>
           <context context-type="linenumber">1433</context>
@@ -30341,14 +30410,14 @@
         </context-group>
       </trans-unit>
       <trans-unit id="learningObjectives.subtitle" datatype="html">
-        <source> Formuliere Ziele für das gesamte Quiz oder für ausgewählte Aufgaben.</source>
+        <source> Halte fest, was mit dem Quiz oder einzelnen Fragen erreicht werden soll.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/quiz/quiz-learning-objectives/quiz-learning-objectives.component.html</context>
           <context context-type="linenumber">11,13</context>
         </context-group>
       </trans-unit>
       <trans-unit id="learningObjectives.originIntro" datatype="html">
-        <source> Manuelle Lernziele formulierst du selbst. Automatisch aus Aufgaben formulierte Lernziele erscheinen als modellunterstützte Vorschläge. Sie bleiben entsprechend gekennzeichnet und müssen von dir fachlich geprüft werden.</source>
+        <source> Du kannst Lernziele selbst schreiben oder automatisch aus deinen Fragen vorschlagen lassen. Automatische Vorschläge werden als Entwurf angelegt, bis du sie prüfst und bestätigst.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/quiz/quiz-learning-objectives/quiz-learning-objectives.component.html</context>
           <context context-type="linenumber">20,25</context>
@@ -30359,7 +30428,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="learningObjectives.intro" datatype="html">
-        <source> Lernziele werden beim Live-Schalten übernommen. Deaktivierte oder fehlende Aufgaben werden niemals automatisch ersetzt.</source>
+        <source> Beim Start einer Live-Session werden deine Lernziele für aktive Fragen übernommen.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/quiz/quiz-learning-objectives/quiz-learning-objectives.component.html</context>
           <context context-type="linenumber">17,20</context>
@@ -30408,7 +30477,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="learningObjectives.modelDerived" datatype="html">
-        <source>Modellunterstützt</source>
+        <source>KI-Vorschlag</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/quiz/quiz-learning-objectives/quiz-learning-objectives.component.html</context>
           <context context-type="linenumber">108</context>
@@ -30416,6 +30485,37 @@
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/quiz/quiz-learning-objectives/quiz-learning-objectives.component.ts</context>
           <context context-type="linenumber">334</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="learningObjectives.confirmAllGenerated" datatype="html">
+        <source>Alle Vorschläge bestätigen</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/quiz/quiz-learning-objectives/quiz-learning-objectives.component.html</context>
+          <context context-type="linenumber">461</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="learningObjectives.confirmAllGeneratedDone" datatype="html">
+        <source>Alle KI-Vorschläge wurden bestätigt.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/quiz/quiz-learning-objectives/quiz-learning-objectives.component.ts</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="learningObjectives.confirmAllGeneratedPartialOne" datatype="html">
+        <source>Ein KI-Vorschlag wurde bestätigt. Die übrigen bleiben offen.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/quiz/quiz-learning-objectives/quiz-learning-objectives.component.ts</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="learningObjectives.confirmAllGeneratedPartialMany" datatype="html">
+        <source><x id="count" equiv-text="confirmed"/> KI-Vorschläge wurden bestätigt. Die übrigen bleiben offen.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/quiz/quiz-learning-objectives/quiz-learning-objectives.component.ts</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="learningObjectives.confirmAllGeneratedFailed" datatype="html">
+        <source>Die Vorschläge konnten nicht bestätigt werden.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/quiz/quiz-learning-objectives/quiz-learning-objectives.component.ts</context>
         </context-group>
       </trans-unit>
       <trans-unit id="learningObjectives.deleteConfirmGroup" datatype="html">
@@ -30496,21 +30596,21 @@
         </context-group>
       </trans-unit>
       <trans-unit id="learningObjectives.scopeSelected" datatype="html">
-        <source> Ausgewählte Aufgaben</source>
+        <source> Ausgewählte Fragen</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/quiz/quiz-learning-objectives/quiz-learning-objectives.component.html</context>
           <context context-type="linenumber">216,218</context>
         </context-group>
       </trans-unit>
       <trans-unit id="learningObjectives.questionSelection" datatype="html">
-        <source>Aufgaben auswählen</source>
+        <source>Fragen auswählen</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/quiz/quiz-learning-objectives/quiz-learning-objectives.component.html</context>
           <context context-type="linenumber">226</context>
         </context-group>
       </trans-unit>
       <trans-unit id="learningObjectives.questionNumber" datatype="html">
-        <source>Aufgabe <x id="INTERPOLATION" equiv-text="{{ index + 1 }}"/>:</source>
+        <source>Frage <x id="INTERPOLATION" equiv-text="{{ index + 1 }}"/>:</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/quiz/quiz-learning-objectives/quiz-learning-objectives.component.html</context>
           <context context-type="linenumber">234</context>
@@ -30524,7 +30624,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="learningObjectives.missingReferences" datatype="html">
-        <source> Mindestens eine referenzierte Aufgabe fehlt. Entferne den Verweis oder wähle einen anderen Bereich.</source>
+        <source> Mindestens eine referenzierte Frage fehlt. Entferne den Verweis oder wähle einen anderen Bereich.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/quiz/quiz-learning-objectives/quiz-learning-objectives.component.html</context>
           <context context-type="linenumber">245,248</context>
@@ -30566,7 +30666,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="learningObjectives.draftHint" datatype="html">
-        <source>Noch nicht fachlich geprüft. Nutze diesen Status, solange du Inhalt oder Bereich abstimmst.</source>
+        <source>Noch in Abstimmung. KI-Vorschläge starten immer als Entwurf.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/quiz/quiz-learning-objectives/quiz-learning-objectives.component.html</context>
           <context context-type="linenumber">300</context>
@@ -30577,7 +30677,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="learningObjectives.confirmedHint" datatype="html">
-        <source>Von dir fachlich geprüft. Relevante Quellenänderungen lösen erneut Prüfbedarf aus.</source>
+        <source>Freigegeben. Wenn sich zugehörige Fragen ändern, wird das Ziel zur Prüfung markiert.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/quiz/quiz-learning-objectives/quiz-learning-objectives.component.html</context>
           <context context-type="linenumber">316</context>
@@ -30606,7 +30706,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="learningObjectives.referenceLimit" datatype="html">
-        <source>Höchstens <x id="maxReferences" equiv-text="this.maxReferences"/> Aufgaben können einem Lernziel zugeordnet werden.</source>
+        <source>Höchstens <x id="maxReferences" equiv-text="this.maxReferences"/> Fragen können einem Lernziel zugeordnet werden.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/quiz/quiz-learning-objectives/quiz-learning-objectives.component.ts</context>
           <context context-type="linenumber">137</context>
@@ -30627,14 +30727,14 @@
         </context-group>
       </trans-unit>
       <trans-unit id="learningObjectives.scopeRequired" datatype="html">
-        <source>Wähle mindestens eine Aufgabe oder nutze den gesamten Quizbereich.</source>
+        <source>Wähle mindestens eine Frage oder nutze den gesamten Quizbereich.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/quiz/quiz-learning-objectives/quiz-learning-objectives.component.ts</context>
           <context context-type="linenumber">189</context>
         </context-group>
       </trans-unit>
       <trans-unit id="learningObjectives.missingDerivationCannotConfirm" datatype="html">
-        <source>Eine Herleitungsaufgabe fehlt. Das Ziel bleibt bis zu einer neuen Herleitung prüfbedürftig und kann nicht bestätigt werden.</source>
+        <source>Die ursprüngliche Frage zu diesem KI-Vorschlag fehlt. Bitte erstelle einen neuen Vorschlag oder speichere das Ziel als Entwurf.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/quiz/quiz-learning-objectives/quiz-learning-objectives.component.ts</context>
           <context context-type="linenumber">213</context>
@@ -30725,7 +30825,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="learningObjectives.scopeQuestionCount" datatype="html">
-        <source><x id="count" equiv-text="objective.scope.sourceQuestionIds.length"/> Aufgabe(n)</source>
+        <source><x id="count" equiv-text="objective.scope.sourceQuestionIds.length"/> Frage(n)</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/quiz/quiz-learning-objectives/quiz-learning-objectives.component.ts</context>
           <context context-type="linenumber">329</context>
@@ -30746,14 +30846,14 @@
         </context-group>
       </trans-unit>
       <trans-unit id="learningObjectives.reviewReferenceRemoved" datatype="html">
-        <source>Eine referenzierte Aufgabe wurde gelöscht. Prüfe den Bereich.</source>
+        <source>Eine verknüpfte Frage wurde gelöscht. Prüfe die Zuordnung.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/quiz/quiz-learning-objectives/quiz-learning-objectives.component.ts</context>
           <context context-type="linenumber">345</context>
         </context-group>
       </trans-unit>
       <trans-unit id="learningObjectives.reviewSourceChanged" datatype="html">
-        <source>Der Aufgabeninhalt hat sich seit der Herleitung geändert.</source>
+        <source>Die verknüpfte Frage hat sich geändert. Bitte prüfe das Lernziel.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/quiz/quiz-learning-objectives/quiz-learning-objectives.component.ts</context>
           <context context-type="linenumber">346</context>
@@ -30774,7 +30874,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="sessionHost.learningObjectivesButton" datatype="html">
-        <source>Ziele</source>
+        <source>Lernziel</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/session-host.component.html</context>
           <context context-type="linenumber">656</context>
@@ -30788,7 +30888,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="sessionLearningObjectives.subtitle" datatype="html">
-        <source> Ziele für Quiz und Q&amp;A dieser Session</source>
+        <source> Lernziele für dieses Quiz</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/session-learning-objectives-dialog.component.html</context>
           <context context-type="linenumber">14,16</context>
@@ -30837,14 +30937,14 @@
         </context-group>
       </trans-unit>
       <trans-unit id="sessionLearningObjectives.modelDerived" datatype="html">
-        <source>Modellunterstützt</source>
+        <source>KI-Vorschlag</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/session-learning-objectives-dialog.component.html</context>
           <context context-type="linenumber">102</context>
         </context-group>
       </trans-unit>
       <trans-unit id="sessionLearningObjectives.unresolvedReference" datatype="html">
-        <source> Mindestens ein Aufgabenverweis ist nicht mehr verfügbar. Das Ziel bleibt sichtbar und muss vor einer Inhaltsänderung neu zugeordnet werden.</source>
+        <source> Mindestens ein Fragenverweis ist nicht mehr verfügbar. Das Ziel bleibt sichtbar und muss vor einer Inhaltsänderung neu zugeordnet werden.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/session-learning-objectives-dialog.component.html</context>
           <context context-type="linenumber">114,117</context>
@@ -30935,21 +31035,21 @@
         </context-group>
       </trans-unit>
       <trans-unit id="sessionLearningObjectives.scopeTasksOption" datatype="html">
-        <source> Ausgewählte Quiz- oder Q&amp;A-Aufgaben</source>
+        <source> Ausgewählte Fragen</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/session-learning-objectives-dialog.component.html</context>
           <context context-type="linenumber">234,236</context>
         </context-group>
       </trans-unit>
       <trans-unit id="sessionLearningObjectives.taskSelection" datatype="html">
-        <source>Aufgaben auswählen</source>
+        <source>Fragen auswählen</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/session-learning-objectives-dialog.component.html</context>
           <context context-type="linenumber">244</context>
         </context-group>
       </trans-unit>
       <trans-unit id="sessionLearningObjectives.noTasks" datatype="html">
-        <source> Aktuell sind keine auswählbaren Aufgaben verfügbar. Nutze den Sessionbereich.</source>
+        <source> Aktuell sind keine auswählbaren Fragen verfügbar. Nutze das gesamte Quiz.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/session-learning-objectives-dialog.component.html</context>
           <context context-type="linenumber">264,266</context>
@@ -30998,7 +31098,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="sessionLearningObjectives.missingDerivationHint" datatype="html">
-        <source> Eine Herleitungsaufgabe fehlt. Das Ziel bleibt bis zu einer neuen Herleitung prüfbedürftig und kann nicht bestätigt werden.</source>
+        <source> Die ursprüngliche Frage zu diesem KI-Vorschlag fehlt. Bitte erstelle einen neuen Vorschlag oder speichere das Ziel als Entwurf.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/session-learning-objectives-dialog.component.html</context>
           <context context-type="linenumber">302,305</context>
@@ -31019,21 +31119,21 @@
         </context-group>
       </trans-unit>
       <trans-unit id="sessionLearningObjectives.quizTaskLabel" datatype="html">
-        <source>Quizaufgabe <x id="order" equiv-text="task.order + 1"/>: <x id="text" equiv-text="task.text"/></source>
+        <source>Frage <x id="order" equiv-text="task.order + 1"/>: <x id="text" equiv-text="task.text"/></source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/session-learning-objectives-dialog.component.ts</context>
           <context context-type="linenumber">108</context>
         </context-group>
       </trans-unit>
       <trans-unit id="sessionLearningObjectives.qaTaskFallback" datatype="html">
-        <source>Q&amp;A-Frage</source>
+        <source>Q&amp;A-Aufgabe</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/session-learning-objectives-dialog.component.ts</context>
           <context context-type="linenumber">121</context>
         </context-group>
       </trans-unit>
       <trans-unit id="sessionLearningObjectives.quizTaskFallback" datatype="html">
-        <source>Quizaufgabe</source>
+        <source>Frage</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/session-learning-objectives-dialog.component.ts</context>
           <context context-type="linenumber">122</context>
@@ -31061,21 +31161,21 @@
         </context-group>
       </trans-unit>
       <trans-unit id="sessionLearningObjectives.rescopeRequired" datatype="html">
-        <source>Mindestens ein Aufgabenverweis ist nicht mehr verfügbar. Wähle den Bereich neu, bevor du speicherst.</source>
+        <source>Mindestens ein Fragenverweis ist nicht mehr verfügbar. Wähle den Bereich neu, bevor du speicherst.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/session-learning-objectives-dialog.component.ts</context>
           <context context-type="linenumber">282</context>
         </context-group>
       </trans-unit>
       <trans-unit id="sessionLearningObjectives.missingDerivationCannotConfirm" datatype="html">
-        <source>Eine Herleitungsaufgabe fehlt. Das Ziel bleibt bis zu einer neuen Herleitung prüfbedürftig und kann nicht bestätigt werden.</source>
+        <source>Die ursprüngliche Frage zu diesem KI-Vorschlag fehlt. Bitte erstelle einen neuen Vorschlag oder speichere das Ziel als Entwurf.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/session-learning-objectives-dialog.component.ts</context>
           <context context-type="linenumber">290</context>
         </context-group>
       </trans-unit>
       <trans-unit id="sessionLearningObjectives.taskRequired" datatype="html">
-        <source>Wähle mindestens eine Aufgabe oder einen anderen Bereich.</source>
+        <source>Wähle mindestens eine Frage oder einen anderen Bereich.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/session-learning-objectives-dialog.component.ts</context>
           <context context-type="linenumber">301</context>
@@ -31167,21 +31267,21 @@
         </context-group>
       </trans-unit>
       <trans-unit id="sessionLearningObjectives.reviewReferenceRemoved" datatype="html">
-        <source>Eine referenzierte Aufgabe wurde entfernt. Ordne den Bereich neu oder leite das Ziel erneut her.</source>
+        <source>Eine verknüpfte Frage wurde entfernt. Ordne den Bereich neu zu oder erstelle einen neuen Vorschlag.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/session-learning-objectives-dialog.component.ts</context>
           <context context-type="linenumber">428</context>
         </context-group>
       </trans-unit>
       <trans-unit id="sessionLearningObjectives.reviewDerivationReplaced" datatype="html">
-        <source>Die Herleitung wurde ersetzt. Prüfe das Ziel, bevor du es erneut bestätigst.</source>
+        <source>Der Vorschlag wurde aktualisiert. Bitte prüfe das Lernziel erneut.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/session-learning-objectives-dialog.component.ts</context>
           <context context-type="linenumber">430</context>
         </context-group>
       </trans-unit>
       <trans-unit id="sessionLearningObjectives.reviewSourceChanged" datatype="html">
-        <source>Der Inhalt einer Herleitungsaufgabe hat sich geändert. Prüfe das Ziel erneut.</source>
+        <source>Die verknüpfte Frage hat sich geändert. Bitte prüfe das Lernziel erneut.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/session-learning-objectives-dialog.component.ts</context>
           <context context-type="linenumber">432</context>
@@ -31223,7 +31323,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="sessionLearningObjectives.scopeTasks" datatype="html">
-        <source><x id="count" equiv-text="objective.scope.taskReferences.length"/> Aufgabe(n)</source>
+        <source><x id="count" equiv-text="objective.scope.taskReferences.length"/> Frage(n)</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/session/session-host/session-learning-objectives-dialog.component.ts</context>
           <context context-type="linenumber">454</context>
@@ -31283,7 +31383,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="learningObjectives.derivationSourceChanged" datatype="html">
-        <source>Mindestens eine verwendete Aufgabe wurde während der automatischen Herleitung geändert oder deaktiviert. Deine Lernziele bleiben unverändert. Starte die Herleitung erneut.</source>
+        <source>Mindestens eine verwendete Frage wurde während der automatischen Herleitung geändert oder deaktiviert. Deine Lernziele bleiben unverändert. Starte die Herleitung erneut.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/quiz/data/quiz-store.service.ts</context>
           <context context-type="linenumber">1585</context>
@@ -31305,14 +31405,14 @@
         </context-group>
       </trans-unit>
       <trans-unit id="learningObjectives.derivationTitle" datatype="html">
-        <source> Automatische Vorschläge </source>
+        <source> Lernziele vorschlagen lassen </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/quiz/quiz-learning-objectives/quiz-learning-objectives.component.html</context>
           <context context-type="linenumber">91,93</context>
         </context-group>
       </trans-unit>
       <trans-unit id="learningObjectives.derivationHelp" datatype="html">
-        <source> Erst nach deiner ausdrücklichen Aktion werden geeignete aktive Aufgaben mit ihren Lösungen an das lokale Modell übergeben. Vorschläge werden als Entwurf ergänzt; manuelle, bearbeitete oder bestätigte Lernziele bleiben unverändert. </source>
+        <source> Auf Klick erstellt die lokale Text-KI passende Lernziel-Entwürfe aus deinen aktiven Fragen und Lösungen. Deine bestehenden Lernziele bleiben unverändert. </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/quiz/quiz-learning-objectives/quiz-learning-objectives.component.html</context>
           <context context-type="linenumber">94,98</context>
@@ -31333,35 +31433,35 @@
         </context-group>
       </trans-unit>
       <trans-unit id="learningObjectives.derivationStart" datatype="html">
-        <source>Automatisch aus Aufgaben formulieren</source>
+        <source>Automatisch aus Fragen formulieren</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/quiz/quiz-learning-objectives/quiz-learning-objectives.component.html</context>
           <context context-type="linenumber">115</context>
         </context-group>
       </trans-unit>
       <trans-unit id="learningObjectives.derivationCancel" datatype="html">
-        <source> Herleitung abbrechen </source>
+        <source> Abbrechen </source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/quiz/quiz-learning-objectives/quiz-learning-objectives.component.html</context>
           <context context-type="linenumber">126,128</context>
         </context-group>
       </trans-unit>
       <trans-unit id="learningObjectives.derivationLimitations" datatype="html">
-        <source>Hinweise zur Herleitung:</source>
+        <source>Hinweise:</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/quiz/quiz-learning-objectives/quiz-learning-objectives.component.html</context>
           <context context-type="linenumber">145</context>
         </context-group>
       </trans-unit>
       <trans-unit id="learningObjectives.derivationInvalidQuiz" datatype="html">
-        <source>Mindestens eine Aufgabe kann nicht sicher für die automatische Herleitung verwendet werden. Prüfe das Quiz und versuche es erneut.</source>
+        <source>Mindestens eine Frage kann nicht sicher für die automatische Herleitung verwendet werden. Prüfe das Quiz und versuche es erneut.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/quiz/quiz-learning-objectives/quiz-learning-objectives.component.ts</context>
           <context context-type="linenumber">224</context>
         </context-group>
       </trans-unit>
       <trans-unit id="learningObjectives.derivationNoEligible" datatype="html">
-        <source>Es gibt noch keine geeignete aktive Aufgabe mit Lösung.</source>
+        <source>Es gibt noch keine geeignete aktive Frage mit Lösung.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/quiz/quiz-learning-objectives/quiz-learning-objectives.component.ts</context>
           <context context-type="linenumber">231</context>
@@ -31429,7 +31529,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="learningObjectives.derivationUnavailable" datatype="html">
-        <source>Die automatische Herleitung ist gerade nicht verfügbar. Versuche es später erneut.</source>
+        <source>Die lokale Text-KI ist gerade nicht erreichbar. Du kannst Lernziele manuell eintragen oder es später erneut versuchen.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/quiz/quiz-learning-objectives/quiz-learning-objectives.component.ts</context>
           <context context-type="linenumber">358</context>
@@ -31440,7 +31540,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="learningObjectives.derivationAborted" datatype="html">
-        <source>Die automatische Herleitung wurde abgebrochen. Deine Lernziele bleiben unverändert.</source>
+        <source>Die automatische Erstellung wurde abgebrochen. Deine Lernziele bleiben unverändert.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/quiz/quiz-learning-objectives/quiz-learning-objectives.component.ts</context>
           <context context-type="linenumber">369</context>
@@ -31451,7 +31551,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="learningObjectives.derivationBusy" datatype="html">
-        <source>Das lokale Modell ist gerade ausgelastet. Deine Lernziele bleiben unverändert. Versuche es bewusst noch einmal.</source>
+        <source>Die lokale Text-KI ist gerade ausgelastet. Deine Lernziele bleiben unverändert. Bitte versuche es gleich noch einmal.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/quiz/quiz-learning-objectives/quiz-learning-objectives.component.ts</context>
           <context context-type="linenumber">706</context>
@@ -31465,7 +31565,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="learningObjectives.derivationTimeout" datatype="html">
-        <source>Die automatische Herleitung hat zu lange gedauert. Deine Lernziele bleiben unverändert.</source>
+        <source>Die automatische Erstellung hat zu lange gedauert. Deine Lernziele bleiben unverändert.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/quiz/quiz-learning-objectives/quiz-learning-objectives.component.ts</context>
           <context context-type="linenumber">712</context>
@@ -31479,14 +31579,14 @@
         </context-group>
       </trans-unit>
       <trans-unit id="learningObjectives.derivationCircuitOpen" datatype="html">
-        <source>Das lokale Modell erholt sich gerade von Fehlern. Versuche es später bewusst noch einmal.</source>
+        <source>Die automatische Erstellung steht kurzzeitig nicht zur Verfügung. Bitte versuche es in einem Moment noch einmal.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/quiz/quiz-learning-objectives/quiz-learning-objectives.component.ts</context>
           <context context-type="linenumber">720</context>
         </context-group>
       </trans-unit>
       <trans-unit id="learningObjectives.derivationInputTooLarge" datatype="html">
-        <source>Mindestens eine Aufgabe enthält zu viel Inhalt für die automatische Herleitung. Kürze sie und versuche es erneut.</source>
+        <source>Mindestens eine Frage enthält zu viel Inhalt für die automatische Herleitung. Kürze sie und versuche es erneut.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/features/quiz/quiz-learning-objectives/quiz-learning-objectives.component.ts</context>
           <context context-type="linenumber">724</context>
@@ -31820,6 +31920,81 @@
           <context context-type="sourcefile">src/app/features/session/session-host/moderation-compass-dialog.component.ts</context>
           <context context-type="linenumber">452</context>
         </context-group>
+      </trans-unit>
+      <trans-unit id="sessionHost.qaAssignmentButton" datatype="html">
+        <source>Auftrag</source>
+      </trans-unit>
+      <trans-unit id="sessionHost.qaAssignmentAria" datatype="html">
+        <source>Auftrag für das Q&amp;A-Forum öffnen</source>
+      </trans-unit>
+      <trans-unit id="sessionQaAssignments.title" datatype="html">
+        <source>Auftrag</source>
+      </trans-unit>
+      <trans-unit id="sessionQaAssignments.subtitle" datatype="html">
+        <source>Auftrag für das Q&amp;A-Forum dieser Session</source>
+      </trans-unit>
+      <trans-unit id="sessionLearningObjectives.questionTitle" datatype="html">
+        <source>Lernziel zur Frage</source>
+      </trans-unit>
+      <trans-unit id="sessionQaAssignments.loading" datatype="html">
+        <source>Auftrag wird geladen …</source>
+      </trans-unit>
+      <trans-unit id="sessionQaAssignments.loadFailed" datatype="html">
+        <source>Auftrag konnte nicht geladen werden.</source>
+      </trans-unit>
+      <trans-unit id="sessionQaAssignments.readOnly" datatype="html">
+        <source>Diese beendete Session ist nur noch lesbar. Aufträge können nicht mehr geändert werden.</source>
+      </trans-unit>
+      <trans-unit id="sessionQaAssignments.intro" datatype="html">
+        <source>Hier hinterlegst du einen klaren Arbeits- oder Diskussionsauftrag für das Q&amp;A-Forum. Sobald ein Auftrag vorhanden ist, sehen Teilnehmende im Forum den Button »Auftrag«.</source>
+      </trans-unit>
+      <trans-unit id="sessionQaAssignments.empty" datatype="html">
+        <source>Für dieses Q&amp;A-Forum ist noch kein Auftrag hinterlegt.</source>
+      </trans-unit>
+      <trans-unit id="sessionLearningObjectives.questionEmpty" datatype="html">
+        <source>Für diese Frage ist noch kein Lernziel hinterlegt.</source>
+      </trans-unit>
+      <trans-unit id="sessionQaAssignments.deleteQuestion" datatype="html">
+        <source>Diesen Auftrag wirklich löschen?</source>
+      </trans-unit>
+      <trans-unit id="sessionQaAssignments.editTitle" datatype="html">
+        <source>Auftrag bearbeiten</source>
+      </trans-unit>
+      <trans-unit id="sessionQaAssignments.addTitle" datatype="html">
+        <source>Auftrag hinzufügen</source>
+      </trans-unit>
+      <trans-unit id="sessionQaAssignments.textLabel" datatype="html">
+        <source>Auftrag</source>
+      </trans-unit>
+      <trans-unit id="sessionQaAssignments.add" datatype="html">
+        <source>Auftrag hinzufügen</source>
+      </trans-unit>
+      <trans-unit id="sessionQaAssignments.textRequired" datatype="html">
+        <source>Formuliere einen Auftrag.</source>
+      </trans-unit>
+      <trans-unit id="sessionQaAssignments.textTooLong" datatype="html">
+        <source>Der Auftrag ist zu lang.</source>
+      </trans-unit>
+      <trans-unit id="sessionQaAssignments.created" datatype="html">
+        <source>Auftrag hinzugefügt.</source>
+      </trans-unit>
+      <trans-unit id="sessionQaAssignments.updated" datatype="html">
+        <source>Auftrag aktualisiert.</source>
+      </trans-unit>
+      <trans-unit id="sessionQaAssignments.saveFailed" datatype="html">
+        <source>Auftrag konnte nicht gespeichert werden. Versuche es erneut.</source>
+      </trans-unit>
+      <trans-unit id="sessionQaAssignments.deleted" datatype="html">
+        <source>Auftrag gelöscht.</source>
+      </trans-unit>
+      <trans-unit id="sessionQaAssignments.deleteFailed" datatype="html">
+        <source>Auftrag konnte nicht gelöscht werden.</source>
+      </trans-unit>
+      <trans-unit id="sessionVote.qaAssignmentButton" datatype="html">
+        <source>Auftrag</source>
+      </trans-unit>
+      <trans-unit id="sessionVote.qaAssignmentHeading" datatype="html">
+        <source>Dein Auftrag in diesem Forum</source>
       </trans-unit>
     </body>
   </file>

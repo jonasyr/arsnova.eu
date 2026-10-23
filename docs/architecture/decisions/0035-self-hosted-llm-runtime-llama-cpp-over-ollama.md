@@ -5,7 +5,7 @@
 **Status:** Accepted
 **Datum:** 2026-08-22
 **Entscheider:** Projektteam (Architekturentscheid auf Basis der 1.14c-Voranalyse, PO-Auftrag 2026-08-22)
-**Letzter Repo-Abgleich:** 2026-10-05 (Runtime R, Lernziel- und Summary-V2-Consumer implementiert; Produktivaktivierung, Label-Consumer und reale Consumerabnahme offen)
+**Letzter Repo-Abgleich:** 2026-10-17 (Runtime R und alle drei Consumer `topic_label` inkl. Multi-Cluster-Batching V2, `qa_summary` V2 `qa-summary-model-output-v3` und `learning_objectives` implementiert und auf dem privaten 8-vCPU-Produktionshost real vermessen; PO-Entscheidung: `topic_label` gilt für Host-Q&A und Host-Freitext)
 **Kontext-Tags:** Machine Learning, Inferenz-Runtime, Selbst-Hosting, Backend-Architektur, Betrieb, Open-Weight-LLM
 
 **Ersetzt keine Produktentscheidung, nur die Runtime:** [WORD-CLOUD-3.0-1.14c-VORANALYSE-2026-08-20.md](../../implementation/WORD-CLOUD-3.0-1.14c-VORANALYSE-2026-08-20.md), [ADR-0032](0032-optional-nlp-cascade-for-qa-moderation-signals.md), Backlog Story 1.14c, Story 8.9c, Story 8.9d.
@@ -159,7 +159,7 @@ anzuwenden. Verbindlich ist daher das ebenfalls dokumentierte und real geprüfte
 Produktionspfad und keine Übersetzerschicht in Produktion.
 
 **Umsetzungsabgleich #456 Slice 7:** Summary V2 verwendet den Node-Client direkt und bindet
-`qa-summary-context-v2`, `qa-summary-model-output-v2`,
+`qa-summary-context-v2`, `qa-summary-model-output-v3`,
 `moderation-prompt-context-v1`, die technische Instruktionsversion und das
 Bedeutungslexikon ausdrücklich. Die Runtime erhält genau zwei Systemnachrichten
 (Instruktion und Definition) sowie als Usernachricht ausschließlich das kanonische JSON
@@ -170,26 +170,28 @@ des gepackten Domainkontexts. Der Legacy-HTTP-Adapter bleibt als explizit ausgeh
 
 Qwen3-4B-Instruct-2507 hat nativ sehr großen Kontext. `--ctx-size` Default `0` lädt den
 Modellwert und sprengt den KV-Cache im 4-GB-cgroup. Encoder-Timeout in Compose ist bereits
-120 s, weil e5 auf CPU langsam ist. `QA_SUMMARY_TIMEOUT_MS` Default 8 s / Max 30 s ist um
-Gemini Flash-Lite und den Helferabbruch 5 s vorher gebaut.
+120 s, weil e5 auf CPU langsam ist. `QA_SUMMARY_TIMEOUT_MS` Default 90 s / Max 300 s ist an
+`OPEN_WEIGHT_LLM_SUMMARY_TIMEOUT_MS` und CPU-Prefill unter dem 8k-Packingprofil angeglichen
+(früher 8 s / 30 s aus der Gemini-Flash-Lite-Ära).
 
 Voranalyse §4.6/§5.3 bleibt: DoD ist **nicht** „gleich Gemini unter 3–8 s“. CPU-Prefill eines
 vollen 8.9c-Snapshots (`QA_SUMMARY_MAX_SOURCES` Default 20) passt in 2048 Tokens oft nicht.
 
 Verbindlich:
 
-- `--ctx-size` explizit 2048 oder 4096, nach gemessener KV-Größe, nie Modelldefault.
+- `--ctx-size` explizit setzen (aktuell 8192), nach gemessener KV-Größe und unter dem
+  praxisnahen 8k-Arbeitsfenster von Qwen3-4B Q4; nie Modelldefault (nativ 32k / RoPE bis 128k).
 - `--n-predict` als harte Obergrenze (Richtung 256); Label-Requests setzen zusätzlich ein
   deutlich kleineres `max_tokens`.
 - Getrennte Backend-Timeouts für Label-, Summary- und Lernziel-Job; Werte erst nach Prefill-Messung auf
   der echten 8-vCPU-Box, nicht als Kopie der Gemini-Fenster.
 - Der Summary-V2-Packer sendet eine **deterministisch ausgewählte, dependency-geschlossene**
   Teilmenge, nicht automatisch alle 20 Legacy-Snapshot-Quellen.
-- Das feste Implementierungsprofil verwendet 4.096, 640 Antwortreserve und 128
+- Das feste Implementierungsprofil verwendet 8.192, 640 Antwortreserve und 128
   Sicherheitsmarge. Instruktion und Definition belegen konservativ weitere 314 und 203
-  UTF-8-Einheiten; für das kanonische Kontext-JSON bleiben höchstens 2.811.
-- Der reichhaltige Referenzkontext passt in dieses Profil bereits mit seinen
-  Basismetadaten nicht. Der Packer degradiert sichtbar auf eine Q&A-Textbaseline. Das ist
+  UTF-8-Einheiten; für das kanonische Kontext-JSON bleiben höchstens 6.907.
+- Der reichhaltige Referenzkontext kann trotz 8k noch an Basismetadaten scheitern. Der Packer
+  degradiert dann sichtbar auf eine Q&A-Textbaseline bzw. Force-Fit-Mindestbelege. Das ist
   kein Nachweis eines nutzbaren reichhaltigen Vollkontextprofils.
 - Eine Produktivaktivierung startet erst, wenn die Messung auf der vorgesehenen CPU-Box
   und eine ausdrückliche Profilentscheidung vorliegen. 1.14c Stufe 2 (kurze Labels) bleibt
@@ -251,22 +253,23 @@ Diese Entscheidung betrifft ausschließlich die **Betreiber-seitige** Serving-Ru
   Entwicklerwerkzeug, kein Produktionspfad,
 - die verworfene Bring-your-own-LLM-Option für Hosts,
 - 8.9b (in-process Gatekeeper/k-NN) — kein dritter Auftrag auf dem llama.cpp-Slot,
-- Freitext-Encoder-Clustering (Story 1.14d) — kein LLM-Label.
+- Freitext-Encoder-Clustering (Story 1.14d) als eigener Modellauftrag. Die Mitgliedschaft bleibt der Encoder. Seit der Produktentscheidung vom 2026-10-13 benennt derselbe Auftrag `topic_label` auch Host-Freitext-Cluster; das ist kein zweiter Pfad und keine Änderung dieser Runtime-Wahl.
 
 Implementierungsfolge: **Runtime-Baustein zuerst** (Image, Profil,
 Flags, gemeinsames Inflight, Health, Tests ohne Modell-Download) → 1.14c Stufe 2 (kurze Labels)
-→ 8.9c Slice 4 nach Prefill-Messung. Runtime R sowie der ausdrücklich gestartete
-Lernziel-Consumer und der Summary-V2-Consumer sind umgesetzt; diese ADR autorisiert weiterhin
-keine Produktivaktivierung. Label benötigt seine eigene Ausbaustufe. Summary und Lernzielpfad
-benötigen reale Consumer-/Hardwareläufe; das reichhaltige 4.096-Summaryprofil ist derzeit nicht
-belegt.
+→ 8.9c Slice 4 nach Prefill-Messung. Runtime R sowie alle drei Consumer (`topic_label` V1/V2,
+`learning_objectives` und `qa_summary` V2) sind umgesetzt und auf dem privaten 8-vCPU-Produktionshost
+funktional und zeitlich vermessen (`learning_objectives`: 10 Demo-Quiz-Entwürfe bei ~3,56 GiB Peak-RAM;
+`qa_summary` V2: 56,9 s / 374 Completion-Tokens; `topic_label` V2 Batch: 6 Cluster in 22,9 s / 179 Completion-Tokens).
+Diese ADR autorisiert weiterhin keine standardmäßige Aktivierung der Repository-Flags; die formale
+Prefill-/RSS-Abnahme des reichhaltigen 8.192-Vollkontexts an der Obergrenze und die fachliche
+Qualitätsfreigabe bleiben getrennt in der Slice-8-Abnahme geführt.
 
 ## Performance-Steckbrief
 
 - **Lastklasse:** performance-kritisch (ADR-0025), solange nicht durch Messung entschärft.
 - **Pfadtyp:** privater Hintergrund-/On-Demand-Dienst, kein synchroner Live-Hotpath.
-- **Kostenprofil:** CPU-Threads (2–4 laut Voranalyse), RAM (~4 GB Modell plus KV für den
-  gepinnten Kontext, nicht für den nativen Modellkontext), Image ohne eingebettetes GGUF.
+- **Kostenprofil:** CPU-Threads (4 im Same-Host-Labor `docker-compose.yml`/`docker-compose.prod.yml`, bis zu 8 auf dem dedizierten Zweit-Host `docker-compose.llm.yml`), RAM (5 GiB im Labor bzw. 8 GiB RAM / 10 GiB RAM+Swap auf dem Zweit-Host plus KV für den gepinnten 8.192-Kontext), Image ohne eingebettetes GGUF.
 - **Skalierungsprofil:** ein Slot, ein Inflight über drei Auftragstypen. Drei Auftragstypen
   teilen sich denselben Prozess; ein konkurrierender Job fällt sofort auf Fallback beziehungsweise manuellen Retry, statt in llama.cpp
   zu warten (Voranalyse §4.3, geschärft).
@@ -365,10 +368,10 @@ belegt.
 - Freigabestufen unverändert: Offline-Vergleich → isolierter Zwei-Server-Laborpfad →
   produktionsnahe Last-/Fehler-/Security-/Privacy-/Kostenprüfung, erst danach bewusste
   Produktivaktivierung.
-- Runtime R setzt diese Leitplanken technisch um. Die ADR autorisiert weder die Aktivierung
-  noch den offenen Label-Consumer aus 1.14c Stufe 2. Lernziel- und Summary-V2-Consumer sind
-  implementiert, bleiben aber bis zu realen Consumer-/Hardwaremessungen und einer getrennten
-  Betreiberentscheidung produktiv aus.
+- Runtime R und alle drei Consumer (`topic_label` V1/V2, `learning_objectives` und `qa_summary` V2)
+  setzen diese Leitplanken technisch um und wurden auf dem privaten 8-vCPU-Produktionshost real
+  ausgeführt. Die ADR autorisiert keine standardmäßige Aktivierung der Repository-Flags; das
+  Einschalten in Produktion bleibt eine explizite Betreiberentscheidung.
 
 ---
 
@@ -386,7 +389,7 @@ belegt.
 
 ## Ergänzung 2026-09-22: Runtime-Voraussetzung für Issue #456
 
-**Status:** Runtime R am 2026-10-05 technisch implementiert und lokal mit echtem kurzem Labelauftrag geprüft; Lernziel- und Summary-V2-Consumer implementiert, aber noch keine Produktivaktivierung oder reale Consumer-/Slice-8-Betriebsfreigabe.
+**Status:** Runtime R am 2026-10-05 technisch implementiert und lokal mit echtem kurzem Labelauftrag geprüft; `topic_label` V1/V2, `learning_objectives` und `qa_summary` V2 sind als Consumer implementiert und wurden bis zum 2026-10-17 auf dem privaten 8-vCPU-Produktionshost real ausgeführt (formale Vollkontext-RSS-/TTFT- und Qualitätsabnahme in Slice 8 noch offen; Repository-Defaults bleiben `false`).
 [Issue #456](https://github.com/kqc-real/arsnova.eu/issues/456) erweitert den bisherigen
 Geltungsbereich (Labels und Summary) um einen dritten Auftrag: **Lernzielableitung**.
 Frühere Aussagen über zwei Aufträge beschreiben den bisherigen Scope; die übrigen
@@ -434,23 +437,25 @@ Lernzielaufträge einen typisierten Belegt-Zustand für manuellen Retry.
 
 ### Messprofil und Rollout
 
-2.048/4.096 Kontexttokens und Qwen3-4B-Instruct-2507 Q4_K_M bleiben das initiale
-Messprofil, keine Eignungsgarantie für den reicheren Kontext. Instruktionen, Metadaten,
+8.192 Kontexttokens und Qwen3-4B-Instruct-2507 Q4_K_M sind das aktuelle Laufzeit-/Packing-Profil
+(unter dem praxisnahen 8k-Arbeitsfenster; nativ 32k wird nicht als Default geladen).
+Keine Eignungsgarantie für den reicheren Modellkontext. Instruktionen, Metadaten,
 Quellen, Antwort- und Sicherheitsreserve gemeinsam budgetieren. „Richtung acht Quellen“
 ist keine feste neue Quellenzahl.
 
 Kurze Labels bleiben der erste generative Betriebsnachweis. Lernzielableitung und
 angereicherte Summary benötigen eigene Messungen. Die produktionsnahe 8-vCPU-Prefill-Abnahme
 der Summary bleibt Voraussetzung für 8.9c Slice 4 und die Gesamt-/Betriebsabnahme von #456;
-der lokale Lauf für R ersetzt sie nicht. Kein stilles Hochsetzen des Kontexts oder
-GPU-/SaaS-Wechsel. Bei fehlender Eignung bleibt der betreffende generative Pfad
+der lokale Lauf für R ersetzt sie nicht. Kein stilles Hochsetzen auf Modelldefault (32k/128k)
+oder GPU-/SaaS-Wechsel. Bei fehlender Eignung bleibt der betreffende generative Pfad
 deaktiviert und seine Abnahme offen; Kompass, extraktive Labels und manuelle Ziele bleiben nutzbar.
 
-Der integrierte Summary-V2-Packer bestätigt diese Grenze konkret: Im festen 4.096-Profil
-passt der reichhaltige Referenzkontext nicht, sodass kontrolliert die ausgewiesene
-Q&A-Textbaseline gepackt wird. Für `qa_summary` V2 und `learning_objectives` stand in der
-Slice-8-Integration keine reale Zielruntime zur Verfügung. Beide Betriebsnachweise bleiben
-offen; Details stehen in
-[Issue #456 – Slice-8-Abnahme](../../implementation/ISSUE-456-SLICE-8-ABNAHME.md).
+Der integrierte Summary-V2-Packer bestätigt die Budgetgrenze konkret: Wenn der reichhaltige
+Referenzkontext nicht passt, wird kontrolliert die ausgewiesene Q&A-Textbaseline bzw. ein
+Force-Fit-Mindestbeleg gepackt. Auf dem privaten 8-vCPU-Produktionshost wurden sowohl
+`learning_objectives` (10 Entwürfe im Demo-Quiz) als auch `qa_summary` V2 (56,9 s, 374 Tokens)
+und `topic_label` V2 (6 Cluster in 22,9 s) erfolgreich real ausgeführt; die formale
+Prefill-/RSS-Detailabnahme an der 8.192-Obergrenze und die fachliche Qualitätsabnahme sind in
+[Issue #456 – Slice-8-Abnahme](../../implementation/ISSUE-456-SLICE-8-ABNAHME.md) dokumentiert.
 
 Der finale Moderationsprompt bleibt Folgearbeit; der Lernzielauftrag gehört zu #456.

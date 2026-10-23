@@ -1090,6 +1090,18 @@ type CacheEntry = {
   readonly value: ModerationPromptContextV1;
 };
 
+/** Analyzed Q&A questions present but no model-visible included question texts. */
+export function isEmptyQaEvidencePack(promptContext: ModerationPromptContextV1): boolean {
+  const analyzed =
+    promptContext.context.questions.state === 'available'
+      ? promptContext.context.questions.corpus.analyzed
+      : 0;
+  if (analyzed === 0) return false;
+  return !promptContext.context.sources.some(
+    (source) => source.kind === 'qa-question' && source.content.state === 'included',
+  );
+}
+
 export type FreshlyAuthorizedPackingResult = Readonly<{
   promptContext: ModerationPromptContextV1;
   cache: 'hit' | 'miss' | 'purge-fenced';
@@ -1133,16 +1145,23 @@ export class ModerationPromptPackingCache {
     readonly analysis: ModerationAnalysisContextV1;
     readonly profile: ModerationPromptPackingProfile;
     readonly packedAt?: Date;
+    readonly pack?: (input: PackModerationPromptContextInput) => ModerationPromptContextV1;
   }): FreshlyAuthorizedPackingResult {
     const sessionId = input.sessionId.trim();
     if (!sessionId) throw new Error('A session ID is required for moderation prompt caching.');
+    const pack = input.pack ?? packModerationPromptContext;
+    const packInput: PackModerationPromptContextInput = {
+      analysis: input.analysis,
+      profile: input.profile,
+      packedAt: input.packedAt,
+    };
     const now = this.#now();
     this.#prune(now);
     const semanticHash = hashModerationAnalysisForPacking(input.analysis, input.profile);
     const key = `${sessionId}:${semanticHash}`;
     if (this.#purgedUntil > now) {
       return {
-        promptContext: packModerationPromptContext(input),
+        promptContext: pack(packInput),
         cache: 'purge-fenced',
       };
     }
@@ -1154,17 +1173,21 @@ export class ModerationPromptPackingCache {
       return { promptContext: structuredClone(cached.value), cache: 'hit' };
     }
 
-    const promptContext = packModerationPromptContext(input);
-    while (this.#entries.size >= this.#maxEntries()) {
-      const oldestKey = this.#entries.keys().next().value as string | undefined;
-      if (!oldestKey) break;
-      this.#entries.delete(oldestKey);
+    const promptContext = pack(packInput);
+    // Do not cache empty-evidence packs: analyzed Q&A with zero included source
+    // texts would stick extractive fallback for the TTL and block force-fit retries.
+    if (!isEmptyQaEvidencePack(promptContext)) {
+      while (this.#entries.size >= this.#maxEntries()) {
+        const oldestKey = this.#entries.keys().next().value as string | undefined;
+        if (!oldestKey) break;
+        this.#entries.delete(oldestKey);
+      }
+      this.#entries.set(key, {
+        sessionId,
+        expiresAt: now + this.#ttlMs(),
+        value: structuredClone(promptContext),
+      });
     }
-    this.#entries.set(key, {
-      sessionId,
-      expiresAt: now + this.#ttlMs(),
-      value: structuredClone(promptContext),
-    });
     return { promptContext, cache: 'miss' };
   }
 
@@ -1219,6 +1242,7 @@ export function packFreshlyAuthorizedModerationPromptContext(input: {
   readonly analysis: ModerationAnalysisContextV1;
   readonly profile: ModerationPromptPackingProfile;
   readonly packedAt?: Date;
+  readonly pack?: (input: PackModerationPromptContextInput) => ModerationPromptContextV1;
 }): FreshlyAuthorizedPackingResult {
   return defaultModerationPromptPackingCache.getOrPackFreshlyAuthorized(input);
 }

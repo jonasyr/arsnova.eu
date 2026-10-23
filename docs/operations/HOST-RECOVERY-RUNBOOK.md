@@ -23,17 +23,18 @@ nicht den PostgreSQL-basierten Wiederzugang. Ist Redis nicht erreichbar, bleibt
 der Zugriff fail-closed, bis Redis wieder verfügbar ist.
 
 Besitzt der Browser aktivierte Host-Capabilities, zeigt die Live-Karte eine
-Reihe: Lookup bis 32 Codes, Anzeige höchstens 8, offene Foren zuerst
-(zuletzt gehostete, sonst frühestes Offen-bis), danach geschlossene
-(frühestes Zugang-bis). Gefüllt ist nur das erste noch offene Forum; der
-Rest ist outlined wie »Quiz-Sammlung öffnen«. Jeder öffnet
+Reihe: paralleles öffentliches `getInfo` bis 32 Codes, Anzeige höchstens 8,
+offene Foren zuerst (zuletzt gehostete, sonst frühestes Offen-bis), danach
+geschlossene (frühestes Zugang-bis). Gefüllt ist nur das erste noch offene
+Forum; der Rest ist outlined wie »Quiz-Sammlung öffnen«. Jeder öffnet
 die Host-Session direkt im Q&A-Kanal. Die erste Zeile nennt **Q&A-Session** und
 den sechsstelligen Sessioncode. Die zweite Zeile zeigt die Host-Zugangsfrist
 (`postProcessingEndsAt`, sonst `expiresAt`) als »Zugang bis …« mit lokalem
 Datum und Uhrzeit. Die dritte Zeile zeigt die Q&A-Offen-Frist (`qaClosesAt`,
 sonst `expiresAt`) als »Offen bis …« oder »Forum geschlossen«. Die vierte Zeile
 zeigt bei wartenden Moderationsfragen (`PENDING` > 0 aus
-`getInfo.qaPendingQuestionCount`, nur mit Host-Token) »In Moderation: {n}«,
+`getInfo.qaPendingQuestionCount`, nur mit Host-Token, nachgezogen sobald ein
+gespeichertes oder frisch ausgestelltes Token liegt) »In Moderation: {n}«,
 sonst die sichtbaren Fragen als
 »1 Frage« oder »{n} Fragen«; bei 0 entfällt die Zeile. Der Guard stellt den
 kurzlebigen Host-Token aus der Capability aus. Die Wiederherstellungsseite
@@ -100,7 +101,7 @@ die vollständige Session-Kennung `ARS-XXXX-XXXX`. Eine Session-Kennung darf
 nicht still auf sechs Zeichen gekürzt werden.
 
 Der Operator erhält ausschließlich eine Übergabe-Capability, keine dauerhafte
-Host-Capability. Die 15 Minuten gelten für die **erste Einlösung** dieses
+Host-Capability. Die 24 Stunden gelten für die **erste Einlösung** dieses
 Übergabecodes. Nach erfolgreichem Prepare beginnt ein separates
 Aktivierungsfenster von 15 Minuten. Die Oberfläche nennt dabei jeweils
 Datum und lokale Uhrzeit (`{deadline}` / `{expiryTime}`). Die Aktivierungsfrist
@@ -172,10 +173,11 @@ openssl rand -base64 32
 ```
 
 Das Backend bricht den Produktionsstart ohne gültigen Schlüssel ab. Eine
-Rotation erst durchführen, wenn keine höchstens 15 Minuten alten
-Host-Austausche und keine höchstens 10 Minuten alten Join-Replays mehr offen
-sind; sonst kann nur deren verschlüsseltes Replay-Material nicht mehr gelesen
-werden. Die zugrunde liegenden gehashten Capabilities bleiben gültig.
+Rotation erst durchführen, wenn keine offenen Admin-Übergabecodes (höchstens 24
+Stunden gültig), keine höchstens 15 Minuten alten Host-Austausche und keine
+höchstens 10 Minuten alten Join-Replays mehr bestehen; sonst kann nur deren
+verschlüsseltes Replay-Material nicht mehr gelesen werden. Die zugrunde
+liegenden gehashten Capabilities bleiben gültig.
 
 Beim Rolling Deployment vergibt ein PostgreSQL-Trigger Teilnehmernummern für
 ältere Images. Neue Host-Tokens werden zusätzlich kurzzeitig in das alte

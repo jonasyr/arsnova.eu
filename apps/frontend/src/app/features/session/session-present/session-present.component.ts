@@ -58,6 +58,7 @@ import type {
   QaQuestionDTO,
   QaQuestionSortMode,
   QaQuestionsListDTO,
+  FreetextWordCloudPresenterProjectionDTO,
   QaWordCloudPresenterProjectionDTO,
   QuickFeedbackResult,
   SessionInfoDTO,
@@ -256,6 +257,9 @@ export class SessionPresentComponent implements OnInit, OnDestroy {
   private currentQuestionSub: Unsubscribable | null = null;
   private voteProgressSub: Unsubscribable | null = null;
   private statusSub: Unsubscribable | null = null;
+  private presentSessionMetaRefreshEpoch = 0;
+  private presentHostQuestionRefreshEpoch = 0;
+  private presentQuickFeedbackRefreshEpoch = 0;
   private countdownTimer: ReturnType<typeof setInterval> | null = null;
   private countdownDeadlineMs: number | null = null;
   private countdownKey: string | null = null;
@@ -479,11 +483,11 @@ export class SessionPresentComponent implements OnInit, OnDestroy {
   qaSortModeLabel(mode: QaQuestionSortMode = this.presenterQaSortMode()): string {
     switch (mode) {
       case 'TOP':
-        return $localize`:@@sessionQa.sortTop:Meist unterstützt`;
+        return $localize`:@@sessionQa.sortTop:Stimmensaldo`;
       case 'BEST':
         return $localize`:@@sessionQa.sortBest:Beste Fragen`;
       case 'CONTROVERSIAL':
-        return $localize`:@@sessionQa.sortControversial:Umstritten`;
+        return $localize`:@@sessionQa.sortControversial:Kontroverse`;
       case 'TIME':
         return $localize`:@@sessionQa.sortTime:Zeit`;
     }
@@ -540,8 +544,34 @@ export class SessionPresentComponent implements OnInit, OnDestroy {
   readonly wordCloudTermLocale = computed<SupportedLocale>(() =>
     getEffectiveLocale(localeIdToSupported(this.localeId)),
   );
-  readonly freetextWordCloudTerms = computed<WordCloudTerm[]>(() =>
-    this.wordCloudTermExtractor.extractTerms(
+  readonly freetextWordCloudProjection = signal<FreetextWordCloudPresenterProjectionDTO | null>(
+    null,
+  );
+  readonly freetextStageAnalysisEntries = computed(() => {
+    const projection = this.freetextWordCloudProjection();
+    if (
+      !projection ||
+      projection.entries.length === 0 ||
+      projection.questionId !== this.freetextQuestionId()
+    ) {
+      return null;
+    }
+    return projection.entries.map((entry) => ({
+      key: entry.key,
+      label: entry.label,
+      count: entry.count,
+      basisLabel: entry.label,
+      members: [{ sourceId: entry.key, text: entry.label, weight: entry.count }],
+      variants: [entry.label],
+      confidence: null,
+      labelOrigin: entry.labelOrigin,
+    }));
+  });
+  readonly freetextWordCloudTerms = computed<WordCloudTerm[] | null>(() => {
+    if (this.freetextStageAnalysisEntries()) {
+      return null;
+    }
+    return this.wordCloudTermExtractor.extractTerms(
       this.freetextResponses().map((response, index) => ({
         id: `response-${index}`,
         body: response,
@@ -551,8 +581,8 @@ export class SessionPresentComponent implements OnInit, OnDestroy {
         maxEntries: 80,
         maxNgramLength: 3,
       },
-    ),
-  );
+    );
+  });
   readonly presenterQaWordCloudQuestions = computed(() => this.presenterQaOrderedQuestions());
   readonly presenterQaWordCloudResponses = computed(() =>
     this.presenterQaWordCloudQuestions().map((question) => question.text),
@@ -632,15 +662,15 @@ export class SessionPresentComponent implements OnInit, OnDestroy {
       this.qaWordCloudModePill(projection.mode),
       this.qaWordCloudMetricPill(projection.metric),
       projection.smoothingActive
-        ? $localize`:@@sessionPresent.wordCloudSmoothingOn:Glättung an`
-        : $localize`:@@sessionPresent.wordCloudSmoothingOff:ohne Glättung`,
+        ? $localize`:@@sessionPresent.wordCloudSmoothingOn:Wort-Glättung an`
+        : $localize`:@@sessionPresent.wordCloudSmoothingOff:ohne Wort-Glättung`,
     ];
   });
 
   private qaWordCloudModePill(mode: WordCloudAnalysisVariant): string {
     switch (mode) {
       case 'SEMANTIC':
-        return $localize`:@@sessionQa.wordCloudAnalysisSemantic:Themen`;
+        return $localize`:@@sessionQa.wordCloudAnalysisSemantic:Thema`;
       case 'LEXICAL':
         return $localize`:@@sessionQa.wordCloudAnalysisLexical:Wörter`;
       default:
@@ -653,11 +683,11 @@ export class SessionPresentComponent implements OnInit, OnDestroy {
       case 'BEST':
         return $localize`:@@sessionQa.sortBest:Beste Fragen`;
       case 'CONTROVERSIAL':
-        return $localize`:@@sessionPresent.wordCloudMetricControversial:Kontroverse`;
+        return $localize`:@@sessionQa.sortControversial:Kontroverse`;
       case 'TIME':
-        return $localize`:@@sessionQa.wordCloudMetricTime:Häufigkeit`;
+        return $localize`:@@sessionQa.wordCloudMetricTime:Vorkommen in Fragen`;
       default:
-        return $localize`:@@sessionQa.wordCloudSizeTop:Stimmen`;
+        return $localize`:@@sessionQa.sortTop:Stimmensaldo`;
     }
   }
 
@@ -1090,6 +1120,9 @@ export class SessionPresentComponent implements OnInit, OnDestroy {
       await this.refreshQaWordCloudProjection();
       return;
     }
+    if (this.showPresenterFreetextResultsStage()) {
+      await this.refreshFreetextWordCloudProjection();
+    }
     await this.refreshLiveFreetext();
     await this.refreshQaQuestions();
     await this.refreshQuickFeedbackResult();
@@ -1307,6 +1340,7 @@ export class SessionPresentComponent implements OnInit, OnDestroy {
   }
 
   private async refreshSessionMeta(): Promise<void> {
+    const refreshEpoch = ++this.presentSessionMetaRefreshEpoch;
     try {
       const requestedAt = Date.now();
       const session = await trpc.session.getInfoForReconnect.query({
@@ -1314,7 +1348,7 @@ export class SessionPresentComponent implements OnInit, OnDestroy {
         anonymousClientId: getAnonymousClientId(),
       });
       // Eine späte Antwort nach ngOnDestroy darf keine Subscriptions oder Timer mehr starten.
-      if (this.destroyRef.destroyed) return;
+      if (this.destroyRef.destroyed || refreshEpoch !== this.presentSessionMetaRefreshEpoch) return;
       recordServerTimeSample(session.serverTime, requestedAt);
       this.snapshotRefreshFailed.set(false);
       this.showHomeCta.set(false);
@@ -1329,6 +1363,8 @@ export class SessionPresentComponent implements OnInit, OnDestroy {
             currentQuestion: null,
             finishProjection: 'idle',
           });
+        } else if (!this.presentDeadlineClosed) {
+          this.ensurePresenterSubscriptions();
         }
         return;
       }
@@ -1638,21 +1674,45 @@ export class SessionPresentComponent implements OnInit, OnDestroy {
     }
   }
 
+  private async refreshFreetextWordCloudProjection(): Promise<void> {
+    if (!this.showPresenterFreetextResultsStage() || this.presentDeadlineClosed) {
+      return;
+    }
+    try {
+      const result = await trpc.session.getFreetextWordCloudProjection.query({
+        code: this.code.toUpperCase(),
+      });
+      if (this.presentDeadlineClosed) {
+        return;
+      }
+      this.freetextWordCloudProjection.set(result.projection);
+    } catch {
+      // Ohne Projektion bleibt die bisherige lokale Phrasenwolke.
+    }
+  }
+
   private async refreshQuickFeedbackResult(): Promise<void> {
     const quickFeedbackEnabled = this.session()?.channels?.quickFeedback.enabled ?? false;
     if (!quickFeedbackEnabled || this.showFinishProjection() || this.presentDeadlineClosed) {
+      this.presentQuickFeedbackRefreshEpoch += 1;
       this.quickFeedbackResult.set(null);
       return;
     }
 
+    const refreshEpoch = ++this.presentQuickFeedbackRefreshEpoch;
     try {
       const result = await trpc.quickFeedback.results.query({
         sessionCode: this.code.toUpperCase(),
       });
-      if (this.presentDeadlineClosed) return;
+      if (this.presentDeadlineClosed || refreshEpoch !== this.presentQuickFeedbackRefreshEpoch) {
+        return;
+      }
       this.quickFeedbackResult.set(result);
     } catch (error: unknown) {
-      if (this.errorCode(error) === 'NOT_FOUND') {
+      if (
+        refreshEpoch === this.presentQuickFeedbackRefreshEpoch &&
+        this.errorCode(error) === 'NOT_FOUND'
+      ) {
         this.quickFeedbackResult.set(null);
       }
     }
@@ -1665,15 +1725,19 @@ export class SessionPresentComponent implements OnInit, OnDestroy {
       this.presentDeadlineClosed ||
       this.session()?.presenterSurface === 'qaWordCloud'
     ) {
+      this.presentHostQuestionRefreshEpoch += 1;
       this.hostQuestion.set(null);
       this.stopCountdown();
       return;
     }
+    const refreshEpoch = ++this.presentHostQuestionRefreshEpoch;
     try {
       const question = await trpc.session.getCurrentQuestionForHost.query({
         code: this.code.toUpperCase(),
       });
-      if (this.presentDeadlineClosed) return;
+      if (this.presentDeadlineClosed || refreshEpoch !== this.presentHostQuestionRefreshEpoch) {
+        return;
+      }
       this.hostQuestion.set(question);
       if (this.session()?.status === 'ACTIVE') {
         this.startCountdown(question?.timer ?? null);
@@ -1749,6 +1813,7 @@ export class SessionPresentComponent implements OnInit, OnDestroy {
         {
           onData: (data) => {
             if (!this.presentDeadlineClosed) {
+              this.presentHostQuestionRefreshEpoch += 1;
               this.hostQuestion.set(data);
             }
           },
@@ -1786,6 +1851,7 @@ export class SessionPresentComponent implements OnInit, OnDestroy {
           if (!this.applySessionDeadlineSnapshot(data)) {
             return;
           }
+          this.presentSessionMetaRefreshEpoch += 1;
           this.session.update((current) =>
             current
               ? {

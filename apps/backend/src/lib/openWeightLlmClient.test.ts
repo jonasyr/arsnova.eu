@@ -313,7 +313,7 @@ describe('openWeightLlmClient', () => {
     const output = {
       schemaVersion: 2,
       taskType: 'qa_summary',
-      outputContract: 'qa-summary-model-output-v2',
+      outputContract: 'qa-summary-model-output-v3',
       output: {
         status: 'ready',
         statements: [{ text: 'Belegt.', sourceIds: [sourceId] }],
@@ -349,6 +349,56 @@ describe('openWeightLlmClient', () => {
     ]);
     expect(body.messages[2]?.content).not.toContain(prepared.request.promptContext.snapshotHash);
     expect(body.response_format.schema.properties).toHaveProperty('output');
+    const outputProp = body.response_format.schema.properties?.['output'] as {
+      properties?: {
+        statements?: {
+          minItems?: number;
+          maxItems?: number;
+          items?: { properties?: { sourceIds?: { items?: { enum?: string[] } } } };
+        };
+      };
+    };
+    expect(outputProp?.properties?.statements?.minItems).toBeUndefined();
+    expect(outputProp?.properties?.statements?.maxItems).toBe(3);
+    expect(outputProp?.properties?.statements?.items?.properties?.sourceIds?.items?.enum).toEqual(
+      prepared.request.promptContext.context.sources.map((s) => s.id),
+    );
+  });
+
+  it('zwingt learning_objectives questionIds im Wire-Schema auf die Quell-IDs statt UUID-Regex', async () => {
+    let translatedBody: string | null = null;
+    resetOpenWeightLlmClientForTests({
+      config: () => defaultConfig,
+      request: async (input) => {
+        if (input.path.startsWith('/slots')) return { status: 200, body: '[]' };
+        translatedBody = input.body;
+        return completionResponse(outputs.learning_objectives);
+      },
+    });
+
+    await expect(
+      runOpenWeightLlmLearningObjectives(requests.learning_objectives),
+    ).resolves.toMatchObject({ status: 'completed' });
+    const body = JSON.parse(translatedBody ?? '{}') as {
+      response_format: {
+        schema: {
+          properties?: {
+            objectives?: {
+              items?: {
+                properties?: {
+                  questionIds?: { items?: { enum?: string[]; pattern?: string; format?: string } };
+                };
+              };
+            };
+          };
+        };
+      };
+    };
+    const questionIds =
+      body.response_format.schema.properties?.objectives?.items?.properties?.questionIds?.items;
+    expect(questionIds?.enum).toEqual([QUESTION_ID]);
+    expect(questionIds?.pattern).toBeUndefined();
+    expect(questionIds?.format).toBeUndefined();
   });
 
   it('weist einen kontextsprengenden Auftrag vor Config, Slot und Modellaufruf ab', async () => {
